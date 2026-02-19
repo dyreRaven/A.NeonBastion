@@ -111,7 +111,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-1";
+const BUILD_ID = "2026-02-19-2";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -7000,10 +7000,6 @@ function renderLoadoutMenu() {
     button.addEventListener("click", () => {
       const towerTypeId = button.dataset.loadoutUpgradeToggle;
       if (!towerTypeId) return;
-      if (!isTowerInLoadout(towerTypeId)) {
-        setStatus("Equip that entry first before opening upgrades.", true);
-        return;
-      }
       game.loadoutUpgradeTargetId = game.loadoutUpgradeTargetId === towerTypeId ? null : towerTypeId;
       renderLoadoutMenu();
     });
