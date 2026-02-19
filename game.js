@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-11";
+const BUILD_ID = "2026-02-19-12";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4107,7 +4107,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spikeLength: 2.32,
       spikeRadius: 0.58,
       ringRadius: 0,
-      coreRadius: 0.3,
+      coreRadius: 0,
       coreY: 0.12,
     },
     rhombus: {
@@ -4207,9 +4207,6 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     const spikeRadius = Math.max(0.16, setup.spikeRadius || 0.34);
 
     const coreGeometry = new THREE.IcosahedronGeometry(coreRadius, 0);
-    body = cast(new THREE.Mesh(coreGeometry, bodyMat));
-    body.rotation.y = Math.PI / 10;
-    group.add(body);
 
     const spikeMat = new THREE.MeshPhysicalMaterial({
       color: secondary.clone().lerp(new THREE.Color("#ffffff"), 0.14),
@@ -4261,6 +4258,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spike.quaternion.setFromUnitVectors(upAxis, normal);
       group.add(spike);
     }
+    coreGeometry.dispose();
     faceGeometry.dispose();
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
