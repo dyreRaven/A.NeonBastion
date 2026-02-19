@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-16";
+const BUILD_ID = "2026-02-19-17";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1800,7 +1800,7 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
 function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   if (level === 1 && wave === 20) return ["icosahedron", ...Array(12).fill("minion")];
   if (level >= 3 && wave === 40) return ["star"];
-  if (level >= 2 && wave === 30) {
+  if (level === 2 && wave === 30) {
     const escortBlock = Array(4).fill("rhombusMinus");
     return [...escortBlock, "rhombus", ...escortBlock, "rhombus", ...escortBlock];
   }
@@ -1875,7 +1875,6 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 3) {
     if (wave === 40) return "Ember threat: Star-class apex boss detected. Massive HP, extremely slow advance.";
-    if (wave === 30) return "Ember threat: Twin Rhombus apex bosses with molten escort formations.";
     if (wave >= 21) return "Ember threat: Monolith command cores entering the rift lane.";
     if (wave >= 10) return "Ember threat: Leviathan siege wave under volcanic pressure.";
     if (wave >= 9) return "Ember threat: Colossus and Warden heat-shield column advancing.";
@@ -8552,7 +8551,7 @@ function update(dt) {
       const baseInterval = Math.max(0.18, 0.78 - game.wave * 0.015);
       let nextSpawnDelay = Math.max(profile.minSpawnInterval, baseInterval * profile.spawnIntervalScale);
 
-      const isRhombusWave = game.currentLevel >= 2 && game.wave === 30;
+      const isRhombusWave = game.currentLevel === 2 && game.wave === 30;
       if (isRhombusWave && spawnedType === "rhombusMinus") {
         // Keep escort units spaced so they stride with the bosses instead of clumping.
         nextSpawnDelay = Math.max(nextSpawnDelay, 0.58);
