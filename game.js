@@ -111,7 +111,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-5";
+const BUILD_ID = "2026-02-19-6";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1743,7 +1743,7 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
     { id: "prism", weight: moonLevel && effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 3.6, 20) : 0 },
     { id: "colossus", weight: effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 2.8, 16) : 0 },
     { id: "leviathan", weight: effectiveWave >= 12 ? Math.min((effectiveWave - 11) * 2.3, 14) : 0 },
-    { id: "monolith", weight: moonLevel && wave >= 13 ? Math.min((effectiveWave - 14) * 2.4, 11) : 0 },
+    { id: "monolith", weight: moonLevel && wave >= 21 ? Math.min((effectiveWave - 22) * 2.4, 11) : 0 },
   ].filter((entry) => entry.weight > 0);
 }
 
@@ -1763,9 +1763,9 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
     let forcedType = null;
     const slot = i + 1;
 
-    if (level >= 2 && wave >= 13 && slot % 19 === 0) forcedType = Math.random() < 0.7 ? "monolith" : "leviathan";
+    if (level >= 2 && wave >= 21 && slot % 19 === 0) forcedType = Math.random() < 0.7 ? "monolith" : "leviathan";
     else if (effectiveWave >= 12 && slot % 17 === 0) {
-      if (level >= 2 && wave >= 13 && Math.random() < 0.35) forcedType = "monolith";
+      if (level >= 2 && wave >= 21 && Math.random() < 0.35) forcedType = "monolith";
       else forcedType = Math.random() < 0.55 ? "leviathan" : "colossus";
     }
     else if (effectiveWave >= 9 && slot % 13 === 0) forcedType = Math.random() < 0.5 ? "colossus" : "warden";
@@ -1786,7 +1786,7 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   }
 
   // Ensure Monolith is always seen immediately once Moon reaches its unlock wave.
-  if (level >= 2 && wave >= 13 && queue.length > 0) {
+  if (level >= 2 && wave >= 21 && queue.length > 0) {
     queue[0] = "monolith";
     if (queue.length > 5) {
       const secondIndex = Math.min(queue.length - 1, Math.max(2, Math.floor(queue.length * 0.45)));
@@ -1824,8 +1824,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 2) {
     if (wave === 30) return "Lunar threat: Twin Rhombus apex bosses with Rhombus Minion escorts.";
-    if (wave >= 20) return "Lunar threat: Monolith command units escalating to apex intensity.";
-    if (wave >= 13) return "Lunar threat: Monolith reinforcements joining Leviathan-class siege units.";
+    if (wave >= 21) return "Lunar threat: Monolith command units escalating to apex intensity.";
     if (wave >= 10) return "Lunar threat: Leviathan-class siege swarm under low gravity.";
     if (wave >= 9) return "Lunar threat: Colossus and Warden phalanx advancing.";
     if (wave >= 7) return "Lunar threat: Prism assault casters surging with Raider and Specter packs.";
