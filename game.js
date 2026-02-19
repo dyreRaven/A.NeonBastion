@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-22";
+const BUILD_ID = "2026-02-19-23";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1436,8 +1436,10 @@ const CREATURE_SPAWNER_UNLOCKS = {
   colossus: { killRequirement: 90, towerCost: 720, spawnInterval: 5.8 },
   leviathan: { killRequirement: 70, towerCost: 860, spawnInterval: 6.6 },
   monolith: { killRequirement: 80, towerCost: 1220, spawnInterval: 7.8 },
+  trapiziod: { killRequirement: 42, towerCost: 1360, spawnInterval: 6.9 },
+  cross: { killRequirement: 44, towerCost: 1320, spawnInterval: 6.6 },
   icosahedron: { killRequirement: 6, towerCost: 1620, spawnInterval: 8.4 },
-  star: { killRequirement: 2, towerCost: 2450, spawnInterval: 11.8 },
+  star: { killRequirement: 3, towerCost: 2450, spawnInterval: 11.8 },
   rhombus: { killRequirement: 6, towerCost: 1780, spawnInterval: 9.2, spawnCount: 2 },
   rhombusMinus: { killRequirement: 36, towerCost: 920, spawnInterval: 5.2 },
 };
@@ -5091,6 +5093,37 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     symbolGeometry = new THREE.BoxGeometry(0.74, 0.74, 0.74);
   } else if (enemyTypeId === "specter" || enemyTypeId === "colossus") {
     symbolGeometry = new THREE.CylinderGeometry(0.48, 0.48, 0.7, 6);
+  } else if (enemyTypeId === "trapiziod") {
+    symbolGeometry = new THREE.CylinderGeometry(0.34, 0.5, 0.72, 4);
+    symbolY = 0.7;
+  } else if (enemyTypeId === "cross") {
+    const crossShape = new THREE.Shape();
+    const armHalfLen = 0.36;
+    const armHalfWidth = 0.14;
+    crossShape.moveTo(-armHalfWidth, armHalfLen);
+    crossShape.lineTo(armHalfWidth, armHalfLen);
+    crossShape.lineTo(armHalfWidth, armHalfWidth);
+    crossShape.lineTo(armHalfLen, armHalfWidth);
+    crossShape.lineTo(armHalfLen, -armHalfWidth);
+    crossShape.lineTo(armHalfWidth, -armHalfWidth);
+    crossShape.lineTo(armHalfWidth, -armHalfLen);
+    crossShape.lineTo(-armHalfWidth, -armHalfLen);
+    crossShape.lineTo(-armHalfWidth, -armHalfWidth);
+    crossShape.lineTo(-armHalfLen, -armHalfWidth);
+    crossShape.lineTo(-armHalfLen, armHalfWidth);
+    crossShape.lineTo(-armHalfWidth, armHalfWidth);
+    crossShape.closePath();
+    symbolGeometry = new THREE.ExtrudeGeometry(crossShape, {
+      depth: 0.18,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: 0.04,
+      bevelSize: 0.04,
+      bevelSegments: 2,
+      curveSegments: 14,
+    });
+    symbolGeometry.center();
+    symbolY = 0.69;
   } else if (enemyTypeId === "icosahedron") {
     symbolGeometry = new THREE.IcosahedronGeometry(0.56, 0);
   } else if (enemyTypeId === "star") {
@@ -5131,6 +5164,11 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   const symbol = cast(new THREE.Mesh(symbolGeometry, symbolMat));
   if (enemyTypeId === "blink" || enemyTypeId === "skitter" || enemyTypeId === "minion" || enemyTypeId === "raider") {
     symbol.rotation.y = Math.PI / 3;
+  } else if (enemyTypeId === "trapiziod") {
+    symbol.rotation.y = Math.PI / 4;
+  } else if (enemyTypeId === "cross") {
+    symbol.rotation.x = Math.PI / 2;
+    symbol.rotation.z = Math.PI / 10;
   } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "icosahedron") {
