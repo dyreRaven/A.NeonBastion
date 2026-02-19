@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-8";
+const BUILD_ID = "2026-02-19-9";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -2247,34 +2247,34 @@ function applyLevelLightingTheme(level) {
   const emberLevel = level >= 3;
 
   if (emberLevel) {
-    scene.background.set("#110904");
-    scene.fog.color.set("#110904");
-    scene.fog.density = 0.014;
-    renderer.toneMappingExposure = 0.94;
+    scene.background.set("#090e1c");
+    scene.fog.color.set("#0b1020");
+    scene.fog.density = 0.012;
+    renderer.toneMappingExposure = 1.0;
 
-    hemiLight.color.set("#ffcf9a");
-    hemiLight.groundColor.set("#160904");
-    hemiLight.intensity = 0.52;
+    hemiLight.color.set("#9cb4de");
+    hemiLight.groundColor.set("#10090e");
+    hemiLight.intensity = 0.54;
 
-    sunLight.color.set("#ffd47d");
-    sunLight.intensity = 0.98;
-    sunLight.position.set(25, 28, -8);
+    sunLight.color.set("#ffd8be");
+    sunLight.intensity = 0.9;
+    sunLight.position.set(22, 30, -12);
 
-    tealRim.color.set("#ff6842");
-    tealRim.intensity = 0.82;
-    tealRim.position.set(-26, 10, -16);
+    tealRim.color.set("#5fb9ff");
+    tealRim.intensity = 0.7;
+    tealRim.position.set(-24, 11, -18);
 
-    emberRim.color.set("#ffd66a");
-    emberRim.intensity = 0.58;
-    emberRim.position.set(20, 9, 18);
+    emberRim.color.set("#ff6e5c");
+    emberRim.intensity = 0.44;
+    emberRim.position.set(21, 9, 17);
 
-    prismKeyLight.color.set("#ff7a45");
-    prismKeyLight.intensity = 0.64;
-    prismKeyLight.position.set(2, 15, -10);
+    prismKeyLight.color.set("#8faeff");
+    prismKeyLight.intensity = 0.56;
+    prismKeyLight.position.set(1, 15, -10);
 
-    prismFillLight.color.set("#ffb85f");
-    prismFillLight.intensity = 0.5;
-    prismFillLight.position.set(-12, 10, 17);
+    prismFillLight.color.set("#b58dff");
+    prismFillLight.intensity = 0.46;
+    prismFillLight.position.set(-13, 10, 16);
   } else if (moonLevel) {
     scene.background.set("#060913");
     scene.fog.color.set("#060913");
@@ -2401,13 +2401,13 @@ function buildMap() {
   const base = new THREE.Mesh(
     new THREE.BoxGeometry(boardWidth + 14, 1.9, boardHeight + 14),
     new THREE.MeshPhysicalMaterial({
-      color: emberLevel ? "#1f1209" : moonLevel ? "#121620" : "#0a1624",
+      color: emberLevel ? "#151824" : moonLevel ? "#121620" : "#0a1624",
       roughness: 0.82,
       metalness: 0.18,
       clearcoat: 0.3,
       clearcoatRoughness: 0.48,
-      emissive: emberLevel ? "#140803" : moonLevel ? "#0b0f18" : "#050e19",
-      emissiveIntensity: emberLevel ? 0.62 : moonLevel ? 0.58 : 0.66,
+      emissive: emberLevel ? "#0d101b" : moonLevel ? "#0b0f18" : "#050e19",
+      emissiveIntensity: emberLevel ? 0.56 : moonLevel ? 0.58 : 0.66,
       envMapIntensity: 1.05,
     })
   );
@@ -2418,11 +2418,11 @@ function buildMap() {
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(boardWidth + 5.2, 0.18, boardHeight + 5.2),
     new THREE.MeshStandardMaterial({
-      color: emberLevel ? "#2a170d" : moonLevel ? "#1a202d" : "#102538",
+      color: emberLevel ? "#1f2436" : moonLevel ? "#1a202d" : "#102538",
       roughness: 0.72,
       metalness: 0.26,
-      emissive: emberLevel ? "#1b0d06" : moonLevel ? "#101722" : "#08192a",
-      emissiveIntensity: emberLevel ? 0.34 : moonLevel ? 0.26 : 0.34,
+      emissive: emberLevel ? "#141a2a" : moonLevel ? "#101722" : "#08192a",
+      emissiveIntensity: emberLevel ? 0.28 : moonLevel ? 0.26 : 0.34,
     })
   );
   deck.position.y = -0.06;
@@ -2433,9 +2433,9 @@ function buildMap() {
   const vignette = new THREE.Mesh(
     new THREE.RingGeometry(boardRadius * 0.58, boardRadius * 0.96, 72),
     new THREE.MeshBasicMaterial({
-      color: emberLevel ? "#150601" : moonLevel ? "#04070e" : "#01060c",
+      color: emberLevel ? "#080812" : moonLevel ? "#04070e" : "#01060c",
       transparent: true,
-      opacity: emberLevel ? 0.62 : moonLevel ? 0.56 : 0.48,
+      opacity: emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48,
       side: THREE.DoubleSide,
       depthWrite: false,
     })
@@ -2447,9 +2447,9 @@ function buildMap() {
   const shadowWash = new THREE.Mesh(
     new THREE.PlaneGeometry(boardWidth + 4.8, boardHeight + 4.8),
     new THREE.MeshBasicMaterial({
-      color: emberLevel ? "#150702" : moonLevel ? "#02050a" : "#01050a",
+      color: emberLevel ? "#0a0b15" : moonLevel ? "#02050a" : "#01050a",
       transparent: true,
-      opacity: emberLevel ? 0.32 : moonLevel ? 0.26 : 0.2,
+      opacity: emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2,
       depthWrite: false,
     })
   );
@@ -2458,8 +2458,8 @@ function buildMap() {
   worldGroup.add(shadowWash);
 
   const mapLightA = new THREE.PointLight(
-    emberLevel ? 0xff6a3a : moonLevel ? 0x8ab5ff : 0x58c6ff,
-    emberLevel ? 0.48 : moonLevel ? 0.38 : 0.46,
+    emberLevel ? 0x6aaeff : moonLevel ? 0x8ab5ff : 0x58c6ff,
+    emberLevel ? 0.42 : moonLevel ? 0.38 : 0.46,
     boardWidth * 1.4,
     2
   );
@@ -2467,8 +2467,8 @@ function buildMap() {
   worldGroup.add(mapLightA);
 
   const mapLightB = new THREE.PointLight(
-    emberLevel ? 0xffcc66 : moonLevel ? 0x8aa0d8 : 0xff9f57,
-    emberLevel ? 0.4 : moonLevel ? 0.3 : 0.38,
+    emberLevel ? 0xff8164 : moonLevel ? 0x8aa0d8 : 0xff9f57,
+    emberLevel ? 0.32 : moonLevel ? 0.3 : 0.38,
     boardWidth * 1.4,
     2
   );
@@ -2476,8 +2476,8 @@ function buildMap() {
   worldGroup.add(mapLightB);
 
   const mapLightC = new THREE.PointLight(
-    emberLevel ? 0xff8a52 : moonLevel ? 0xd4e0ff : 0x63f2d3,
-    emberLevel ? 0.3 : moonLevel ? 0.22 : 0.28,
+    emberLevel ? 0xb493ff : moonLevel ? 0xd4e0ff : 0x63f2d3,
+    emberLevel ? 0.26 : moonLevel ? 0.22 : 0.28,
     boardWidth * 1.2,
     2
   );
@@ -2504,8 +2504,8 @@ function buildMap() {
 
       const tileColor = new THREE.Color();
       if (emberLevel) {
-        if (onPath) tileColor.setHSL(0.08 + n * 0.015, 0.78, 0.24 + n * 0.04 - edgeBlend * 0.05);
-        else tileColor.setHSL(0.05 + n * 0.02, 0.62, 0.16 + n * 0.06 - edgeBlend * 0.08);
+        if (onPath) tileColor.setHSL(0.03 + n * 0.018, 0.66, 0.22 + n * 0.04 - edgeBlend * 0.05);
+        else tileColor.setHSL(0.64 + n * 0.024, 0.26, 0.13 + n * 0.06 - edgeBlend * 0.08);
       } else if (moonLevel) {
         if (onPath) tileColor.setHSL(0.6 + n * 0.01, 0.24, 0.26 + n * 0.05 - edgeBlend * 0.05);
         else tileColor.setHSL(0.62 + n * 0.01, 0.12, 0.2 + n * 0.08 - edgeBlend * 0.07 - craterFactor * 0.08);
@@ -2530,15 +2530,15 @@ function buildMap() {
         metalness: onPath ? (emberLevel ? 0.3 : moonLevel ? 0.18 : 0.34) : emberLevel ? 0.1 : moonLevel ? 0.05 : 0.14,
         clearcoat: onPath ? (emberLevel ? 0.68 : moonLevel ? 0.48 : 0.76) : emberLevel ? 0.14 : moonLevel ? 0.08 : 0.16,
         clearcoatRoughness: onPath ? (emberLevel ? 0.16 : moonLevel ? 0.3 : 0.14) : emberLevel ? 0.52 : moonLevel ? 0.62 : 0.56,
-        emissive: onPath ? (emberLevel ? "#8b2f14" : moonLevel ? "#2f486c" : "#7b3212") : emberLevel ? "#3a1209" : moonLevel ? "#111926" : "#0a2d4f",
+        emissive: onPath ? (emberLevel ? "#7c2a24" : moonLevel ? "#2f486c" : "#7b3212") : emberLevel ? "#1a1d3e" : moonLevel ? "#111926" : "#0a2d4f",
         emissiveIntensity: onPath
           ? emberLevel
-            ? 1.05
+            ? 0.88
             : moonLevel
               ? 0.72
               : 1.06
           : emberLevel
-            ? 0.24 + (1 - edgeBlend) * 0.12
+            ? 0.2 + (1 - edgeBlend) * 0.1
             : moonLevel
               ? 0.16 + (1 - edgeBlend) * 0.08
               : 0.34 + (1 - edgeBlend) * 0.12,
@@ -2557,9 +2557,9 @@ function buildMap() {
       const glaze = new THREE.Mesh(
         new THREE.PlaneGeometry(CELL_SIZE * 0.84, CELL_SIZE * 0.84),
         new THREE.MeshBasicMaterial({
-          color: onPath ? (emberLevel ? "#ffc178" : moonLevel ? "#b7cdff" : "#ffae60") : emberLevel ? "#ff7a5e" : moonLevel ? "#8ea6d6" : "#5cbfff",
+          color: onPath ? (emberLevel ? "#ffb09a" : moonLevel ? "#b7cdff" : "#ffae60") : emberLevel ? "#8ea6ff" : moonLevel ? "#8ea6d6" : "#5cbfff",
           transparent: true,
-          opacity: onPath ? (emberLevel ? 0.27 : moonLevel ? 0.22 : 0.24) : emberLevel ? 0.14 : moonLevel ? 0.1 : 0.12,
+          opacity: onPath ? (emberLevel ? 0.22 : moonLevel ? 0.22 : 0.24) : emberLevel ? 0.12 : moonLevel ? 0.1 : 0.12,
           depthWrite: false,
         })
       );
@@ -2571,12 +2571,12 @@ function buildMap() {
         const inlay = new THREE.Mesh(
           new THREE.CylinderGeometry(CELL_SIZE * 0.2, CELL_SIZE * 0.2, 0.06, 14),
           new THREE.MeshPhysicalMaterial({
-            color: emberLevel ? "#ffd08b" : moonLevel ? "#d7e4ff" : "#ffd5a0",
-            emissive: emberLevel ? "#ff7a32" : moonLevel ? "#8ea6d8" : "#ff9750",
-            emissiveIntensity: emberLevel ? 1.24 : moonLevel ? 0.92 : 1.18,
+            color: emberLevel ? "#ffd4c8" : moonLevel ? "#d7e4ff" : "#ffd5a0",
+            emissive: emberLevel ? "#cf5f6f" : moonLevel ? "#8ea6d8" : "#ff9750",
+            emissiveIntensity: emberLevel ? 1.02 : moonLevel ? 0.92 : 1.18,
             metalness: emberLevel ? 0.46 : moonLevel ? 0.36 : 0.5,
-            roughness: emberLevel ? 0.16 : moonLevel ? 0.24 : 0.18,
-            transmission: emberLevel ? 0.2 : moonLevel ? 0.14 : 0.22,
+            roughness: emberLevel ? 0.2 : moonLevel ? 0.24 : 0.18,
+            transmission: emberLevel ? 0.18 : moonLevel ? 0.14 : 0.22,
             clearcoat: emberLevel ? 0.9 : moonLevel ? 0.78 : 0.9,
             clearcoatRoughness: emberLevel ? 0.1 : moonLevel ? 0.2 : 0.12,
           })
@@ -2589,9 +2589,9 @@ function buildMap() {
           const panel = new THREE.Mesh(
             new THREE.BoxGeometry(CELL_SIZE * 0.42, 0.12, CELL_SIZE * 0.22),
             new THREE.MeshStandardMaterial({
-              color: emberLevel ? "#5b3323" : moonLevel ? "#3a4457" : "#294a63",
-              emissive: emberLevel ? "#2a120b" : moonLevel ? "#1a2230" : "#0f2638",
-              emissiveIntensity: emberLevel ? 0.34 : moonLevel ? 0.22 : 0.4,
+              color: emberLevel ? "#3d3048" : moonLevel ? "#3a4457" : "#294a63",
+              emissive: emberLevel ? "#1d1428" : moonLevel ? "#1a2230" : "#0f2638",
+              emissiveIntensity: emberLevel ? 0.3 : moonLevel ? 0.22 : 0.4,
               metalness: emberLevel ? 0.45 : moonLevel ? 0.34 : 0.52,
               roughness: emberLevel ? 0.56 : moonLevel ? 0.62 : 0.42,
             })
@@ -2618,9 +2618,9 @@ function buildPathRails() {
   const moonLevel = game.currentLevel === 2;
   const emberLevel = game.currentLevel >= 3;
   const railMaterial = new THREE.MeshPhysicalMaterial({
-    color: emberLevel ? "#ffc27c" : moonLevel ? "#c8d8ff" : "#ffb873",
-    emissive: emberLevel ? "#9f3b1a" : moonLevel ? "#5e78a8" : "#8c3714",
-    emissiveIntensity: emberLevel ? 1.02 : moonLevel ? 0.9 : 1.12,
+    color: emberLevel ? "#d7c4ff" : moonLevel ? "#c8d8ff" : "#ffb873",
+    emissive: emberLevel ? "#6b4ca8" : moonLevel ? "#5e78a8" : "#8c3714",
+    emissiveIntensity: emberLevel ? 0.82 : moonLevel ? 0.9 : 1.12,
     metalness: emberLevel ? 0.5 : moonLevel ? 0.42 : 0.56,
     roughness: emberLevel ? 0.24 : moonLevel ? 0.28 : 0.2,
     clearcoat: emberLevel ? 0.86 : moonLevel ? 0.8 : 0.88,
@@ -2629,9 +2629,9 @@ function buildPathRails() {
   });
 
   const laneMaterial = new THREE.MeshPhysicalMaterial({
-    color: emberLevel ? "#7f341a" : moonLevel ? "#3c4f73" : "#874822",
-    emissive: emberLevel ? "#4a170c" : moonLevel ? "#1f2d47" : "#5f260f",
-    emissiveIntensity: emberLevel ? 1.04 : moonLevel ? 0.74 : 0.94,
+    color: emberLevel ? "#3d3258" : moonLevel ? "#3c4f73" : "#874822",
+    emissive: emberLevel ? "#201838" : moonLevel ? "#1f2d47" : "#5f260f",
+    emissiveIntensity: emberLevel ? 0.72 : moonLevel ? 0.74 : 0.94,
     metalness: emberLevel ? 0.36 : moonLevel ? 0.24 : 0.32,
     roughness: emberLevel ? 0.3 : moonLevel ? 0.44 : 0.33,
     clearcoat: emberLevel ? 0.7 : moonLevel ? 0.54 : 0.66,
@@ -2657,9 +2657,9 @@ function buildPathRails() {
     const laneGlow = new THREE.Mesh(
       new THREE.PlaneGeometry(segment.length + 0.1, 0.46),
       new THREE.MeshBasicMaterial({
-        color: emberLevel ? "#ff8c5b" : moonLevel ? "#b9d0ff" : "#ffb870",
+        color: emberLevel ? "#a8bbff" : moonLevel ? "#b9d0ff" : "#ffb870",
         transparent: true,
-        opacity: emberLevel ? 0.34 : moonLevel ? 0.24 : 0.3,
+        opacity: emberLevel ? 0.26 : moonLevel ? 0.24 : 0.3,
         depthWrite: false,
       })
     );
@@ -2685,9 +2685,9 @@ function buildPathPulseOrbs() {
   const moonLevel = game.currentLevel === 2;
   const emberLevel = game.currentLevel >= 3;
   const orbMaterial = new THREE.MeshStandardMaterial({
-    color: emberLevel ? "#ffd08b" : moonLevel ? "#d6e3ff" : "#ffe7ba",
-    emissive: emberLevel ? "#ff7838" : moonLevel ? "#92aee8" : "#ffb169",
-    emissiveIntensity: emberLevel ? 1.22 : moonLevel ? 0.95 : 1.1,
+    color: emberLevel ? "#d6dcff" : moonLevel ? "#d6e3ff" : "#ffe7ba",
+    emissive: emberLevel ? "#8b6bff" : moonLevel ? "#92aee8" : "#ffb169",
+    emissiveIntensity: emberLevel ? 1.06 : moonLevel ? 0.95 : 1.1,
     metalness: emberLevel ? 0.36 : moonLevel ? 0.24 : 0.32,
     roughness: emberLevel ? 0.24 : moonLevel ? 0.34 : 0.28,
   });
@@ -2717,10 +2717,10 @@ function buildSkyBits(boardWidth, boardHeight) {
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const starMaterial = new THREE.PointsMaterial({
-    color: emberLevel ? "#ff9f5e" : moonLevel ? "#d6e7ff" : "#a8dcff",
+    color: emberLevel ? "#c6d7ff" : moonLevel ? "#d6e7ff" : "#a8dcff",
     size: emberLevel ? 0.28 : moonLevel ? 0.24 : 0.22,
     transparent: true,
-    opacity: emberLevel ? 0.28 : moonLevel ? 0.42 : 0.34,
+    opacity: emberLevel ? 0.34 : moonLevel ? 0.42 : 0.34,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
@@ -2743,7 +2743,7 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
     const post = new THREE.Mesh(
       new THREE.CylinderGeometry(0.3, 0.45, 2.2, 12),
       new THREE.MeshStandardMaterial({
-        color: emberLevel ? "#5c3020" : moonLevel ? "#465270" : "#355670",
+        color: emberLevel ? "#4a3850" : moonLevel ? "#465270" : "#355670",
         roughness: 0.52,
         metalness: emberLevel ? 0.52 : moonLevel ? 0.48 : 0.6,
       })
@@ -2755,9 +2755,9 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
     const lamp = new THREE.Mesh(
       new THREE.SphereGeometry(0.28, 12, 12),
       new THREE.MeshStandardMaterial({
-        color: emberLevel ? "#ffd69e" : moonLevel ? "#d2e4ff" : "#a2ffe9",
-        emissive: emberLevel ? "#ff7d3e" : moonLevel ? "#8eaee8" : "#63f5d4",
-        emissiveIntensity: emberLevel ? 1.28 : moonLevel ? 1.05 : 1.2,
+        color: emberLevel ? "#dccbff" : moonLevel ? "#d2e4ff" : "#a2ffe9",
+        emissive: emberLevel ? "#9072ff" : moonLevel ? "#8eaee8" : "#63f5d4",
+        emissiveIntensity: emberLevel ? 1.08 : moonLevel ? 1.05 : 1.2,
         roughness: emberLevel ? 0.24 : moonLevel ? 0.36 : 0.3,
         metalness: emberLevel ? 0.46 : moonLevel ? 0.38 : 0.5,
       })
@@ -4082,11 +4082,10 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spikeRadius: 0.14,
     },
     star: {
-      shape: "star",
-      outerRadius: 2.4,
-      innerRadius: 1.08,
-      depth: 0.96,
-      spikes: 5,
+      shape: "starBall",
+      radius: 1.92,
+      spikeLength: 0.98,
+      spikeRadius: 0.2,
       ringRadius: 0,
       coreRadius: 0.34,
       coreY: 0.12,
@@ -4182,34 +4181,48 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spike.position.copy(spikeDir).multiplyScalar(setup.radius + (setup.spikeLength || 0.7) * 0.32);
       group.add(spike);
     }
-  } else if (setup.shape === "star") {
-    const spikes = Math.max(5, Math.floor(setup.spikes || 5));
-    const outerRadius = Math.max(0.6, setup.outerRadius || 2.2);
-    const innerRadius = Math.max(0.3, Math.min(outerRadius * 0.8, setup.innerRadius || outerRadius * 0.45));
-    const starShape = new THREE.Shape();
-    const points = spikes * 2;
-    for (let i = 0; i < points; i += 1) {
-      const angle = (i / points) * Math.PI * 2 - Math.PI / 2;
-      const radius = i % 2 === 0 ? outerRadius : innerRadius;
-      const px = Math.cos(angle) * radius;
-      const py = Math.sin(angle) * radius;
-      if (i === 0) starShape.moveTo(px, py);
-      else starShape.lineTo(px, py);
-    }
-    starShape.closePath();
-    const starGeometry = new THREE.ExtrudeGeometry(starShape, {
-      depth: setup.depth || 0.96,
-      steps: 1,
-      bevelEnabled: true,
-      bevelThickness: 0.11,
-      bevelSize: 0.14,
-      bevelSegments: 2,
-      curveSegments: 24,
-    });
-    starGeometry.center();
-    body = cast(new THREE.Mesh(starGeometry, bodyMat));
-    body.rotation.x = Math.PI / 2;
+  } else if (setup.shape === "starBall") {
+    const coreRadius = Math.max(0.8, setup.radius || 1.9);
+    const spikeLength = Math.max(0.25, setup.spikeLength || 0.9);
+    const spikeRadius = Math.max(0.1, setup.spikeRadius || 0.2);
+
+    body = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(coreRadius, 1), bodyMat));
+    body.rotation.y = Math.PI / 10;
     group.add(body);
+
+    const starTemplate = new THREE.IcosahedronGeometry(coreRadius, 1);
+    const pos = starTemplate.getAttribute("position");
+    const spikeDirs = [];
+    const dir = new THREE.Vector3();
+    const upAxis = new THREE.Vector3(0, 1, 0);
+
+    for (let i = 0; i < pos.count; i += 1) {
+      dir.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+      let exists = false;
+      for (const stored of spikeDirs) {
+        if (stored.dot(dir) > 0.995) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) spikeDirs.push(dir.clone());
+    }
+    starTemplate.dispose();
+
+    for (let i = 0; i < spikeDirs.length; i += 1) {
+      const spikeDir = spikeDirs[i];
+      const lengthScale = i % 4 === 0 ? 1.18 : i % 3 === 0 ? 1.08 : 1;
+      const widthScale = i % 5 === 0 ? 1.12 : 1;
+      const spike = cast(
+        new THREE.Mesh(
+          new THREE.ConeGeometry(spikeRadius * widthScale, spikeLength * lengthScale, 9),
+          i % 2 === 0 ? darkMat : accentMat
+        )
+      );
+      spike.quaternion.setFromUnitVectors(upAxis, spikeDir);
+      spike.position.copy(spikeDir).multiplyScalar(coreRadius + (spikeLength * lengthScale) * 0.36);
+      group.add(spike);
+    }
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
     body.rotation.y = Math.PI / 4;
@@ -8281,12 +8294,12 @@ function updateMapEffects(dt) {
   }
 
   if (emberLevel) {
-    tealRim.intensity = 0.78 + Math.sin(game.time * 1.4) * 0.1;
-    emberRim.intensity = 0.52 + Math.sin(game.time * 1.1 + 1.2) * 0.08;
-    prismKeyLight.intensity = 0.62 + Math.sin(game.time * 1.6 + 0.4) * 0.11;
-    prismFillLight.intensity = 0.48 + Math.sin(game.time * 1.32 + 1.9) * 0.09;
-    prismKeyLight.position.x = 2 + Math.sin(game.time * 0.3) * 10;
-    prismFillLight.position.z = 17 + Math.cos(game.time * 0.25) * 5.5;
+    tealRim.intensity = 0.64 + Math.sin(game.time * 1.34) * 0.08;
+    emberRim.intensity = 0.36 + Math.sin(game.time * 1.06 + 1.2) * 0.06;
+    prismKeyLight.intensity = 0.54 + Math.sin(game.time * 1.48 + 0.4) * 0.09;
+    prismFillLight.intensity = 0.42 + Math.sin(game.time * 1.24 + 1.9) * 0.08;
+    prismKeyLight.position.x = 1 + Math.sin(game.time * 0.28) * 9;
+    prismFillLight.position.z = 16 + Math.cos(game.time * 0.24) * 5;
   } else if (moonLevel) {
     tealRim.intensity = 0.54 + Math.sin(game.time * 1.3) * 0.08;
     emberRim.intensity = 0.28 + Math.sin(game.time * 1.15 + 1.2) * 0.05;
@@ -8305,9 +8318,9 @@ function updateMapEffects(dt) {
 
   if (mapState.mapLights.length >= 3) {
     if (emberLevel) {
-      mapState.mapLights[0].intensity = 0.46 + Math.sin(game.time * 1.15 + 0.2) * 0.12;
-      mapState.mapLights[1].intensity = 0.36 + Math.sin(game.time * 1.04 + 1.6) * 0.1;
-      mapState.mapLights[2].intensity = 0.28 + Math.sin(game.time * 1.22 + 2.2) * 0.08;
+      mapState.mapLights[0].intensity = 0.38 + Math.sin(game.time * 1.05 + 0.2) * 0.09;
+      mapState.mapLights[1].intensity = 0.3 + Math.sin(game.time * 0.96 + 1.6) * 0.08;
+      mapState.mapLights[2].intensity = 0.24 + Math.sin(game.time * 1.1 + 2.2) * 0.06;
     } else if (moonLevel) {
       mapState.mapLights[0].intensity = 0.34 + Math.sin(game.time * 0.95 + 0.2) * 0.08;
       mapState.mapLights[1].intensity = 0.26 + Math.sin(game.time * 0.88 + 1.6) * 0.06;
