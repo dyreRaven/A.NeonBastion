@@ -936,6 +936,8 @@ const SPAWNER_TOWER_PLACE_CAPS = {
   rhombus: 1,
   rhombusMinus: 2,
 };
+const TOWER_CAP_HARD_LIMIT = 8;
+const TOWER_CAP_UPGRADE_MAX_LEVEL = 3;
 
 const HALF_COLS = (COLS - 1) / 2;
 const HALF_ROWS = (ROWS - 1) / 2;
@@ -1380,14 +1382,56 @@ function getTowerType(towerTypeId) {
   return TOWER_TYPES[towerTypeId] || getSpawnerTowerType(towerTypeId) || TOWER_TYPES.pulse;
 }
 
-function getTowerPlaceCap(towerTypeId) {
+function getTowerBasePlaceCap(towerTypeId) {
   const spawnerEnemyTypeId = enemyTypeFromSpawnerTowerId(towerTypeId);
   if (spawnerEnemyTypeId) {
     const cap = SPAWNER_TOWER_PLACE_CAPS[spawnerEnemyTypeId];
-    return Math.max(1, Math.min(4, Number.isFinite(cap) ? cap : 2));
+    return Math.max(1, Math.min(TOWER_CAP_HARD_LIMIT, Number.isFinite(cap) ? cap : 2));
   }
   const cap = BASE_TOWER_PLACE_CAPS[towerTypeId];
-  return Math.max(1, Math.min(4, Number.isFinite(cap) ? cap : 2));
+  return Math.max(1, Math.min(TOWER_CAP_HARD_LIMIT, Number.isFinite(cap) ? cap : 2));
+}
+
+function getTowerCapUpgradeMaxLevel(towerTypeId) {
+  const baseCap = getTowerBasePlaceCap(towerTypeId);
+  const roomUntilHardLimit = Math.max(0, TOWER_CAP_HARD_LIMIT - baseCap);
+  return Math.max(0, Math.min(TOWER_CAP_UPGRADE_MAX_LEVEL, roomUntilHardLimit));
+}
+
+function getTowerCapUpgradeLevel(towerTypeId) {
+  const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
+  const rawLevel = Number(game.towerCapUpgrades?.[towerTypeId] || 0);
+  if (!Number.isFinite(rawLevel)) return 0;
+  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+}
+
+function getTowerPlaceCap(towerTypeId) {
+  const baseCap = getTowerBasePlaceCap(towerTypeId);
+  const upgradeLevel = getTowerCapUpgradeLevel(towerTypeId);
+  return Math.max(1, Math.min(TOWER_CAP_HARD_LIMIT, baseCap + upgradeLevel));
+}
+
+function getTowerCapUpgradeCost(towerTypeId, nextLevel) {
+  const towerType = getTowerType(towerTypeId);
+  const baseCap = getTowerBasePlaceCap(towerTypeId);
+  const level = Math.max(1, Math.floor(nextLevel || 1));
+  const spawnerTax = isSpawnerTowerId(towerTypeId) ? 8 : 0;
+  return Math.max(8, Math.round(6 + baseCap * 4 + level * 10 + towerType.cost * 0.035 + spawnerTax));
+}
+
+function normalizeTowerCapUpgrades(rawUpgrades) {
+  const normalized = {};
+  const knownTowerIds = getAllTowerTypeIds();
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+  for (const towerTypeId of knownTowerIds) {
+    const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
+    if (maxLevel <= 0) continue;
+    const rawLevel = Number(rawUpgrades[towerTypeId]);
+    if (!Number.isFinite(rawLevel)) continue;
+    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+    if (level > 0) normalized[towerTypeId] = level;
+  }
+  return normalized;
 }
 
 function countPlacedTowersByType(towerTypeId) {
@@ -1517,7 +1561,8 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
   const baseReward = type.reward + type.rewardGrowth * waveFactor;
   const rewardScaled = (typeId === "crawler" ? baseReward : baseReward / 3) * profile.rewardMultiplier;
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
-  const hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : scaledHp;
+  let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : scaledHp;
+  if (level === 1 && typeId === "icosahedron") hp = Math.max(1, Math.round(hp * 2));
 
   return {
     typeId,
@@ -2466,6 +2511,7 @@ const game = {
   spawnQueue: [],
   selectedTowerType: "pulse",
   unlockedTowers: new Set(BASE_UNLOCKED_TOWERS),
+  towerCapUpgrades: {},
   maxLoadoutSlots: BASE_LOADOUT_SLOTS,
   activeLoadout: new Set(Array.from(BASE_UNLOCKED_TOWERS).slice(0, BASE_LOADOUT_SLOTS)),
   unlockedSpawnerTowers: new Set(),
@@ -3299,6 +3345,7 @@ function createAccountRecord(name = "Commander", seed = null) {
 
   const enemyKillCounts = normalizeEnemyKillCounts(seed?.enemyKillCounts);
   const unlockedSpawnerTowers = normalizeUnlockedSpawnerTypes(seed?.unlockedSpawnerTowers, enemyKillCounts);
+  const towerCapUpgrades = normalizeTowerCapUpgrades(seed?.towerCapUpgrades);
   const maxLoadoutSlots = clampLoadoutSlotLimit(Number(seed?.maxLoadoutSlots));
   let loadout = normalizeTowerIds(
     seed?.activeLoadout,
@@ -3325,6 +3372,7 @@ function createAccountRecord(name = "Commander", seed = null) {
     activeLoadout: Array.from(loadout),
     enemyKillCounts,
     unlockedSpawnerTowers: Array.from(unlockedSpawnerTowers),
+    towerCapUpgrades,
   };
 }
 
@@ -3397,6 +3445,7 @@ function applyAccountToGame(account) {
     game.currentLevel = getHighestUnlockedLevel();
   }
   game.unlockedTowers = new Set(account.unlockedTowers);
+  game.towerCapUpgrades = normalizeTowerCapUpgrades(account.towerCapUpgrades);
   game.enemyKillCounts = normalizeEnemyKillCounts(account.enemyKillCounts);
   game.unlockedSpawnerTowers = normalizeUnlockedSpawnerTypes(
     account.unlockedSpawnerTowers,
@@ -3440,6 +3489,7 @@ function savePlayerProgress() {
   current.maxLevelUnlocked = Math.max(1, Math.floor(game.maxLevelUnlocked || 1));
   current.maxLoadoutSlots = getCurrentLoadoutSlotLimit();
   current.unlockedTowers = Array.from(game.unlockedTowers);
+  current.towerCapUpgrades = normalizeTowerCapUpgrades(game.towerCapUpgrades);
   current.enemyKillCounts = normalizeEnemyKillCounts(game.enemyKillCounts);
   current.unlockedSpawnerTowers = Array.from(game.unlockedSpawnerTowers).filter((enemyTypeId) =>
     Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
@@ -5320,6 +5370,7 @@ function buildMultiplayerSnapshot() {
     multiplayerPlayers: getMultiplayerRosterPayload(),
     activeLoadout: Array.from(game.activeLoadout),
     unlockedTowers: Array.from(game.unlockedTowers),
+    towerCapUpgrades: normalizeTowerCapUpgrades(game.towerCapUpgrades),
     unlockedSpawnerTowers: Array.from(game.unlockedSpawnerTowers),
     laneCells: Array.from(pathCellSet),
     statusText: statusEl ? statusEl.textContent : "",
@@ -5570,6 +5621,7 @@ function applyMultiplayerSnapshot(snapshot) {
   if (Array.isArray(snapshot.unlockedTowers)) {
     game.unlockedTowers = new Set(snapshot.unlockedTowers.filter((id) => Object.prototype.hasOwnProperty.call(TOWER_TYPES, id)));
   }
+  game.towerCapUpgrades = normalizeTowerCapUpgrades(snapshot.towerCapUpgrades || game.towerCapUpgrades);
   if (Array.isArray(snapshot.unlockedSpawnerTowers)) {
     game.unlockedSpawnerTowers = new Set(
       snapshot.unlockedSpawnerTowers.filter((id) => Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, id))
@@ -5611,6 +5663,10 @@ function applyMultiplayerSnapshot(snapshot) {
     Array.from(game.activeLoadout).join(","),
     Array.from(game.unlockedTowers).sort().join(","),
     Array.from(game.unlockedSpawnerTowers).sort().join(","),
+    Object.keys(game.towerCapUpgrades || {})
+      .sort()
+      .map((towerTypeId) => `${towerTypeId}:${game.towerCapUpgrades[towerTypeId]}`)
+      .join(","),
   ].join("|");
   if (shopSignature !== multiplayer.lastShopSignature) {
     multiplayer.lastShopSignature = shopSignature;
@@ -6648,9 +6704,65 @@ function renderMenuShop() {
     `);
   }
 
+  const capUpgradeTowerIds = [];
+  for (const towerTypeId of Object.keys(TOWER_TYPES)) {
+    if (!game.unlockedTowers.has(towerTypeId)) continue;
+    if (getTowerCapUpgradeMaxLevel(towerTypeId) <= 0) continue;
+    capUpgradeTowerIds.push(towerTypeId);
+  }
+  for (const enemyTypeId of CREATURE_SHOP_ENEMY_IDS) {
+    if (!game.unlockedSpawnerTowers.has(enemyTypeId)) continue;
+    const towerTypeId = spawnerTowerIdForEnemy(enemyTypeId);
+    if (getTowerCapUpgradeMaxLevel(towerTypeId) <= 0) continue;
+    capUpgradeTowerIds.push(towerTypeId);
+  }
+  capUpgradeTowerIds.sort((a, b) => {
+    const aSpawner = isSpawnerTowerId(a) ? 1 : 0;
+    const bSpawner = isSpawnerTowerId(b) ? 1 : 0;
+    if (aSpawner !== bSpawner) return aSpawner - bSpawner;
+    return getTowerType(a).name.localeCompare(getTowerType(b).name);
+  });
+
+  for (const towerTypeId of capUpgradeTowerIds) {
+    const type = getTowerType(towerTypeId);
+    const baseCap = getTowerBasePlaceCap(towerTypeId);
+    const currentCap = getTowerPlaceCap(towerTypeId);
+    const currentLevel = getTowerCapUpgradeLevel(towerTypeId);
+    const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
+    const atMax = currentLevel >= maxLevel;
+    const nextLevel = currentLevel + 1;
+    const upgradeCost = atMax ? 0 : getTowerCapUpgradeCost(towerTypeId, nextLevel);
+    const nextCap = Math.min(TOWER_CAP_HARD_LIMIT, currentCap + (atMax ? 0 : 1));
+    const canAfford = atMax || game.shards >= upgradeCost;
+    const itemClasses = [
+      "menu-unlock-item",
+      atMax ? "unlocked" : "",
+      !atMax && !canAfford ? "unaffordable" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    fragments.push(`
+      <div class="${itemClasses}">
+        <div>
+          <strong>${type.name} Cap Upgrade</strong>
+          <span>Base ${baseCap} | Current ${currentCap} | Upgrade ${currentLevel}/${maxLevel}${atMax ? " (MAX)" : ` -> ${nextCap}`}</span>
+        </div>
+        <button
+          class="unlock-action"
+          type="button"
+          data-cap-upgrade-type="${towerTypeId}"
+          ${atMax ? "disabled" : ""}
+        >
+          ${atMax ? "Maxed" : `${upgradeCost} Shards`}
+        </button>
+      </div>
+    `);
+  }
+
   menuShopEl.innerHTML = fragments.join("");
 
-  const unlockButtons = menuShopEl.querySelectorAll(".unlock-action");
+  const unlockButtons = menuShopEl.querySelectorAll("button[data-unlock-type]");
   for (const button of unlockButtons) {
     button.addEventListener("click", () => {
       const towerTypeId = button.dataset.unlockType;
@@ -6666,6 +6778,40 @@ function renderMenuShop() {
       game.unlockedTowers.add(towerTypeId);
       const tower = getTowerType(towerTypeId);
       setStatus(`${tower.name} unlocked in the menu shop.`);
+      savePlayerProgress();
+      renderAccountMenu();
+      renderMenuShop();
+      renderCreatureShop();
+      renderShop();
+      updateHud();
+    });
+  }
+
+  const capUpgradeButtons = menuShopEl.querySelectorAll("button[data-cap-upgrade-type]");
+  for (const button of capUpgradeButtons) {
+    button.addEventListener("click", () => {
+      const towerTypeId = button.dataset.capUpgradeType;
+      if (!towerTypeId) return;
+      const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
+      if (maxLevel <= 0) return;
+      const currentLevel = getTowerCapUpgradeLevel(towerTypeId);
+      if (currentLevel >= maxLevel) {
+        setStatus(`${getTowerType(towerTypeId).name} cap is already maxed.`);
+        return;
+      }
+
+      const nextLevel = currentLevel + 1;
+      const upgradeCost = getTowerCapUpgradeCost(towerTypeId, nextLevel);
+      if (game.shards < upgradeCost) {
+        setStatus("Not enough shards for that cap upgrade.", true);
+        updateHud();
+        return;
+      }
+
+      game.shards -= upgradeCost;
+      game.towerCapUpgrades[towerTypeId] = nextLevel;
+      const upgradedCap = getTowerPlaceCap(towerTypeId);
+      setStatus(`${getTowerType(towerTypeId).name} cap increased to ${upgradedCap}.`);
       savePlayerProgress();
       renderAccountMenu();
       renderMenuShop();
