@@ -4895,6 +4895,103 @@ class Projectile {
   }
 }
 
+class NetworkProjectile {
+  constructor(state) {
+    this.alive = true;
+    this.color = state?.color || "#9fd8ff";
+    this.radius = Math.max(0.04, Number.isFinite(state?.radius) ? state.radius : 0.14);
+    this.speed = Number.isFinite(state?.speed) ? state.speed : 12;
+    this.renderPosition = new THREE.Vector3();
+    this.targetPosition = new THREE.Vector3();
+    this.direction = new THREE.Vector3(0, 0, 1);
+    this.desiredQuat = new THREE.Quaternion();
+
+    this.group = new THREE.Group();
+
+    this.streakMat = new THREE.MeshStandardMaterial({
+      color: this.color,
+      emissive: this.color,
+      emissiveIntensity: 1.25,
+      metalness: 0.05,
+      roughness: 0.2,
+      transparent: true,
+      opacity: 0.68,
+      depthWrite: false,
+    });
+
+    this.streak = new THREE.Mesh(
+      new THREE.CylinderGeometry(this.radius * 0.35, this.radius * 0.95, this.radius * 7, 10, 1, true),
+      this.streakMat
+    );
+    this.streak.rotation.x = Math.PI / 2;
+    this.streak.position.z = -this.radius * 2.4;
+    this.group.add(this.streak);
+
+    this.coreMat = new THREE.MeshStandardMaterial({
+      color: this.color,
+      emissive: this.color,
+      emissiveIntensity: 1.3,
+      metalness: 0.22,
+      roughness: 0.24,
+    });
+
+    this.core = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 10, 10), this.coreMat);
+    this.group.add(this.core);
+
+    scene.add(this.group);
+    this.updateFromNetworkState(state, true);
+  }
+
+  updateFromNetworkState(state, snap = false) {
+    if (!state || typeof state !== "object") {
+      this.alive = false;
+      return;
+    }
+
+    const nextColor = state.color || this.color;
+    if (nextColor !== this.color) {
+      this.color = nextColor;
+      this.streakMat.color.set(nextColor);
+      this.streakMat.emissive.set(nextColor);
+      this.coreMat.color.set(nextColor);
+      this.coreMat.emissive.set(nextColor);
+    }
+
+    this.speed = Number.isFinite(state.speed) ? state.speed : this.speed;
+
+    const x = Number.isFinite(state.x) ? state.x : this.targetPosition.x;
+    const y = Number.isFinite(state.y) ? state.y : this.targetPosition.y;
+    const z = Number.isFinite(state.z) ? state.z : this.targetPosition.z;
+    this.targetPosition.set(x, y, z);
+
+    if (snap) this.renderPosition.copy(this.targetPosition);
+    else this.renderPosition.lerp(this.targetPosition, 0.82);
+    this.group.position.copy(this.renderPosition);
+
+    const dx = Number.isFinite(state.dirX) ? state.dirX : this.direction.x;
+    const dy = Number.isFinite(state.dirY) ? state.dirY : this.direction.y;
+    const dz = Number.isFinite(state.dirZ) ? state.dirZ : this.direction.z;
+    const dirLength = Math.hypot(dx, dy, dz);
+    if (dirLength > 1e-6) this.direction.set(dx / dirLength, dy / dirLength, dz / dirLength);
+
+    this.desiredQuat.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
+    if (snap) this.group.quaternion.copy(this.desiredQuat);
+    else this.group.quaternion.slerp(this.desiredQuat, 0.68);
+
+    const stretch = 1 + Math.min(this.speed * 0.03, 1.8);
+    this.streak.scale.z = stretch;
+    this.alive = state.alive !== false;
+  }
+
+  update() {
+    this.alive = false;
+  }
+
+  dispose() {
+    scene.remove(this.group);
+  }
+}
+
 function serializeTowerState(tower) {
   return {
     towerTypeId: tower.towerTypeId,
@@ -4953,6 +5050,25 @@ function serializeAllyState(ally) {
   };
 }
 
+function serializeProjectileState(projectile) {
+  if (!projectile || !projectile.alive) return null;
+  const position = projectile.renderPosition || projectile.position || projectile.group?.position || null;
+  if (!position) return null;
+  const direction = projectile.direction || PROJECTILE_FORWARD;
+  return {
+    x: Number.isFinite(position.x) ? position.x : 0,
+    y: Number.isFinite(position.y) ? position.y : 0,
+    z: Number.isFinite(position.z) ? position.z : 0,
+    dirX: Number.isFinite(direction.x) ? direction.x : 0,
+    dirY: Number.isFinite(direction.y) ? direction.y : 0,
+    dirZ: Number.isFinite(direction.z) ? direction.z : 1,
+    speed: Number.isFinite(projectile.speed) ? projectile.speed : 0,
+    radius: Number.isFinite(projectile.radius) ? projectile.radius : 0.12,
+    color: projectile.color || "#9fd8ff",
+    alive: projectile.alive !== false,
+  };
+}
+
 function buildMultiplayerSnapshot() {
   return {
     started: game.started,
@@ -4992,6 +5108,7 @@ function buildMultiplayerSnapshot() {
     towers: game.towers.map(serializeTowerState),
     enemies: game.enemies.filter((enemy) => enemy.alive).map(serializeEnemyState),
     allies: game.allies.filter((ally) => ally.alive).map(serializeAllyState),
+    projectiles: game.projectiles.map(serializeProjectileState).filter(Boolean),
   };
 }
 
@@ -5146,6 +5263,31 @@ function syncAlliesFromMultiplayer(states) {
   game.allies = next;
 }
 
+function syncProjectilesFromMultiplayer(states) {
+  const next = [];
+  const list = Array.isArray(states) ? states : [];
+  for (let i = 0; i < list.length; i += 1) {
+    const state = list[i];
+    if (!state || typeof state !== "object") continue;
+    let projectile = game.projectiles[i] || null;
+    const reusable = projectile && typeof projectile.updateFromNetworkState === "function";
+    if (!reusable) {
+      if (projectile) projectile.dispose();
+      projectile = new NetworkProjectile(state);
+    } else {
+      projectile.updateFromNetworkState(state);
+    }
+    if (projectile.alive) next.push(projectile);
+    else projectile.dispose();
+  }
+
+  for (let i = list.length; i < game.projectiles.length; i += 1) {
+    const projectile = game.projectiles[i];
+    if (projectile) projectile.dispose();
+  }
+  game.projectiles = next;
+}
+
 function applyMultiplayerSnapshot(snapshot) {
   if (!isMultiplayerClient() || !snapshot || typeof snapshot !== "object") return;
   const level = Math.max(1, Math.floor(snapshot.currentLevel || 1));
@@ -5232,9 +5374,7 @@ function applyMultiplayerSnapshot(snapshot) {
   syncTowersFromMultiplayer(snapshot.towers);
   syncEnemiesFromMultiplayer(snapshot.enemies);
   syncAlliesFromMultiplayer(snapshot.allies);
-
-  for (const projectile of game.projectiles) projectile.dispose();
-  game.projectiles = [];
+  syncProjectilesFromMultiplayer(snapshot.projectiles);
   for (const debris of game.debris) debris.dispose();
   game.debris = [];
 
