@@ -18,6 +18,7 @@ const autoWaveBtn = document.getElementById("autoWaveBtn");
 const shopEl = document.getElementById("shop");
 const menuScreenEl = document.getElementById("menuScreen");
 const menuCardEl = document.getElementById("menuCard");
+const buildStampEl = document.getElementById("buildStamp");
 const exitConfirmEl = document.getElementById("exitConfirm");
 const confirmExitBtn = document.getElementById("confirmExitBtn");
 const cancelExitBtn = document.getElementById("cancelExitBtn");
@@ -110,6 +111,10 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+const BUILD_ID = "2026-02-19-1";
+
+if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
+window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
 
 const audioSystem = {
   musicBusVolume: 0.34,
@@ -938,6 +943,12 @@ const SPAWNER_TOWER_PLACE_CAPS = {
 };
 const TOWER_CAP_HARD_LIMIT = 8;
 const TOWER_CAP_UPGRADE_MAX_LEVEL = 3;
+const TOWER_DAMAGE_UPGRADE_MAX_LEVEL = 6;
+const TOWER_ATTACK_SPEED_UPGRADE_MAX_LEVEL = 6;
+const SPAWNER_COOLDOWN_UPGRADE_MAX_LEVEL = 6;
+const TOWER_DAMAGE_UPGRADE_STEP = 0.22;
+const TOWER_ATTACK_SPEED_UPGRADE_STEP = 0.12;
+const SPAWNER_COOLDOWN_UPGRADE_STEP = 0.1;
 
 const HALF_COLS = (COLS - 1) / 2;
 const HALF_ROWS = (ROWS - 1) / 2;
@@ -1228,6 +1239,20 @@ const ENEMY_TYPES = {
     colorB: "#fff0c8",
     hoverHeight: 1.08,
   },
+  prism: {
+    name: "Prism",
+    hp: 310,
+    speed: 4.25,
+    reward: 34,
+    radius: 1.02,
+    coreDamage: 2,
+    hpGrowth: 0.28,
+    speedGrowth: 0.012,
+    rewardGrowth: 2.2,
+    colorA: "#7de4ff",
+    colorB: "#e3fcff",
+    hoverHeight: 1.08,
+  },
   colossus: {
     name: "Colossus",
     hp: 390,
@@ -1255,6 +1280,20 @@ const ENEMY_TYPES = {
     colorA: "#ff5b8e",
     colorB: "#ffd9e7",
     hoverHeight: 1.2,
+  },
+  monolith: {
+    name: "Monolith",
+    hp: 960,
+    speed: 2.78,
+    reward: 80,
+    radius: 5.2,
+    coreDamage: 7,
+    hpGrowth: 0.44,
+    speedGrowth: 0.009,
+    rewardGrowth: 3.6,
+    colorA: "#7b62ff",
+    colorB: "#f2ddff",
+    hoverHeight: 3.4,
   },
   icosahedron: {
     name: "Icosahedron",
@@ -1361,7 +1400,7 @@ function getSpawnerTowerType(towerTypeId) {
     cost: unlock.towerCost,
     range: 1.7,
     damage: enemyType.hp,
-    fireInterval: unlock.spawnInterval,
+    fireInterval: spawnInterval,
     turnSpeed: 2.4,
     projectileSpeed: 0,
     projectileRadius: 0.2,
@@ -1378,8 +1417,103 @@ function getSpawnerTowerType(towerTypeId) {
   };
 }
 
+function getTowerDamageUpgradeMaxLevel(towerTypeId) {
+  return isSpawnerTowerId(towerTypeId) ? 0 : TOWER_DAMAGE_UPGRADE_MAX_LEVEL;
+}
+
+function getTowerAttackSpeedUpgradeMaxLevel(towerTypeId) {
+  return isSpawnerTowerId(towerTypeId) ? 0 : TOWER_ATTACK_SPEED_UPGRADE_MAX_LEVEL;
+}
+
+function getSpawnerCooldownUpgradeMaxLevel(towerTypeId) {
+  return isSpawnerTowerId(towerTypeId) ? SPAWNER_COOLDOWN_UPGRADE_MAX_LEVEL : 0;
+}
+
+function getTowerDamageUpgradeLevel(towerTypeId) {
+  const maxLevel = getTowerDamageUpgradeMaxLevel(towerTypeId);
+  const rawLevel = Number(game.towerDamageUpgrades?.[towerTypeId] || 0);
+  if (!Number.isFinite(rawLevel)) return 0;
+  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+}
+
+function getTowerAttackSpeedUpgradeLevel(towerTypeId) {
+  const maxLevel = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
+  const rawLevel = Number(game.towerAttackSpeedUpgrades?.[towerTypeId] || 0);
+  if (!Number.isFinite(rawLevel)) return 0;
+  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+}
+
+function getSpawnerCooldownUpgradeLevel(towerTypeId) {
+  const maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
+  const rawLevel = Number(game.spawnerCooldownUpgrades?.[towerTypeId] || 0);
+  if (!Number.isFinite(rawLevel)) return 0;
+  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+}
+
+function getTowerDamageMultiplier(towerTypeId) {
+  return 1 + getTowerDamageUpgradeLevel(towerTypeId) * TOWER_DAMAGE_UPGRADE_STEP;
+}
+
+function getTowerFireIntervalMultiplier(towerTypeId) {
+  const level = getTowerAttackSpeedUpgradeLevel(towerTypeId);
+  return Math.max(0.35, 1 - level * TOWER_ATTACK_SPEED_UPGRADE_STEP);
+}
+
+function getSpawnerCooldownMultiplier(towerTypeId) {
+  const level = getSpawnerCooldownUpgradeLevel(towerTypeId);
+  return Math.max(0.4, 1 - level * SPAWNER_COOLDOWN_UPGRADE_STEP);
+}
+
+function getTowerDamageUpgradeCost(towerTypeId, nextLevel) {
+  const baseTower = TOWER_TYPES[towerTypeId];
+  if (!baseTower) return 0;
+  const level = Math.max(1, Math.floor(nextLevel || 1));
+  return Math.max(8, Math.round(12 + baseTower.cost * 0.045 + baseTower.damage * 0.08 + level * 14));
+}
+
+function getTowerAttackSpeedUpgradeCost(towerTypeId, nextLevel) {
+  const baseTower = TOWER_TYPES[towerTypeId];
+  if (!baseTower) return 0;
+  const level = Math.max(1, Math.floor(nextLevel || 1));
+  const speedWeight = Math.max(1, 1 / Math.max(0.08, baseTower.fireInterval));
+  return Math.max(8, Math.round(14 + baseTower.cost * 0.05 + speedWeight * 3 + level * 15));
+}
+
+function getSpawnerCooldownUpgradeCost(towerTypeId, nextLevel) {
+  const spawnerType = getSpawnerTowerType(towerTypeId);
+  if (!spawnerType) return 0;
+  const level = Math.max(1, Math.floor(nextLevel || 1));
+  return Math.max(8, Math.round(12 + spawnerType.cost * 0.048 + spawnerType.spawnCount * 6 + level * 13));
+}
+
 function getTowerType(towerTypeId) {
-  return TOWER_TYPES[towerTypeId] || getSpawnerTowerType(towerTypeId) || TOWER_TYPES.pulse;
+  const baseTower = TOWER_TYPES[towerTypeId];
+  if (baseTower) {
+    const damageMultiplier = getTowerDamageMultiplier(towerTypeId);
+    const fireIntervalMultiplier = getTowerFireIntervalMultiplier(towerTypeId);
+    const damage = Math.max(1, Math.round(baseTower.damage * damageMultiplier));
+    const fireInterval = Math.max(0.05, Number((baseTower.fireInterval * fireIntervalMultiplier).toFixed(3)));
+    if (damage === baseTower.damage && fireInterval === baseTower.fireInterval) return baseTower;
+    return {
+      ...baseTower,
+      damage,
+      fireInterval,
+    };
+  }
+
+  const spawnerTower = getSpawnerTowerType(towerTypeId);
+  if (spawnerTower) {
+    const cooldownMultiplier = getSpawnerCooldownMultiplier(towerTypeId);
+    const spawnInterval = Math.max(0.35, Number((spawnerTower.spawnInterval * cooldownMultiplier).toFixed(2)));
+    if (spawnInterval === spawnerTower.spawnInterval) return spawnerTower;
+    return {
+      ...spawnerTower,
+      fireInterval: spawnInterval,
+      spawnInterval,
+    };
+  }
+
+  return TOWER_TYPES.pulse;
 }
 
 function getTowerBasePlaceCap(towerTypeId) {
@@ -1434,6 +1568,51 @@ function normalizeTowerCapUpgrades(rawUpgrades) {
   return normalized;
 }
 
+function normalizeTowerDamageUpgrades(rawUpgrades) {
+  const normalized = {};
+  const knownTowerIds = Object.keys(TOWER_TYPES);
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+  for (const towerTypeId of knownTowerIds) {
+    const maxLevel = getTowerDamageUpgradeMaxLevel(towerTypeId);
+    if (maxLevel <= 0) continue;
+    const rawLevel = Number(rawUpgrades[towerTypeId]);
+    if (!Number.isFinite(rawLevel)) continue;
+    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+    if (level > 0) normalized[towerTypeId] = level;
+  }
+  return normalized;
+}
+
+function normalizeTowerAttackSpeedUpgrades(rawUpgrades) {
+  const normalized = {};
+  const knownTowerIds = Object.keys(TOWER_TYPES);
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+  for (const towerTypeId of knownTowerIds) {
+    const maxLevel = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
+    if (maxLevel <= 0) continue;
+    const rawLevel = Number(rawUpgrades[towerTypeId]);
+    if (!Number.isFinite(rawLevel)) continue;
+    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+    if (level > 0) normalized[towerTypeId] = level;
+  }
+  return normalized;
+}
+
+function normalizeSpawnerCooldownUpgrades(rawUpgrades) {
+  const normalized = {};
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+  for (const enemyTypeId of CREATURE_SHOP_ENEMY_IDS) {
+    const towerTypeId = spawnerTowerIdForEnemy(enemyTypeId);
+    const maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
+    if (maxLevel <= 0) continue;
+    const rawLevel = Number(rawUpgrades[towerTypeId]);
+    if (!Number.isFinite(rawLevel)) continue;
+    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+    if (level > 0) normalized[towerTypeId] = level;
+  }
+  return normalized;
+}
+
 function countPlacedTowersByType(towerTypeId) {
   let count = 0;
   for (const tower of game.towers) {
@@ -1451,6 +1630,51 @@ function getTowerPlacementStats(towerTypeId) {
     remaining: Math.max(0, cap - placed),
     atCap: placed >= cap,
   };
+}
+
+function getTowerCapBreakdown(towerTypeId) {
+  const baseCap = getTowerBasePlaceCap(towerTypeId);
+  const upgradeLevel = getTowerCapUpgradeLevel(towerTypeId);
+  const cap = getTowerPlaceCap(towerTypeId);
+  const maxUpgradeLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
+  return {
+    baseCap,
+    cap,
+    upgradeLevel,
+    maxUpgradeLevel,
+  };
+}
+
+function formatPlacementCapLine(towerTypeId, placement = null, includeMaxTag = true) {
+  const effectivePlacement = placement || getTowerPlacementStats(towerTypeId);
+  const capInfo = getTowerCapBreakdown(towerTypeId);
+  const maxTag = includeMaxTag && effectivePlacement.atCap ? " (MAX)" : "";
+  return `Cap ${capInfo.cap} (Base ${capInfo.baseCap} +${capInfo.upgradeLevel}) | Placed ${effectivePlacement.placed}/${effectivePlacement.cap}${maxTag}`;
+}
+
+function applyTowerTypeConfigToPlacedTower(tower) {
+  if (!tower || !tower.towerTypeId) return;
+  const config = getTowerType(tower.towerTypeId);
+  tower.name = config.name;
+  tower.isSpawner = !!config.spawnerEnemyTypeId;
+  tower.spawnEnemyTypeId = config.spawnerEnemyTypeId || null;
+  tower.spawnInterval = config.spawnInterval || config.fireInterval;
+  tower.spawnCount = Math.max(1, Math.floor(config.spawnCount || 1));
+  tower.range = config.range;
+  tower.damage = config.damage;
+  tower.turnSpeed = config.turnSpeed ?? tower.turnSpeed;
+  tower.fireInterval = config.fireInterval;
+  tower.projectileSpeed = config.projectileSpeed;
+  tower.projectileRadius = config.projectileRadius;
+  tower.projectileColor = config.projectileColor;
+}
+
+function refreshPlacedTowerStats(towerTypeId = null) {
+  for (const tower of game.towers) {
+    if (!tower) continue;
+    if (towerTypeId && tower.towerTypeId !== towerTypeId) continue;
+    applyTowerTypeConfigToPlacedTower(tower);
+  }
 }
 
 function weightedChoice(weightEntries) {
@@ -1502,6 +1726,7 @@ function getLevelDifficultyProfile(level = game.currentLevel) {
 
 function enemyWeightsForWave(wave, level = game.currentLevel) {
   const profile = getLevelDifficultyProfile(level);
+  const moonLevel = level >= 2;
   const effectiveWave = Math.max(1, wave + profile.effectiveWaveOffset);
   const bulwarkStartWave = level >= 2 ? 5 : 4;
   const raiderStartWave = level >= 2 ? 6 : 5;
@@ -1513,8 +1738,10 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
     { id: "raider", weight: effectiveWave >= raiderStartWave ? Math.min((effectiveWave - (raiderStartWave - 1)) * 4, 23) : 0 },
     { id: "specter", weight: effectiveWave >= 6 ? Math.min((effectiveWave - 5) * 3.8, 21) : 0 },
     { id: "warden", weight: effectiveWave >= 8 ? Math.min((effectiveWave - 7) * 3.4, 20) : 0 },
+    { id: "prism", weight: moonLevel && effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 3.6, 20) : 0 },
     { id: "colossus", weight: effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 2.8, 16) : 0 },
     { id: "leviathan", weight: effectiveWave >= 12 ? Math.min((effectiveWave - 11) * 2.3, 14) : 0 },
+    { id: "monolith", weight: moonLevel && wave >= 13 ? Math.min((effectiveWave - 14) * 2.4, 11) : 0 },
   ].filter((entry) => entry.weight > 0);
 }
 
@@ -1534,8 +1761,13 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
     let forcedType = null;
     const slot = i + 1;
 
-    if (effectiveWave >= 12 && slot % 17 === 0) forcedType = Math.random() < 0.55 ? "leviathan" : "colossus";
+    if (level >= 2 && wave >= 13 && slot % 19 === 0) forcedType = Math.random() < 0.7 ? "monolith" : "leviathan";
+    else if (effectiveWave >= 12 && slot % 17 === 0) {
+      if (level >= 2 && wave >= 13 && Math.random() < 0.35) forcedType = "monolith";
+      else forcedType = Math.random() < 0.55 ? "leviathan" : "colossus";
+    }
     else if (effectiveWave >= 9 && slot % 13 === 0) forcedType = Math.random() < 0.5 ? "colossus" : "warden";
+    else if (level >= 2 && effectiveWave >= 9 && slot % 12 === 0) forcedType = Math.random() < 0.62 ? "prism" : "specter";
     else if (effectiveWave >= 7 && slot % 11 === 0) forcedType = Math.random() < 0.5 ? "specter" : "raider";
     else if (effectiveWave >= (level >= 2 ? 6 : 5) && slot % 9 === 0) forcedType = Math.random() < 0.55 ? "raider" : "bulwark";
     else if (effectiveWave >= 3 && slot % 7 === 0) forcedType = Math.random() < 0.5 ? "skitter" : "blink";
@@ -1549,6 +1781,15 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
     else queue[0] = effectiveWave >= 6 ? "raider" : "skitter";
   } else {
     queue[0] = "crawler";
+  }
+
+  // Ensure Monolith is always seen immediately once Moon reaches its unlock wave.
+  if (level >= 2 && wave >= 13 && queue.length > 0) {
+    queue[0] = "monolith";
+    if (queue.length > 5) {
+      const secondIndex = Math.min(queue.length - 1, Math.max(2, Math.floor(queue.length * 0.45)));
+      queue[secondIndex] = "monolith";
+    }
   }
   return queue;
 }
@@ -1581,10 +1822,11 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 2) {
     if (wave === 30) return "Lunar threat: Twin Rhombus apex bosses with Rhombus Minion escorts.";
-    if (wave >= 20) return "Lunar threat: Orbital command units escalating to apex intensity.";
-    if (wave >= 12) return "Lunar threat: Leviathan-class siege swarm under low gravity.";
+    if (wave >= 20) return "Lunar threat: Monolith command units escalating to apex intensity.";
+    if (wave >= 13) return "Lunar threat: Monolith reinforcements joining Leviathan-class siege units.";
+    if (wave >= 10) return "Lunar threat: Leviathan-class siege swarm under low gravity.";
     if (wave >= 9) return "Lunar threat: Colossus and Warden phalanx advancing.";
-    if (wave >= 7) return "Lunar threat: Raider and Specter strike wave accelerating.";
+    if (wave >= 7) return "Lunar threat: Prism assault casters surging with Raider and Specter packs.";
     if (wave >= 5) return "Lunar threat: Heavy assault units entering from multiple vectors.";
     if (wave >= 3) return "Lunar threat: Fast Skitter packs saturating the route.";
     if (wave >= 2) return "Lunar threat: Blink scouts and mixed pressure detected.";
@@ -2512,6 +2754,10 @@ const game = {
   selectedTowerType: "pulse",
   unlockedTowers: new Set(BASE_UNLOCKED_TOWERS),
   towerCapUpgrades: {},
+  towerDamageUpgrades: {},
+  towerAttackSpeedUpgrades: {},
+  spawnerCooldownUpgrades: {},
+  loadoutUpgradeTargetId: null,
   maxLoadoutSlots: BASE_LOADOUT_SLOTS,
   activeLoadout: new Set(Array.from(BASE_UNLOCKED_TOWERS).slice(0, BASE_LOADOUT_SLOTS)),
   unlockedSpawnerTowers: new Set(),
@@ -3346,6 +3592,9 @@ function createAccountRecord(name = "Commander", seed = null) {
   const enemyKillCounts = normalizeEnemyKillCounts(seed?.enemyKillCounts);
   const unlockedSpawnerTowers = normalizeUnlockedSpawnerTypes(seed?.unlockedSpawnerTowers, enemyKillCounts);
   const towerCapUpgrades = normalizeTowerCapUpgrades(seed?.towerCapUpgrades);
+  const towerDamageUpgrades = normalizeTowerDamageUpgrades(seed?.towerDamageUpgrades);
+  const towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(seed?.towerAttackSpeedUpgrades);
+  const spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(seed?.spawnerCooldownUpgrades);
   const maxLoadoutSlots = clampLoadoutSlotLimit(Number(seed?.maxLoadoutSlots));
   let loadout = normalizeTowerIds(
     seed?.activeLoadout,
@@ -3373,6 +3622,9 @@ function createAccountRecord(name = "Commander", seed = null) {
     enemyKillCounts,
     unlockedSpawnerTowers: Array.from(unlockedSpawnerTowers),
     towerCapUpgrades,
+    towerDamageUpgrades,
+    towerAttackSpeedUpgrades,
+    spawnerCooldownUpgrades,
   };
 }
 
@@ -3446,6 +3698,9 @@ function applyAccountToGame(account) {
   }
   game.unlockedTowers = new Set(account.unlockedTowers);
   game.towerCapUpgrades = normalizeTowerCapUpgrades(account.towerCapUpgrades);
+  game.towerDamageUpgrades = normalizeTowerDamageUpgrades(account.towerDamageUpgrades);
+  game.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(account.towerAttackSpeedUpgrades);
+  game.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(account.spawnerCooldownUpgrades);
   game.enemyKillCounts = normalizeEnemyKillCounts(account.enemyKillCounts);
   game.unlockedSpawnerTowers = normalizeUnlockedSpawnerTypes(
     account.unlockedSpawnerTowers,
@@ -3466,6 +3721,7 @@ function applyAccountToGame(account) {
   if (!isTowerSelectable(game.selectedTowerType)) {
     game.selectedTowerType = firstAvailableTowerId() || "pulse";
   }
+  game.loadoutUpgradeTargetId = null;
 }
 
 function persistProgressData() {
@@ -3490,6 +3746,9 @@ function savePlayerProgress() {
   current.maxLoadoutSlots = getCurrentLoadoutSlotLimit();
   current.unlockedTowers = Array.from(game.unlockedTowers);
   current.towerCapUpgrades = normalizeTowerCapUpgrades(game.towerCapUpgrades);
+  current.towerDamageUpgrades = normalizeTowerDamageUpgrades(game.towerDamageUpgrades);
+  current.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades);
+  current.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades);
   current.enemyKillCounts = normalizeEnemyKillCounts(game.enemyKillCounts);
   current.unlockedSpawnerTowers = Array.from(game.unlockedSpawnerTowers).filter((enemyTypeId) =>
     Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
@@ -3564,8 +3823,10 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     raider: 1.02,
     specter: 1.1,
     warden: 1.1,
+    prism: 1.16,
     colossus: 1.22,
     leviathan: 1.3,
+    monolith: 1.48,
     icosahedron: 1.5,
     rhombus: 1.64,
     rhombusMinus: 1.36,
@@ -3672,6 +3933,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     raider: { shape: "triangle", size: 0.9, ringRadius: 0.84, coreRadius: 0.16, coreY: 0.08 },
     specter: { shape: "hex", radius: 0.78, height: 1.2, ringRadius: 0.92, coreRadius: 0.16 },
     warden: { shape: "cube", sizeX: 1.5, sizeY: 1.24, sizeZ: 1.5, ringRadius: 0.78, coreRadius: 0.18, coreY: 0.24 },
+    prism: { shape: "hex", radius: 0.96, height: 1.44, ringRadius: 1.06, coreRadius: 0.17, coreY: 0.08 },
     colossus: { shape: "hex", radius: 1.08, height: 1.64, ringRadius: 1.24, ringTube: 0.08, coreRadius: 0.18 },
     leviathan: {
       shape: "sphere",
@@ -3682,6 +3944,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       coreRadius: 0.19,
       coreY: 0.1,
     },
+    monolith: { shape: "cube", sizeX: 6.6, sizeY: 6.6, sizeZ: 6.6, ringRadius: 0, coreRadius: 0.9, coreY: 0.9 },
     icosahedron: {
       shape: "icosa",
       radius: 1.95,
@@ -4415,6 +4678,8 @@ function getEnemySpinSpeed(typeId) {
   if (typeId === "icosahedron") return 1.25;
   if (typeId === "rhombus") return 1.05;
   if (typeId === "rhombusMinus") return 1.22;
+  if (typeId === "monolith") return 1.18;
+  if (typeId === "prism") return 1.88;
   if (typeId === "colossus" || typeId === "leviathan") return 1.55;
   if (typeId === "warden") return 2.1;
   return 2.8;
@@ -5371,6 +5636,9 @@ function buildMultiplayerSnapshot() {
     activeLoadout: Array.from(game.activeLoadout),
     unlockedTowers: Array.from(game.unlockedTowers),
     towerCapUpgrades: normalizeTowerCapUpgrades(game.towerCapUpgrades),
+    towerDamageUpgrades: normalizeTowerDamageUpgrades(game.towerDamageUpgrades),
+    towerAttackSpeedUpgrades: normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades),
+    spawnerCooldownUpgrades: normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades),
     unlockedSpawnerTowers: Array.from(game.unlockedSpawnerTowers),
     laneCells: Array.from(pathCellSet),
     statusText: statusEl ? statusEl.textContent : "",
@@ -5622,6 +5890,13 @@ function applyMultiplayerSnapshot(snapshot) {
     game.unlockedTowers = new Set(snapshot.unlockedTowers.filter((id) => Object.prototype.hasOwnProperty.call(TOWER_TYPES, id)));
   }
   game.towerCapUpgrades = normalizeTowerCapUpgrades(snapshot.towerCapUpgrades || game.towerCapUpgrades);
+  game.towerDamageUpgrades = normalizeTowerDamageUpgrades(snapshot.towerDamageUpgrades || game.towerDamageUpgrades);
+  game.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(
+    snapshot.towerAttackSpeedUpgrades || game.towerAttackSpeedUpgrades
+  );
+  game.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(
+    snapshot.spawnerCooldownUpgrades || game.spawnerCooldownUpgrades
+  );
   if (Array.isArray(snapshot.unlockedSpawnerTowers)) {
     game.unlockedSpawnerTowers = new Set(
       snapshot.unlockedSpawnerTowers.filter((id) => Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, id))
@@ -5666,6 +5941,18 @@ function applyMultiplayerSnapshot(snapshot) {
     Object.keys(game.towerCapUpgrades || {})
       .sort()
       .map((towerTypeId) => `${towerTypeId}:${game.towerCapUpgrades[towerTypeId]}`)
+      .join(","),
+    Object.keys(game.towerDamageUpgrades || {})
+      .sort()
+      .map((towerTypeId) => `${towerTypeId}:${game.towerDamageUpgrades[towerTypeId]}`)
+      .join(","),
+    Object.keys(game.towerAttackSpeedUpgrades || {})
+      .sort()
+      .map((towerTypeId) => `${towerTypeId}:${game.towerAttackSpeedUpgrades[towerTypeId]}`)
+      .join(","),
+    Object.keys(game.spawnerCooldownUpgrades || {})
+      .sort()
+      .map((towerTypeId) => `${towerTypeId}:${game.spawnerCooldownUpgrades[towerTypeId]}`)
       .join(","),
   ].join("|");
   if (shopSignature !== multiplayer.lastShopSignature) {
@@ -6270,9 +6557,9 @@ function getAvailableTowerEntries() {
     if (!isTowerSelectable(towerTypeId)) continue;
     entries.push([towerTypeId, getTowerType(towerTypeId)]);
   }
-  for (const [towerTypeId, type] of Object.entries(TOWER_TYPES)) {
+  for (const towerTypeId of Object.keys(TOWER_TYPES)) {
     if (!isTowerSelectable(towerTypeId)) continue;
-    entries.push([towerTypeId, type]);
+    entries.push([towerTypeId, getTowerType(towerTypeId)]);
   }
   return entries;
 }
@@ -6297,7 +6584,7 @@ function updateShopButtons() {
     button.classList.toggle("capped", placement.atCap);
     const capLine = button.querySelector(".shop-cap-line");
     if (capLine) {
-      capLine.textContent = `Cap ${placement.cap} | Placed ${placement.placed}/${placement.cap}${placement.atCap ? " (MAX)" : ""}`;
+      capLine.textContent = formatPlacementCapLine(typeId, placement);
     }
   }
   return selected;
@@ -6315,7 +6602,7 @@ function renderShop() {
         <strong>${type.name} - ${type.cost}</strong>
         <span>${type.summary}</span>
         <span>${detailLine}</span>
-        <span class="shop-cap-line">Cap ${placement.cap} | Placed ${placement.placed}/${placement.cap}</span>
+        <span class="shop-cap-line">${formatPlacementCapLine(towerTypeId, placement, false)}</span>
       </button>
     `);
   }
@@ -6359,6 +6646,191 @@ function renderShop() {
   updateShopButtons();
 }
 
+function getLoadoutUpgradeOptions(towerTypeId) {
+  const options = [];
+  const towerType = getTowerType(towerTypeId);
+  const isSpawner = isSpawnerTowerId(towerTypeId);
+
+  if (isSpawner) {
+    const cooldownMax = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
+    const cooldownLevel = getSpawnerCooldownUpgradeLevel(towerTypeId);
+    const cooldownAtMax = cooldownLevel >= cooldownMax;
+    const cooldownNextLevel = cooldownLevel + 1;
+    const cooldownCost = cooldownAtMax ? 0 : getSpawnerCooldownUpgradeCost(towerTypeId, cooldownNextLevel);
+    const baseSpawnerType = getSpawnerTowerType(towerTypeId) || towerType;
+    const nextCooldownMultiplier = Math.max(0.4, 1 - cooldownNextLevel * SPAWNER_COOLDOWN_UPGRADE_STEP);
+    const nextCooldown = Math.max(0.35, Number((baseSpawnerType.spawnInterval * nextCooldownMultiplier).toFixed(2)));
+    options.push({
+      kind: "cooldown",
+      label: "Cooldown",
+      level: cooldownLevel,
+      maxLevel: cooldownMax,
+      atMax: cooldownAtMax,
+      cost: cooldownCost,
+      detail: cooldownAtMax
+        ? `Spawn every ${towerType.spawnInterval.toFixed(2)}s`
+        : `${towerType.spawnInterval.toFixed(2)}s -> ${nextCooldown.toFixed(2)}s`,
+    });
+  } else {
+    const damageMax = getTowerDamageUpgradeMaxLevel(towerTypeId);
+    const damageLevel = getTowerDamageUpgradeLevel(towerTypeId);
+    const damageAtMax = damageLevel >= damageMax;
+    const damageNextLevel = damageLevel + 1;
+    const damageCost = damageAtMax ? 0 : getTowerDamageUpgradeCost(towerTypeId, damageNextLevel);
+    const baseTowerType = TOWER_TYPES[towerTypeId] || towerType;
+    const nextDamage = Math.max(1, Math.round(baseTowerType.damage * (1 + damageNextLevel * TOWER_DAMAGE_UPGRADE_STEP)));
+    options.push({
+      kind: "damage",
+      label: "Damage",
+      level: damageLevel,
+      maxLevel: damageMax,
+      atMax: damageAtMax,
+      cost: damageCost,
+      detail: damageAtMax ? `${towerType.damage}` : `${towerType.damage} -> ${nextDamage}`,
+    });
+
+    const attackSpeedMax = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
+    const attackSpeedLevel = getTowerAttackSpeedUpgradeLevel(towerTypeId);
+    const attackSpeedAtMax = attackSpeedLevel >= attackSpeedMax;
+    const attackSpeedNextLevel = attackSpeedLevel + 1;
+    const attackSpeedCost = attackSpeedAtMax ? 0 : getTowerAttackSpeedUpgradeCost(towerTypeId, attackSpeedNextLevel);
+    const nextIntervalMultiplier = Math.max(0.35, 1 - attackSpeedNextLevel * TOWER_ATTACK_SPEED_UPGRADE_STEP);
+    const nextFireInterval = Math.max(0.05, Number((baseTowerType.fireInterval * nextIntervalMultiplier).toFixed(3)));
+    const currentShots = (1 / Math.max(0.01, towerType.fireInterval)).toFixed(2);
+    const nextShots = (1 / Math.max(0.01, nextFireInterval)).toFixed(2);
+    options.push({
+      kind: "attackSpeed",
+      label: "Attack Speed",
+      level: attackSpeedLevel,
+      maxLevel: attackSpeedMax,
+      atMax: attackSpeedAtMax,
+      cost: attackSpeedCost,
+      detail: attackSpeedAtMax ? `${currentShots}/s` : `${currentShots}/s -> ${nextShots}/s`,
+    });
+  }
+
+  const capMax = getTowerCapUpgradeMaxLevel(towerTypeId);
+  const capLevel = getTowerCapUpgradeLevel(towerTypeId);
+  const capAtMax = capLevel >= capMax;
+  const capNextLevel = capLevel + 1;
+  const capCost = capAtMax ? 0 : getTowerCapUpgradeCost(towerTypeId, capNextLevel);
+  const capCurrent = getTowerPlaceCap(towerTypeId);
+  const capNext = Math.min(TOWER_CAP_HARD_LIMIT, capCurrent + 1);
+  options.push({
+    kind: "placementCap",
+    label: "Placement Cap",
+    level: capLevel,
+    maxLevel: capMax,
+    atMax: capAtMax,
+    cost: capCost,
+    detail: capAtMax ? `${capCurrent}` : `${capCurrent} -> ${capNext}`,
+  });
+
+  return options;
+}
+
+function tryPurchaseLoadoutUpgrade(towerTypeId, kind) {
+  if (!towerTypeId || !isUnlockedForLoadout(towerTypeId)) return false;
+  if (!isTowerInLoadout(towerTypeId)) {
+    setStatus("Equip that entry first before upgrading.", true);
+    return false;
+  }
+
+  const towerName = getTowerType(towerTypeId).name;
+  let nextLevel = 0;
+  let maxLevel = 0;
+  let cost = 0;
+  let successMessage = "";
+
+  if (kind === "damage") {
+    maxLevel = getTowerDamageUpgradeMaxLevel(towerTypeId);
+    const currentLevel = getTowerDamageUpgradeLevel(towerTypeId);
+    if (maxLevel <= 0) return false;
+    if (currentLevel >= maxLevel) {
+      setStatus(`${towerName} damage is already maxed.`);
+      return false;
+    }
+    nextLevel = currentLevel + 1;
+    cost = getTowerDamageUpgradeCost(towerTypeId, nextLevel);
+    if (game.shards < cost) {
+      setStatus("Not enough shards for that upgrade.", true);
+      updateHud();
+      return false;
+    }
+    game.shards -= cost;
+    game.towerDamageUpgrades[towerTypeId] = nextLevel;
+    successMessage = `${towerName} damage upgraded (${nextLevel}/${maxLevel}).`;
+  } else if (kind === "attackSpeed") {
+    maxLevel = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
+    const currentLevel = getTowerAttackSpeedUpgradeLevel(towerTypeId);
+    if (maxLevel <= 0) return false;
+    if (currentLevel >= maxLevel) {
+      setStatus(`${towerName} attack speed is already maxed.`);
+      return false;
+    }
+    nextLevel = currentLevel + 1;
+    cost = getTowerAttackSpeedUpgradeCost(towerTypeId, nextLevel);
+    if (game.shards < cost) {
+      setStatus("Not enough shards for that upgrade.", true);
+      updateHud();
+      return false;
+    }
+    game.shards -= cost;
+    game.towerAttackSpeedUpgrades[towerTypeId] = nextLevel;
+    successMessage = `${towerName} attack speed upgraded (${nextLevel}/${maxLevel}).`;
+  } else if (kind === "cooldown") {
+    maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
+    const currentLevel = getSpawnerCooldownUpgradeLevel(towerTypeId);
+    if (maxLevel <= 0) return false;
+    if (currentLevel >= maxLevel) {
+      setStatus(`${towerName} cooldown is already maxed.`);
+      return false;
+    }
+    nextLevel = currentLevel + 1;
+    cost = getSpawnerCooldownUpgradeCost(towerTypeId, nextLevel);
+    if (game.shards < cost) {
+      setStatus("Not enough shards for that upgrade.", true);
+      updateHud();
+      return false;
+    }
+    game.shards -= cost;
+    game.spawnerCooldownUpgrades[towerTypeId] = nextLevel;
+    successMessage = `${towerName} cooldown upgraded (${nextLevel}/${maxLevel}).`;
+  } else if (kind === "placementCap") {
+    maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
+    const currentLevel = getTowerCapUpgradeLevel(towerTypeId);
+    if (maxLevel <= 0) return false;
+    if (currentLevel >= maxLevel) {
+      setStatus(`${towerName} placement cap is already maxed.`);
+      return false;
+    }
+    nextLevel = currentLevel + 1;
+    cost = getTowerCapUpgradeCost(towerTypeId, nextLevel);
+    if (game.shards < cost) {
+      setStatus("Not enough shards for that upgrade.", true);
+      updateHud();
+      return false;
+    }
+    game.shards -= cost;
+    game.towerCapUpgrades[towerTypeId] = nextLevel;
+    const upgradedCap = getTowerPlaceCap(towerTypeId);
+    successMessage = `${towerName} placement cap increased to ${upgradedCap}.`;
+  } else {
+    return false;
+  }
+
+  refreshPlacedTowerStats(towerTypeId);
+  setStatus(successMessage);
+  savePlayerProgress();
+  renderAccountMenu();
+  renderMenuShop();
+  renderCreatureShop();
+  renderLoadoutMenu();
+  renderShop();
+  updateHud();
+  return true;
+}
+
 function renderLoadoutMenu() {
   if (!menuLoadoutEl) return;
   const fragments = [];
@@ -6367,6 +6839,82 @@ function renderLoadoutMenu() {
   if (menuLoadoutCountEl) menuLoadoutCountEl.textContent = `${equippedCount}/${loadoutLimit} Equipped`;
   const rawSearchText = (menuLoadoutSearchEl?.value || "").trim();
   const searchText = rawSearchText.toLowerCase();
+
+  const renderLoadoutCard = (towerTypeId, type, isSpawner) => {
+    const equipped = isTowerInLoadout(towerTypeId);
+    const capInfo = getTowerCapBreakdown(towerTypeId);
+    let actionLabel = "Equip";
+    let actionDisabled = "";
+
+    if (equipped) {
+      actionLabel = "Equipped";
+      if (game.activeLoadout.size <= 1) {
+        actionLabel = "Required";
+        actionDisabled = "disabled";
+      }
+    } else if (game.activeLoadout.size >= loadoutLimit) {
+      actionLabel = "Loadout Full";
+      actionDisabled = "disabled";
+    }
+
+    const isUpgradeOpen = game.loadoutUpgradeTargetId === towerTypeId;
+    const upgradeToggleLabel = isUpgradeOpen ? "CLOSE UPGRADE MENU" : "UPGRADE MENU";
+    const classes = ["menu-loadout-item", isSpawner ? "spawner" : "", equipped ? "equipped" : ""].filter(Boolean).join(" ");
+
+    const infoLine = isSpawner
+      ? `Spawner | Spawn ${Math.max(1, Math.floor(type.spawnCount || 1))} every ${type.spawnInterval.toFixed(2)}s`
+      : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
+    const options = isUpgradeOpen ? getLoadoutUpgradeOptions(towerTypeId) : [];
+    const upgradePanel = isUpgradeOpen
+      ? `
+        <div class="menu-loadout-upgrade-panel">
+          ${options
+            .map((option) => {
+              const buttonLabel = option.atMax ? "Maxed" : `${option.cost} Shards`;
+              const buttonDisabled = option.atMax || option.maxLevel <= 0 ? "disabled" : "";
+              return `
+                <div class="menu-loadout-upgrade-row">
+                  <div>
+                    <strong>${option.label}</strong>
+                    <span>${option.detail} | L${option.level}/${option.maxLevel}</span>
+                  </div>
+                  <button
+                    class="menu-loadout-upgrade-buy"
+                    type="button"
+                    data-loadout-upgrade-target="${towerTypeId}"
+                    data-loadout-upgrade-kind="${option.kind}"
+                    ${buttonDisabled}
+                  >
+                    ${buttonLabel}
+                  </button>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      `
+      : "";
+
+    fragments.push(`
+      <div class="${classes}">
+        <div>
+          <strong>${type.name}</strong>
+          <span>${infoLine}</span>
+          <span>Placement Cap ${capInfo.cap} (Base ${capInfo.baseCap} +${capInfo.upgradeLevel})</span>
+        </div>
+        <div class="menu-loadout-actions">
+          <button class="menu-loadout-upgrade-toggle" type="button" data-loadout-upgrade-toggle="${towerTypeId}">
+            ${upgradeToggleLabel}
+          </button>
+          <button class="menu-loadout-action" type="button" data-loadout-type="${towerTypeId}" ${actionDisabled}>
+            ${actionLabel}
+          </button>
+        </div>
+        ${upgradePanel}
+      </div>
+    `);
+  };
+
   const unlockedEntries = Object.entries(TOWER_TYPES).filter(([towerTypeId, type]) => {
     if (!isTowerUnlocked(towerTypeId)) return false;
     if (!searchText) return true;
@@ -6376,6 +6924,10 @@ function renderLoadoutMenu() {
       towerTypeId.toLowerCase().includes(searchText)
     );
   });
+  for (const [towerTypeId] of unlockedEntries) {
+    renderLoadoutCard(towerTypeId, getTowerType(towerTypeId), false);
+  }
+
   const unlockedSpawnerEntries = CREATURE_SHOP_ENEMY_IDS.map((enemyTypeId) => {
     const towerTypeId = spawnerTowerIdForEnemy(enemyTypeId);
     const type = getTowerType(towerTypeId);
@@ -6389,65 +6941,8 @@ function renderLoadoutMenu() {
       entry.towerTypeId.toLowerCase().includes(searchText)
     );
   });
-
-  for (const [towerTypeId, type] of unlockedEntries) {
-    const equipped = isTowerInLoadout(towerTypeId);
-    let actionLabel = "Equip";
-    let disabled = "";
-
-    if (equipped) {
-      actionLabel = "Unequip";
-      if (game.activeLoadout.size <= 1) {
-        actionLabel = "Required";
-        disabled = "disabled";
-      }
-    } else if (game.activeLoadout.size >= loadoutLimit) {
-      actionLabel = "Loadout Full";
-      disabled = "disabled";
-    }
-
-    const classes = ["menu-loadout-item", equipped ? "equipped" : ""].filter(Boolean).join(" ");
-
-    fragments.push(`
-      <div class="${classes}">
-        <div>
-          <strong>${type.name}</strong>
-          <span>${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}</span>
-        </div>
-        <button class="menu-loadout-action" type="button" data-loadout-type="${towerTypeId}" ${disabled}>
-          ${actionLabel}
-        </button>
-      </div>
-    `);
-  }
-
   for (const entry of unlockedSpawnerEntries) {
-    const spawnCount = Math.max(1, Math.floor(entry.type.spawnCount || 1));
-    const equipped = isTowerInLoadout(entry.towerTypeId);
-    let actionLabel = "Equip";
-    let disabled = "";
-    if (equipped) {
-      actionLabel = "Unequip";
-      if (game.activeLoadout.size <= 1) {
-        actionLabel = "Required";
-        disabled = "disabled";
-      }
-    } else if (game.activeLoadout.size >= loadoutLimit) {
-      actionLabel = "Loadout Full";
-      disabled = "disabled";
-    }
-
-    fragments.push(`
-      <div class="menu-loadout-item spawner ${equipped ? "equipped" : ""}">
-        <div>
-          <strong>${entry.type.name}</strong>
-          <span>Spawner | Spawn ${spawnCount} every ${entry.type.spawnInterval.toFixed(1)}s</span>
-        </div>
-        <button class="menu-loadout-action" type="button" data-loadout-type="${entry.towerTypeId}" ${disabled}>
-          ${actionLabel}
-        </button>
-      </div>
-    `);
+    renderLoadoutCard(entry.towerTypeId, entry.type, true);
   }
 
   if (fragments.length === 0) {
@@ -6478,6 +6973,7 @@ function renderLoadoutMenu() {
           return;
         }
         game.activeLoadout.delete(towerTypeId);
+        if (game.loadoutUpgradeTargetId === towerTypeId) game.loadoutUpgradeTargetId = null;
         setStatus(`${getTowerType(towerTypeId).name} removed from loadout.`);
       } else {
         if (game.activeLoadout.size >= loadoutLimit) {
@@ -6496,6 +6992,30 @@ function renderLoadoutMenu() {
       renderLoadoutMenu();
       renderShop();
       updateHud();
+    });
+  }
+
+  const upgradeToggleButtons = menuLoadoutEl.querySelectorAll(".menu-loadout-upgrade-toggle");
+  for (const button of upgradeToggleButtons) {
+    button.addEventListener("click", () => {
+      const towerTypeId = button.dataset.loadoutUpgradeToggle;
+      if (!towerTypeId) return;
+      if (!isTowerInLoadout(towerTypeId)) {
+        setStatus("Equip that entry first before opening upgrades.", true);
+        return;
+      }
+      game.loadoutUpgradeTargetId = game.loadoutUpgradeTargetId === towerTypeId ? null : towerTypeId;
+      renderLoadoutMenu();
+    });
+  }
+
+  const upgradeBuyButtons = menuLoadoutEl.querySelectorAll(".menu-loadout-upgrade-buy");
+  for (const button of upgradeBuyButtons) {
+    button.addEventListener("click", () => {
+      const towerTypeId = button.dataset.loadoutUpgradeTarget;
+      const kind = button.dataset.loadoutUpgradeKind;
+      if (!towerTypeId || !kind) return;
+      tryPurchaseLoadoutUpgrade(towerTypeId, kind);
     });
   }
 }
@@ -6704,62 +7224,6 @@ function renderMenuShop() {
     `);
   }
 
-  const capUpgradeTowerIds = [];
-  for (const towerTypeId of Object.keys(TOWER_TYPES)) {
-    if (!game.unlockedTowers.has(towerTypeId)) continue;
-    if (getTowerCapUpgradeMaxLevel(towerTypeId) <= 0) continue;
-    capUpgradeTowerIds.push(towerTypeId);
-  }
-  for (const enemyTypeId of CREATURE_SHOP_ENEMY_IDS) {
-    if (!game.unlockedSpawnerTowers.has(enemyTypeId)) continue;
-    const towerTypeId = spawnerTowerIdForEnemy(enemyTypeId);
-    if (getTowerCapUpgradeMaxLevel(towerTypeId) <= 0) continue;
-    capUpgradeTowerIds.push(towerTypeId);
-  }
-  capUpgradeTowerIds.sort((a, b) => {
-    const aSpawner = isSpawnerTowerId(a) ? 1 : 0;
-    const bSpawner = isSpawnerTowerId(b) ? 1 : 0;
-    if (aSpawner !== bSpawner) return aSpawner - bSpawner;
-    return getTowerType(a).name.localeCompare(getTowerType(b).name);
-  });
-
-  for (const towerTypeId of capUpgradeTowerIds) {
-    const type = getTowerType(towerTypeId);
-    const baseCap = getTowerBasePlaceCap(towerTypeId);
-    const currentCap = getTowerPlaceCap(towerTypeId);
-    const currentLevel = getTowerCapUpgradeLevel(towerTypeId);
-    const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
-    const atMax = currentLevel >= maxLevel;
-    const nextLevel = currentLevel + 1;
-    const upgradeCost = atMax ? 0 : getTowerCapUpgradeCost(towerTypeId, nextLevel);
-    const nextCap = Math.min(TOWER_CAP_HARD_LIMIT, currentCap + (atMax ? 0 : 1));
-    const canAfford = atMax || game.shards >= upgradeCost;
-    const itemClasses = [
-      "menu-unlock-item",
-      atMax ? "unlocked" : "",
-      !atMax && !canAfford ? "unaffordable" : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    fragments.push(`
-      <div class="${itemClasses}">
-        <div>
-          <strong>${type.name} Cap Upgrade</strong>
-          <span>Base ${baseCap} | Current ${currentCap} | Upgrade ${currentLevel}/${maxLevel}${atMax ? " (MAX)" : ` -> ${nextCap}`}</span>
-        </div>
-        <button
-          class="unlock-action"
-          type="button"
-          data-cap-upgrade-type="${towerTypeId}"
-          ${atMax ? "disabled" : ""}
-        >
-          ${atMax ? "Maxed" : `${upgradeCost} Shards`}
-        </button>
-      </div>
-    `);
-  }
-
   menuShopEl.innerHTML = fragments.join("");
 
   const unlockButtons = menuShopEl.querySelectorAll("button[data-unlock-type]");
@@ -6778,40 +7242,6 @@ function renderMenuShop() {
       game.unlockedTowers.add(towerTypeId);
       const tower = getTowerType(towerTypeId);
       setStatus(`${tower.name} unlocked in the menu shop.`);
-      savePlayerProgress();
-      renderAccountMenu();
-      renderMenuShop();
-      renderCreatureShop();
-      renderShop();
-      updateHud();
-    });
-  }
-
-  const capUpgradeButtons = menuShopEl.querySelectorAll("button[data-cap-upgrade-type]");
-  for (const button of capUpgradeButtons) {
-    button.addEventListener("click", () => {
-      const towerTypeId = button.dataset.capUpgradeType;
-      if (!towerTypeId) return;
-      const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
-      if (maxLevel <= 0) return;
-      const currentLevel = getTowerCapUpgradeLevel(towerTypeId);
-      if (currentLevel >= maxLevel) {
-        setStatus(`${getTowerType(towerTypeId).name} cap is already maxed.`);
-        return;
-      }
-
-      const nextLevel = currentLevel + 1;
-      const upgradeCost = getTowerCapUpgradeCost(towerTypeId, nextLevel);
-      if (game.shards < upgradeCost) {
-        setStatus("Not enough shards for that cap upgrade.", true);
-        updateHud();
-        return;
-      }
-
-      game.shards -= upgradeCost;
-      game.towerCapUpgrades[towerTypeId] = nextLevel;
-      const upgradedCap = getTowerPlaceCap(towerTypeId);
-      setStatus(`${getTowerType(towerTypeId).name} cap increased to ${upgradedCap}.`);
       savePlayerProgress();
       renderAccountMenu();
       renderMenuShop();
@@ -6868,6 +7298,7 @@ function renderCreatureShop() {
 }
 
 function setMenuView(view) {
+  if (view !== "loadout") game.loadoutUpgradeTargetId = null;
   game.menuView = view;
   if (menuCardEl) menuCardEl.dataset.view = view;
 }
@@ -6938,6 +7369,7 @@ function openLoadoutMenu() {
   }
   openMenuShop();
   setMenuView("loadout");
+  game.loadoutUpgradeTargetId = null;
   if (menuLoadoutSearchEl) menuLoadoutSearchEl.value = "";
   renderLoadoutMenu();
   if (menuLoadoutEl) menuLoadoutEl.scrollTop = 0;
@@ -7156,6 +7588,7 @@ function stepGameSpeed(delta) {
 function updateHud() {
   const selectedTower = updateShopButtons();
   const placement = getTowerPlacementStats(game.selectedTowerType);
+  const selectedCapInfo = getTowerCapBreakdown(game.selectedTowerType);
   moneyEl.textContent = `Credits: ${game.money}`;
   if (shardsEl) shardsEl.textContent = `Shards: ${game.shards}`;
   if (menuShardsEl) menuShardsEl.textContent = `Shards: ${game.shards}`;
@@ -7164,7 +7597,7 @@ function updateHud() {
   if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
   livesEl.textContent = `Core HP: ${game.lives}`;
   waveEl.textContent = `Wave: ${game.wave}`;
-  buildBtn.textContent = `Build ${selectedTower.name} (${placement.placed}/${placement.cap}) (B) - ${selectedTower.cost}`;
+  buildBtn.textContent = `Build ${selectedTower.name} (${placement.placed}/${placement.cap}, +${selectedCapInfo.upgradeLevel}) (B) - ${selectedTower.cost}`;
   sellBtn.textContent = "Sell (X) - 40%";
   laneBtn.textContent = game.editingLane ? "Lane Edit (L): On" : "Lane Edit (L)";
   if (loadoutBtn) loadoutBtn.textContent = `Loadout (O) ${game.activeLoadout.size}/${getCurrentLoadoutSlotLimit()}`;
