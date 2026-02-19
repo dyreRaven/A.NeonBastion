@@ -449,7 +449,8 @@ body:not(.menu-active) .menu-screen {
 }
 
 #menuMultiplayerPanel {
-  grid-template-rows: auto auto auto auto auto auto minmax(0, 0.8fr) auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  gap: 0.62rem;
 }
 
 .menu-shop-head {
@@ -493,22 +494,179 @@ body:not(.menu-active) .menu-screen {
   color: #cfe4f7;
 }
 
-.menu-multiplayer-players {
-  min-height: 82px;
+.menu-multiplayer-config {
+  border: 1px solid rgba(171, 220, 250, 0.22);
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(90, 154, 197, 0.14), rgba(16, 36, 54, 0.34));
+  padding: 0.56rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.menu-multiplayer-server-row,
+.menu-multiplayer-room-row {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.menu-multiplayer-server-row label,
+.menu-multiplayer-room-row label {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c7e0f4;
+}
+
+.menu-multiplayer-room-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.menu-multiplayer-room-actions button {
+  min-height: 2rem;
+  min-width: 0;
+  border-radius: 8px;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.78rem;
+}
+
+.menu-multiplayer-hint {
+  border: 1px solid rgba(166, 219, 250, 0.24);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(105, 170, 214, 0.12), rgba(14, 30, 46, 0.3));
+  min-height: 2.2rem;
+  padding: 0.42rem 0.52rem;
+  display: flex;
+  align-items: center;
+}
+
+.menu-multiplayer-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.menu-multiplayer-pane {
+  border: 1px solid rgba(173, 223, 255, 0.22);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(105, 167, 209, 0.1), rgba(12, 28, 43, 0.34));
+  padding: 0.46rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.36rem;
+  min-height: 0;
+}
+
+.menu-multiplayer-pane .menu-shop-head {
+  min-height: 1.4rem;
+}
+
+.menu-multiplayer-players,
+.menu-multiplayer-log {
+  min-height: 0;
+  max-height: none;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  padding-right: 0.06rem;
+}
+
+.menu-mp-player-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(181, 220, 247, 0.24);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(127, 187, 228, 0.12), rgba(24, 49, 73, 0.2));
+  padding: 0.4rem 0.5rem;
+}
+
+.menu-mp-player-item-empty {
   grid-template-columns: 1fr;
 }
 
-#menuMultiplayerPlayers .menu-account-item {
+.menu-mp-player-main {
+  min-width: 0;
+}
+
+.menu-mp-player-name {
+  display: block;
+  font-size: 0.84rem;
+  color: #ebf8ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-mp-player-sub {
+  display: block;
+  margin-top: 0.08rem;
+  font-size: 0.72rem;
+  color: #bed8ea;
+}
+
+.menu-mp-player-tag {
+  border: 1px solid rgba(176, 219, 248, 0.34);
+  border-radius: 999px;
+  padding: 0.14rem 0.44rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #d4edff;
+  background: rgba(77, 120, 153, 0.2);
+}
+
+.menu-mp-player-tag.host {
+  border-color: rgba(255, 211, 153, 0.52);
+  color: #ffe6c7;
+  background: rgba(133, 83, 42, 0.3);
+}
+
+.menu-mp-player-tag.you {
+  border-color: rgba(126, 240, 196, 0.52);
+  color: #dcffef;
+  background: rgba(39, 119, 95, 0.34);
+}
+
+.menu-mp-log-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.44rem;
+  border: 1px solid rgba(172, 219, 248, 0.2);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(114, 170, 208, 0.1), rgba(18, 37, 54, 0.2));
+  padding: 0.38rem 0.5rem;
+}
+
+.menu-mp-log-item-empty {
   grid-template-columns: 1fr;
 }
 
-#menuMultiplayerLog {
-  min-height: 72px;
-  grid-template-columns: 1fr;
+.menu-mp-log-time {
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9fc3dd;
+  min-width: 3.6rem;
 }
 
-#menuMultiplayerLog .menu-account-item {
-  grid-template-columns: 1fr;
+.menu-mp-log-text {
+  font-size: 0.76rem;
+  color: #d7e9f7;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.menu-multiplayer-note {
+  color: #afcde1;
+}
+
+.menu-multiplayer-footer {
+  justify-content: flex-end;
 }
 
 .menu-account-create {
@@ -516,12 +674,6 @@ body:not(.menu-active) .menu-screen {
   grid-template-columns: 1fr auto;
   gap: 0.45rem;
   align-items: center;
-}
-
-.menu-multiplayer-server-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.45rem;
 }
 
 #accountNameInput,
@@ -1445,6 +1597,19 @@ canvas {
   .menu-shop-panel {
     height: auto;
     max-height: min(76vh, 620px);
+  }
+
+  .menu-multiplayer-panels {
+    grid-template-columns: 1fr;
+    gap: 0.44rem;
+  }
+
+  .menu-multiplayer-room-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-multiplayer-room-actions button {
+    width: 100%;
   }
 
   .menu-play-btn {

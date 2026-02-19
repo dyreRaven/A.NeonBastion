@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-24";
+const BUILD_ID = "2026-02-19-25";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3104,15 +3104,26 @@ function getMultiplayerLabel() {
   return "Solo";
 }
 
+function getMultiplayerLogTimestamp() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 function appendMultiplayerLog(message) {
   if (!menuMultiplayerLogEl) return;
+  const placeholder = menuMultiplayerLogEl.querySelector(".menu-mp-log-item-empty");
+  if (placeholder) placeholder.remove();
+  const stamp = getMultiplayerLogTimestamp();
   const entry = `
-    <div class="menu-account-item">
-      <div><strong>${escapeHtml(message)}</strong></div>
+    <div class="menu-mp-log-item">
+      <span class="menu-mp-log-time">${escapeHtml(stamp)}</span>
+      <span class="menu-mp-log-text">${escapeHtml(message)}</span>
     </div>
   `;
   menuMultiplayerLogEl.innerHTML = entry + menuMultiplayerLogEl.innerHTML;
-  const cards = menuMultiplayerLogEl.querySelectorAll(".menu-account-item");
+  const cards = menuMultiplayerLogEl.querySelectorAll(".menu-mp-log-item");
   for (let i = 12; i < cards.length; i += 1) cards[i].remove();
 }
 
@@ -3226,14 +3237,20 @@ function renderMultiplayerRoster() {
   if (menuMultiplayerPlayersEl) {
     if (!isMultiplayerActive()) {
       menuMultiplayerPlayersEl.innerHTML = `
-        <div class="menu-account-item">
-          <div><strong>Not in a room</strong><span>Create or join a room to see players.</span></div>
+        <div class="menu-mp-player-item menu-mp-player-item-empty">
+          <div class="menu-mp-player-main">
+            <strong class="menu-mp-player-name">Not in a room</strong>
+            <span class="menu-mp-player-sub">Create or join a room to see players.</span>
+          </div>
         </div>
       `;
     } else if (entries.length === 0) {
       menuMultiplayerPlayersEl.innerHTML = `
-        <div class="menu-account-item">
-          <div><strong>Connecting...</strong><span>Waiting for player list.</span></div>
+        <div class="menu-mp-player-item menu-mp-player-item-empty">
+          <div class="menu-mp-player-main">
+            <strong class="menu-mp-player-name">Connecting...</strong>
+            <span class="menu-mp-player-sub">Waiting for player list.</span>
+          </div>
         </div>
       `;
     } else {
@@ -3243,12 +3260,16 @@ function renderMultiplayerRoster() {
         if (entry.peerId === multiplayer.peerId) tags.push("You");
         if (entry.peerId === multiplayer.hostId) tags.push("Host");
         const tagText = tags.length > 0 ? tags.join(" / ") : entry.role === "client" ? "Guest" : "Player";
+        const tagClass = entry.peerId === multiplayer.peerId ? "you" : entry.peerId === multiplayer.hostId ? "host" : "";
+        const peerShort = entry.peerId ? entry.peerId.slice(0, 6).toUpperCase() : "";
+        const subText = peerShort ? `ID ${peerShort}` : "Connected";
         fragments.push(`
-          <div class="menu-account-item">
-            <div>
-              <strong>${escapeHtml(entry.displayName)}</strong>
-              <span>${escapeHtml(tagText)}</span>
+          <div class="menu-mp-player-item">
+            <div class="menu-mp-player-main">
+              <strong class="menu-mp-player-name">${escapeHtml(entry.displayName)}</strong>
+              <span class="menu-mp-player-sub">${escapeHtml(subText)}</span>
             </div>
+            <span class="menu-mp-player-tag ${tagClass}">${escapeHtml(tagText)}</span>
           </div>
         `);
       }
@@ -3308,6 +3329,13 @@ function refreshMultiplayerPanel() {
     } else {
       menuMultiplayerHintEl.textContent = "Enter a room code, then Create or Join.";
     }
+  }
+  if (menuMultiplayerLogEl && menuMultiplayerLogEl.children.length === 0) {
+    menuMultiplayerLogEl.innerHTML = `
+      <div class="menu-mp-log-item menu-mp-log-item-empty">
+        <span class="menu-mp-log-text">No room events yet.</span>
+      </div>
+    `;
   }
   renderMultiplayerRoster();
 }

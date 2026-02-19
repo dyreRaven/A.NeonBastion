@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260219x" />
+    <link rel="stylesheet" href="styles.css?v=20260219y" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -114,45 +114,55 @@
             <h2>Multiplayer</h2>
             <span id="menuMultiplayerState">Solo</span>
           </div>
-          <div class="menu-multiplayer-server-row">
-            <input
-              id="multiplayerServerInput"
-              type="url"
-              autocomplete="off"
-              spellcheck="false"
-              maxlength="180"
-              placeholder="Server URL (wss://your-server.example)"
-            />
+          <div class="menu-multiplayer-config">
+            <div class="menu-multiplayer-server-row">
+              <label for="multiplayerServerInput">Server URL</label>
+              <input
+                id="multiplayerServerInput"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="180"
+                placeholder="Server URL (wss://your-server.example)"
+              />
+            </div>
+            <div class="menu-multiplayer-room-row">
+              <label for="multiplayerRoomInput">Room Code</label>
+              <input
+                id="multiplayerRoomInput"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="16"
+                placeholder="Room code"
+              />
+              <div class="menu-multiplayer-room-actions">
+                <button id="hostMultiplayerBtn" type="button">Create Room</button>
+                <button id="joinMultiplayerBtn" type="button">Join Room</button>
+                <button id="leaveMultiplayerBtn" type="button">Leave Room</button>
+              </div>
+            </div>
           </div>
-          <div class="menu-account-create">
-            <input
-              id="multiplayerRoomInput"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              maxlength="16"
-              placeholder="Room code"
-            />
-            <button id="hostMultiplayerBtn" type="button">Create</button>
+          <p id="menuMultiplayerHint" class="menu-shop-note menu-multiplayer-hint">Enter a room code, then Create or Join.</p>
+          <div class="menu-multiplayer-panels">
+            <section class="menu-multiplayer-pane">
+              <div class="menu-shop-head menu-multiplayer-players-head">
+                <h3>Players In Room</h3>
+                <span id="menuMultiplayerPlayerCount">0</span>
+              </div>
+              <div id="menuMultiplayerPlayers" class="menu-shop-list menu-multiplayer-players"></div>
+            </section>
+            <section class="menu-multiplayer-pane">
+              <div class="menu-shop-head menu-multiplayer-log-head">
+                <h3>Room Log</h3>
+              </div>
+              <div id="menuMultiplayerLog" class="menu-shop-list menu-multiplayer-log"></div>
+            </section>
           </div>
-          <div class="menu-shop-actions">
-            <button id="joinMultiplayerBtn" type="button">Join Room</button>
-            <button id="leaveMultiplayerBtn" type="button">Leave Room</button>
-          </div>
-          <p id="menuMultiplayerHint" class="menu-shop-note">Enter a room code, then Create or Join.</p>
-          <div class="menu-shop-head menu-multiplayer-players-head">
-            <h3>Players In Room</h3>
-            <span id="menuMultiplayerPlayerCount">0</span>
-          </div>
-          <div id="menuMultiplayerPlayers" class="menu-shop-list menu-multiplayer-players"></div>
-          <div class="menu-shop-head menu-multiplayer-log-head">
-            <h3>Room Log</h3>
-          </div>
-          <div id="menuMultiplayerLog" class="menu-shop-list"></div>
-          <p class="menu-shop-note">
+          <p class="menu-shop-note menu-multiplayer-note">
             Use the same server URL and room code on every device. Host is authoritative and shares the game state.
           </p>
-          <div class="menu-shop-actions">
+          <div class="menu-shop-actions menu-multiplayer-footer">
             <button id="closeMultiplayerBtn" class="menu-play-btn" type="button">Menu Page</button>
           </div>
         </section>
@@ -296,6 +306,6 @@
     </section>
 
     <script src="vendor/three.min.js"></script>
-    <script src="game.js?v=20260219x"></script>
+    <script src="game.js?v=20260219y"></script>
   </body>
 </html>
