@@ -1,0 +1,10 @@
+﻿services:
+  - type: web
+    name: neon-bastion-multiplayer
+    env: node
+    rootDir: server
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz

@@ -28,6 +28,7 @@ The game UI now supports real network rooms through a WebSocket server.
 
 Use Render/Railway/Fly.io and deploy the `server/` folder as a Node service.
 
+- Render shortcut: this repo includes `render.yaml` (Blueprint deploy).
 - Start command: `npm start`
 - Environment:
   - `PORT` is provided by most hosts automatically
