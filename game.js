@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-18";
+const BUILD_ID = "2026-02-19-19";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1350,7 +1350,7 @@ const ENEMY_TYPES = {
   star: {
     name: "Star",
     hp: 77508,
-    speed: 0.42,
+    speed: 0.84,
     reward: 900,
     radius: 2.4,
     coreDamage: 36,
