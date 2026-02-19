@@ -111,7 +111,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-2";
+const BUILD_ID = "2026-02-19-3";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -937,6 +937,7 @@ const SPAWNER_TOWER_PLACE_CAPS = {
   warden: 1,
   colossus: 1,
   leviathan: 1,
+  monolith: 1,
   icosahedron: 1,
   rhombus: 1,
   rhombusMinus: 2,
@@ -1286,14 +1287,14 @@ const ENEMY_TYPES = {
     hp: 960,
     speed: 2.78,
     reward: 80,
-    radius: 5.2,
+    radius: 6.25,
     coreDamage: 7,
     hpGrowth: 0.44,
     speedGrowth: 0.009,
     rewardGrowth: 3.6,
     colorA: "#7b62ff",
     colorB: "#f2ddff",
-    hoverHeight: 3.4,
+    hoverHeight: 3.9,
   },
   icosahedron: {
     name: "Icosahedron",
@@ -1345,19 +1346,20 @@ const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
 
 const CREATURE_SPAWNER_UNLOCKS = {
-  crawler: { killRequirement: 100, towerCost: 260, spawnInterval: 2.3 },
-  blink: { killRequirement: 95, towerCost: 280, spawnInterval: 2.1 },
-  skitter: { killRequirement: 90, towerCost: 300, spawnInterval: 1.9 },
-  minion: { killRequirement: 120, towerCost: 190, spawnInterval: 1.6 },
-  bulwark: { killRequirement: 80, towerCost: 430, spawnInterval: 4.1 },
-  raider: { killRequirement: 75, towerCost: 420, spawnInterval: 3.5 },
-  specter: { killRequirement: 70, towerCost: 460, spawnInterval: 3.3 },
-  warden: { killRequirement: 60, towerCost: 560, spawnInterval: 4.5 },
-  colossus: { killRequirement: 45, towerCost: 720, spawnInterval: 5.8 },
-  leviathan: { killRequirement: 35, towerCost: 860, spawnInterval: 6.6 },
+  crawler: { killRequirement: 200, towerCost: 260, spawnInterval: 2.3 },
+  blink: { killRequirement: 190, towerCost: 280, spawnInterval: 2.1 },
+  skitter: { killRequirement: 180, towerCost: 300, spawnInterval: 1.9 },
+  minion: { killRequirement: 240, towerCost: 190, spawnInterval: 1.6 },
+  bulwark: { killRequirement: 160, towerCost: 430, spawnInterval: 4.1 },
+  raider: { killRequirement: 150, towerCost: 420, spawnInterval: 3.5 },
+  specter: { killRequirement: 140, towerCost: 460, spawnInterval: 3.3 },
+  warden: { killRequirement: 120, towerCost: 560, spawnInterval: 4.5 },
+  colossus: { killRequirement: 90, towerCost: 720, spawnInterval: 5.8 },
+  leviathan: { killRequirement: 70, towerCost: 860, spawnInterval: 6.6 },
+  monolith: { killRequirement: 80, towerCost: 1220, spawnInterval: 7.8 },
   icosahedron: { killRequirement: 6, towerCost: 1620, spawnInterval: 8.4 },
   rhombus: { killRequirement: 6, towerCost: 1780, spawnInterval: 9.2, spawnCount: 2 },
-  rhombusMinus: { killRequirement: 18, towerCost: 920, spawnInterval: 5.2 },
+  rhombusMinus: { killRequirement: 36, towerCost: 920, spawnInterval: 5.2 },
 };
 
 const CREATURE_SHOP_ENEMY_IDS = Object.keys(ENEMY_TYPES).filter((enemyTypeId) =>
@@ -3944,7 +3946,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       coreRadius: 0.19,
       coreY: 0.1,
     },
-    monolith: { shape: "cube", sizeX: 6.6, sizeY: 6.6, sizeZ: 6.6, ringRadius: 0, coreRadius: 0.9, coreY: 0.9 },
+    monolith: { shape: "cube", sizeX: 7.2, sizeY: 7.2, sizeZ: 7.2, ringRadius: 0, coreRadius: 1.05, coreY: 1.05 },
     icosahedron: {
       shape: "icosa",
       radius: 1.95,
@@ -4631,7 +4633,7 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   if (enemyTypeId === "blink" || enemyTypeId === "skitter" || enemyTypeId === "minion" || enemyTypeId === "raider") {
     symbolGeometry = new THREE.TetrahedronGeometry(0.54);
     symbolY = 0.73;
-  } else if (enemyTypeId === "bulwark" || enemyTypeId === "warden") {
+  } else if (enemyTypeId === "bulwark" || enemyTypeId === "warden" || enemyTypeId === "monolith") {
     symbolGeometry = new THREE.BoxGeometry(0.74, 0.74, 0.74);
   } else if (enemyTypeId === "specter" || enemyTypeId === "colossus") {
     symbolGeometry = new THREE.CylinderGeometry(0.48, 0.48, 0.7, 6);
