@@ -422,7 +422,7 @@ body:not(.menu-active) .menu-screen {
 }
 
 #menuMultiplayerPanel {
-  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto auto auto minmax(0, 0.8fr) auto minmax(0, 1fr) auto auto;
 }
 
 .menu-shop-head {
@@ -443,7 +443,8 @@ body:not(.menu-active) .menu-screen {
 #menuShards,
 #menuAccountCurrent,
 #menuCreatureSummary,
-#menuMultiplayerState {
+#menuMultiplayerState,
+#menuMultiplayerPlayerCount {
   border: 1px solid rgba(179, 219, 255, 0.34);
   border-radius: 999px;
   padding: 0.24rem 0.6rem;
@@ -451,8 +452,32 @@ body:not(.menu-active) .menu-screen {
   color: #d8f5ff;
 }
 
+#menuMultiplayerPlayerCount {
+  min-width: 52px;
+  text-align: center;
+}
+
+.menu-multiplayer-players-head h3,
+.menu-multiplayer-log-head h3 {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #cfe4f7;
+}
+
+.menu-multiplayer-players {
+  min-height: 82px;
+  grid-template-columns: 1fr;
+}
+
+#menuMultiplayerPlayers .menu-account-item {
+  grid-template-columns: 1fr;
+}
+
 #menuMultiplayerLog {
-  min-height: 96px;
+  min-height: 72px;
+  grid-template-columns: 1fr;
 }
 
 #menuMultiplayerLog .menu-account-item {

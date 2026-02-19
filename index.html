@@ -139,6 +139,14 @@
             <button id="leaveMultiplayerBtn" type="button">Leave Room</button>
           </div>
           <p id="menuMultiplayerHint" class="menu-shop-note">Enter a room code, then Create or Join.</p>
+          <div class="menu-shop-head menu-multiplayer-players-head">
+            <h3>Players In Room</h3>
+            <span id="menuMultiplayerPlayerCount">0</span>
+          </div>
+          <div id="menuMultiplayerPlayers" class="menu-shop-list menu-multiplayer-players"></div>
+          <div class="menu-shop-head menu-multiplayer-log-head">
+            <h3>Room Log</h3>
+          </div>
           <div id="menuMultiplayerLog" class="menu-shop-list"></div>
           <p class="menu-shop-note">
             Use the same server URL and room code on every device. Host is authoritative and shares the game state.
@@ -191,6 +199,7 @@
               <span id="shards">Shards: 0</span>
               <span id="lives">Core HP: 0</span>
               <span id="wave">Wave: 0</span>
+              <span id="multiplayerPlayersHud">Players: Solo</span>
             </div>
           </div>
 

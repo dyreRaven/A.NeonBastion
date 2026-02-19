@@ -4,6 +4,7 @@ const moneyEl = document.getElementById("money");
 const shardsEl = document.getElementById("shards");
 const livesEl = document.getElementById("lives");
 const waveEl = document.getElementById("wave");
+const multiplayerPlayersHudEl = document.getElementById("multiplayerPlayersHud");
 const statusEl = document.getElementById("status");
 const buildBtn = document.getElementById("buildBtn");
 const sellBtn = document.getElementById("sellBtn");
@@ -61,6 +62,8 @@ const hostMultiplayerBtn = document.getElementById("hostMultiplayerBtn");
 const joinMultiplayerBtn = document.getElementById("joinMultiplayerBtn");
 const leaveMultiplayerBtn = document.getElementById("leaveMultiplayerBtn");
 const menuMultiplayerLogEl = document.getElementById("menuMultiplayerLog");
+const menuMultiplayerPlayersEl = document.getElementById("menuMultiplayerPlayers");
+const menuMultiplayerPlayerCountEl = document.getElementById("menuMultiplayerPlayerCount");
 const bossBarWrapEl = document.getElementById("bossBarWrap");
 const bossNameEl = document.getElementById("bossName");
 const bossHpEl = document.getElementById("bossHp");
@@ -2496,6 +2499,7 @@ const multiplayer = {
   hostId: null,
   connected: false,
   peers: new Set(),
+  roster: new Map(),
   socket: null,
   serverUrl: "",
   connecting: false,
@@ -2584,12 +2588,161 @@ function appendMultiplayerLog(message) {
   for (let i = 12; i < cards.length; i += 1) cards[i].remove();
 }
 
+function sanitizeMultiplayerDisplayName(name) {
+  return sanitizeAccountName(name) || "Commander";
+}
+
+function getLocalMultiplayerDisplayName() {
+  return sanitizeMultiplayerDisplayName(game.accountName || "Commander");
+}
+
+function parseMultiplayerRole(role) {
+  if (role === "host") return "host";
+  if (role === "client") return "client";
+  return "player";
+}
+
+function getMultiplayerRosterEntries() {
+  const entries = [];
+  multiplayer.roster.forEach((value, peerId) => {
+    if (!peerId) return;
+    const displayName = sanitizeMultiplayerDisplayName(value?.displayName || "Player");
+    const role = parseMultiplayerRole(value?.role);
+    entries.push({ peerId, displayName, role });
+  });
+  entries.sort((a, b) => {
+    const aHost = a.peerId === multiplayer.hostId;
+    const bHost = b.peerId === multiplayer.hostId;
+    if (aHost !== bHost) return aHost ? -1 : 1;
+    const aSelf = a.peerId === multiplayer.peerId;
+    const bSelf = b.peerId === multiplayer.peerId;
+    if (aSelf !== bSelf) return aSelf ? -1 : 1;
+    return a.displayName.localeCompare(b.displayName);
+  });
+  return entries;
+}
+
+function getMultiplayerRosterPayload() {
+  return getMultiplayerRosterEntries().map((entry) => ({
+    peerId: entry.peerId,
+    displayName: entry.displayName,
+    role: entry.role,
+  }));
+}
+
+function getMultiplayerDisplayNameForPeer(peerId, fallback = "Player") {
+  if (!peerId) return sanitizeMultiplayerDisplayName(fallback);
+  const player = multiplayer.roster.get(peerId);
+  return sanitizeMultiplayerDisplayName(player?.displayName || fallback);
+}
+
+function upsertMultiplayerRosterPlayer(peerId, displayName, role = "player") {
+  if (!peerId) return false;
+  const normalizedName = sanitizeMultiplayerDisplayName(displayName || "Player");
+  const normalizedRole = parseMultiplayerRole(role);
+  const existing = multiplayer.roster.get(peerId);
+  const changed =
+    !existing || existing.displayName !== normalizedName || parseMultiplayerRole(existing.role) !== normalizedRole;
+  multiplayer.roster.set(peerId, {
+    displayName: normalizedName,
+    role: normalizedRole,
+  });
+  return changed;
+}
+
+function removeMultiplayerRosterPlayer(peerId) {
+  if (!peerId) return false;
+  return multiplayer.roster.delete(peerId);
+}
+
+function setMultiplayerRosterFromPacket(players, hostPeerId = null) {
+  const list = Array.isArray(players) ? players : [];
+  const next = new Map();
+  for (let i = 0; i < list.length; i += 1) {
+    const player = list[i];
+    if (!player || typeof player !== "object") continue;
+    const peerId = typeof player.peerId === "string" ? player.peerId : "";
+    if (!peerId) continue;
+    const displayName = sanitizeMultiplayerDisplayName(player.displayName || "Player");
+    const role = parseMultiplayerRole(player.role);
+    next.set(peerId, { displayName, role });
+  }
+
+  if (next.size > 0) multiplayer.roster = next;
+  if (typeof hostPeerId === "string" && hostPeerId) multiplayer.hostId = hostPeerId;
+}
+
+function getMultiplayerHudRosterText() {
+  if (!isMultiplayerActive()) return "Players: Solo";
+  const entries = getMultiplayerRosterEntries();
+  if (entries.length === 0) return "Players: Connecting...";
+  const labels = entries.map((entry) => {
+    const tags = [];
+    if (entry.peerId === multiplayer.peerId) tags.push("You");
+    if (entry.peerId === multiplayer.hostId) tags.push("Host");
+    if (tags.length === 0) return entry.displayName;
+    return `${entry.displayName} (${tags.join(" / ")})`;
+  });
+  if (labels.length <= 3) return `Players: ${labels.join(", ")}`;
+  return `Players: ${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
+}
+
+function renderMultiplayerRoster() {
+  const entries = getMultiplayerRosterEntries();
+
+  if (menuMultiplayerPlayerCountEl) {
+    if (isMultiplayerActive()) menuMultiplayerPlayerCountEl.textContent = String(entries.length);
+    else menuMultiplayerPlayerCountEl.textContent = "0";
+  }
+
+  if (menuMultiplayerPlayersEl) {
+    if (!isMultiplayerActive()) {
+      menuMultiplayerPlayersEl.innerHTML = `
+        <div class="menu-account-item">
+          <div><strong>Not in a room</strong><span>Create or join a room to see players.</span></div>
+        </div>
+      `;
+    } else if (entries.length === 0) {
+      menuMultiplayerPlayersEl.innerHTML = `
+        <div class="menu-account-item">
+          <div><strong>Connecting...</strong><span>Waiting for player list.</span></div>
+        </div>
+      `;
+    } else {
+      const fragments = [];
+      for (const entry of entries) {
+        const tags = [];
+        if (entry.peerId === multiplayer.peerId) tags.push("You");
+        if (entry.peerId === multiplayer.hostId) tags.push("Host");
+        const tagText = tags.length > 0 ? tags.join(" / ") : entry.role === "client" ? "Guest" : "Player";
+        fragments.push(`
+          <div class="menu-account-item">
+            <div>
+              <strong>${escapeHtml(entry.displayName)}</strong>
+              <span>${escapeHtml(tagText)}</span>
+            </div>
+          </div>
+        `);
+      }
+      menuMultiplayerPlayersEl.innerHTML = fragments.join("");
+    }
+  }
+
+  if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
+}
+
 function refreshMultiplayerPanel() {
   const supported = multiplayer.supported;
   const active = isMultiplayerActive();
   const connecting = multiplayer.connecting;
   const host = isMultiplayerHost();
   const client = isMultiplayerClient();
+  if (active) {
+    if (host && !multiplayer.hostId) multiplayer.hostId = multiplayer.peerId;
+    if (!multiplayer.roster.has(multiplayer.peerId)) {
+      upsertMultiplayerRosterPlayer(multiplayer.peerId, getLocalMultiplayerDisplayName(), host ? "host" : "client");
+    }
+  }
   const rawServerUrl = multiplayerServerInputEl?.value || multiplayer.serverUrl || "";
   const hasServerUrl = !!normalizeMultiplayerServerUrl(rawServerUrl);
   if (menuMultiplayerStateEl) menuMultiplayerStateEl.textContent = getMultiplayerLabel();
@@ -2628,6 +2781,7 @@ function refreshMultiplayerPanel() {
       menuMultiplayerHintEl.textContent = "Enter a room code, then Create or Join.";
     }
   }
+  renderMultiplayerRoster();
 }
 
 function closeMultiplayerSocket() {
@@ -2671,7 +2825,7 @@ function serializeLaneSignature() {
 
 function leaveMultiplayerSession(announce = true) {
   if (announce && isMultiplayerActive()) {
-    postMultiplayerMessage({ type: "leave" });
+    postMultiplayerMessage({ type: "leave", name: getLocalMultiplayerDisplayName() });
   }
   closeMultiplayerSocket();
   multiplayer.role = "solo";
@@ -2679,6 +2833,7 @@ function leaveMultiplayerSession(announce = true) {
   multiplayer.hostId = null;
   multiplayer.connected = false;
   multiplayer.peers.clear();
+  multiplayer.roster.clear();
   multiplayer.snapshotTimer = 0;
   multiplayer.lastLaneSignature = "";
   multiplayer.lastShopSignature = "";
@@ -2693,19 +2848,30 @@ function onMultiplayerMessage(message) {
 
   if (isMultiplayerHost()) {
     if (message.type === "hello") {
+      const playerName = sanitizeMultiplayerDisplayName(message.name || "Player");
+      const wasKnown = multiplayer.peers.has(message.from) || multiplayer.roster.has(message.from);
       multiplayer.peers.add(message.from);
+      upsertMultiplayerRosterPlayer(message.from, playerName, "client");
       multiplayer.connected = multiplayer.peers.size > 0;
-      postMultiplayerMessage({ type: "welcome", to: message.from });
+      postMultiplayerMessage({
+        type: "welcome",
+        to: message.from,
+        name: getLocalMultiplayerDisplayName(),
+        players: getMultiplayerRosterPayload(),
+      });
       sendMultiplayerSnapshot(true);
-      appendMultiplayerLog("A player joined your room.");
+      if (!wasKnown) appendMultiplayerLog(`${playerName} joined your room.`);
       refreshMultiplayerPanel();
       return;
     }
 
     if (message.type === "leave") {
+      const playerName = sanitizeMultiplayerDisplayName(message.name || getMultiplayerDisplayNameForPeer(message.from, "Player"));
+      const wasKnown = multiplayer.peers.has(message.from) || multiplayer.roster.has(message.from);
       multiplayer.peers.delete(message.from);
+      removeMultiplayerRosterPlayer(message.from);
       multiplayer.connected = multiplayer.peers.size > 0;
-      appendMultiplayerLog("A player left your room.");
+      if (wasKnown) appendMultiplayerLog(`${playerName} left your room.`);
       refreshMultiplayerPanel();
       return;
     }
@@ -2720,6 +2886,9 @@ function onMultiplayerMessage(message) {
     if (message.type === "welcome") {
       if (message.to && message.to !== multiplayer.peerId) return;
       multiplayer.hostId = message.from;
+      upsertMultiplayerRosterPlayer(message.from, message.name || "Host", "host");
+      upsertMultiplayerRosterPlayer(multiplayer.peerId, getLocalMultiplayerDisplayName(), "client");
+      if (Array.isArray(message.players)) setMultiplayerRosterFromPacket(message.players, message.from);
       multiplayer.connected = true;
       appendMultiplayerLog("Connected to host.");
       refreshMultiplayerPanel();
@@ -2736,7 +2905,7 @@ function onMultiplayerMessage(message) {
     }
 
     if (message.type === "leave" && multiplayer.hostId && message.from === multiplayer.hostId) {
-      appendMultiplayerLog("Host left room.");
+      appendMultiplayerLog(`${getMultiplayerDisplayNameForPeer(message.from, "Host")} left room.`);
       leaveMultiplayerSession(false);
       setStatus("Host left multiplayer room.", true);
       return;
@@ -2775,6 +2944,7 @@ function openMultiplayerConnection(roomCode, role, serverUrl) {
         roomCode,
         role,
         peerId: multiplayer.peerId,
+        displayName: getLocalMultiplayerDisplayName(),
       });
       if (sent || settled) return;
       settled = true;
@@ -2795,6 +2965,12 @@ function openMultiplayerConnection(roomCode, role, serverUrl) {
 
       if (packet.type === "joinedRoom") {
         if (packet.roomCode !== roomCode) return;
+        if (typeof packet.peerId === "string" && packet.peerId) multiplayer.peerId = packet.peerId;
+        if (typeof packet.hostPeerId === "string" && packet.hostPeerId) multiplayer.hostId = packet.hostPeerId;
+        if (Array.isArray(packet.players)) setMultiplayerRosterFromPacket(packet.players, packet.hostPeerId || multiplayer.hostId);
+        if (!multiplayer.roster.has(multiplayer.peerId)) {
+          upsertMultiplayerRosterPlayer(multiplayer.peerId, packet.displayName || getLocalMultiplayerDisplayName(), role);
+        }
         multiplayer.connecting = false;
         refreshMultiplayerPanel();
         if (settled) return;
@@ -2826,18 +3002,41 @@ function openMultiplayerConnection(roomCode, role, serverUrl) {
         return;
       }
 
-      if (packet.type === "peerLeft" && isMultiplayerHost()) {
+      if (packet.type === "peerJoined") {
         const peerId = typeof packet.peerId === "string" ? packet.peerId : "";
-        if (!peerId || !multiplayer.peers.has(peerId)) return;
+        if (!peerId || peerId === multiplayer.peerId) return;
+        const playerName = sanitizeMultiplayerDisplayName(packet.displayName || "Player");
+        const knownBefore = multiplayer.roster.has(peerId);
+        upsertMultiplayerRosterPlayer(peerId, playerName, packet.role || "player");
+        if (typeof packet.hostPeerId === "string" && packet.hostPeerId) multiplayer.hostId = packet.hostPeerId;
+        if (Array.isArray(packet.players)) setMultiplayerRosterFromPacket(packet.players, packet.hostPeerId || multiplayer.hostId);
+        if (isMultiplayerHost()) {
+          multiplayer.peers.add(peerId);
+          multiplayer.connected = multiplayer.peers.size > 0;
+        }
+        if (!knownBefore) appendMultiplayerLog(`${playerName} joined the room.`);
+        refreshMultiplayerPanel();
+        return;
+      }
+
+      if (packet.type === "peerLeft") {
+        const peerId = typeof packet.peerId === "string" ? packet.peerId : "";
+        if (!peerId || peerId === multiplayer.peerId) return;
+        const playerName = sanitizeMultiplayerDisplayName(packet.displayName || getMultiplayerDisplayNameForPeer(peerId, "Player"));
+        const knownBefore = multiplayer.roster.has(peerId) || multiplayer.peers.has(peerId);
+        if (isMultiplayerClient() && multiplayer.hostId && peerId === multiplayer.hostId) return;
         multiplayer.peers.delete(peerId);
-        multiplayer.connected = multiplayer.peers.size > 0;
-        appendMultiplayerLog("A player left your room.");
+        if (isMultiplayerHost()) multiplayer.connected = multiplayer.peers.size > 0;
+        removeMultiplayerRosterPlayer(peerId);
+        if (typeof packet.hostPeerId === "string" && packet.hostPeerId) multiplayer.hostId = packet.hostPeerId;
+        if (Array.isArray(packet.players)) setMultiplayerRosterFromPacket(packet.players, packet.hostPeerId || multiplayer.hostId);
+        if (knownBefore) appendMultiplayerLog(`${playerName} left the room.`);
         refreshMultiplayerPanel();
         return;
       }
 
       if (packet.type === "hostLeft" && isMultiplayerClient()) {
-        appendMultiplayerLog("Host left room.");
+        appendMultiplayerLog(`${getMultiplayerDisplayNameForPeer(multiplayer.hostId, "Host")} left room.`);
         leaveMultiplayerSession(false);
         setStatus("Host left multiplayer room.", true);
       }
@@ -2898,8 +3097,9 @@ async function hostMultiplayerSession() {
   persistPreferredMultiplayerServerUrl(serverUrl);
   if (multiplayerServerInputEl) multiplayerServerInputEl.value = serverUrl;
 
+  let joinedPacket = null;
   try {
-    await openMultiplayerConnection(roomCode, "host", serverUrl);
+    joinedPacket = await openMultiplayerConnection(roomCode, "host", serverUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to connect to multiplayer server.";
     leaveMultiplayerSession(false);
@@ -2912,6 +3112,14 @@ async function hostMultiplayerSession() {
   multiplayer.hostId = multiplayer.peerId;
   multiplayer.connected = false;
   multiplayer.peers.clear();
+  multiplayer.roster.clear();
+  if (Array.isArray(joinedPacket?.players)) setMultiplayerRosterFromPacket(joinedPacket.players, multiplayer.peerId);
+  upsertMultiplayerRosterPlayer(multiplayer.peerId, getLocalMultiplayerDisplayName(), "host");
+  for (const player of getMultiplayerRosterEntries()) {
+    if (player.peerId === multiplayer.peerId) continue;
+    multiplayer.peers.add(player.peerId);
+  }
+  multiplayer.connected = multiplayer.peers.size > 0;
   multiplayer.snapshotTimer = 0;
   multiplayer.lastLaneSignature = serializeLaneSignature();
   if (multiplayerRoomInputEl) multiplayerRoomInputEl.value = roomCode;
@@ -2957,14 +3165,23 @@ async function joinMultiplayerSession() {
   multiplayer.role = "client";
   multiplayer.roomCode = roomCode;
   multiplayer.connected = false;
+  multiplayer.peers.clear();
+  multiplayer.roster.clear();
   multiplayer.hostId = typeof joinedPacket?.hostPeerId === "string" ? joinedPacket.hostPeerId : null;
+  if (Array.isArray(joinedPacket?.players)) setMultiplayerRosterFromPacket(joinedPacket.players, multiplayer.hostId);
+  upsertMultiplayerRosterPlayer(multiplayer.peerId, joinedPacket?.displayName || getLocalMultiplayerDisplayName(), "client");
+  if (multiplayer.hostId && multiplayer.hostId !== multiplayer.peerId) {
+    const hostName = getMultiplayerDisplayNameForPeer(multiplayer.hostId, "Host");
+    upsertMultiplayerRosterPlayer(multiplayer.hostId, hostName, "host");
+    multiplayer.connected = true;
+  }
   multiplayer.snapshotTimer = 0;
   multiplayer.lastLaneSignature = "";
   clearActiveCombatState();
   resetTowersForNewLevel();
   if (multiplayerRoomInputEl) multiplayerRoomInputEl.value = roomCode;
   appendMultiplayerLog(`Joining room: ${roomCode}`);
-  postMultiplayerMessage({ type: "hello" });
+  postMultiplayerMessage({ type: "hello", name: getLocalMultiplayerDisplayName() });
   refreshMultiplayerPanel();
   setStatus(`Joining multiplayer room ${roomCode}...`);
 }
@@ -5099,6 +5316,8 @@ function buildMultiplayerSnapshot() {
     speedMultiplier: game.speedMultiplier,
     time: game.time,
     accountName: game.accountName,
+    multiplayerHostId: multiplayer.hostId || multiplayer.peerId,
+    multiplayerPlayers: getMultiplayerRosterPayload(),
     activeLoadout: Array.from(game.activeLoadout),
     unlockedTowers: Array.from(game.unlockedTowers),
     unlockedSpawnerTowers: Array.from(game.unlockedSpawnerTowers),
@@ -5342,7 +5561,11 @@ function applyMultiplayerSnapshot(snapshot) {
     ? Math.max(0.5, Math.min(2, snapshot.speedMultiplier))
     : GAME_SPEED_STEPS[game.speedStepIndex];
   game.time = Number.isFinite(snapshot.time) ? snapshot.time : game.time;
-  game.accountName = snapshot.accountName || game.accountName;
+  if (typeof snapshot.multiplayerHostId === "string" && snapshot.multiplayerHostId) multiplayer.hostId = snapshot.multiplayerHostId;
+  if (Array.isArray(snapshot.multiplayerPlayers)) {
+    setMultiplayerRosterFromPacket(snapshot.multiplayerPlayers, snapshot.multiplayerHostId || multiplayer.hostId);
+  }
+  upsertMultiplayerRosterPlayer(multiplayer.peerId, getLocalMultiplayerDisplayName(), isMultiplayerHost() ? "host" : "client");
 
   if (Array.isArray(snapshot.unlockedTowers)) {
     game.unlockedTowers = new Set(snapshot.unlockedTowers.filter((id) => Object.prototype.hasOwnProperty.call(TOWER_TYPES, id)));
@@ -6792,6 +7015,7 @@ function updateHud() {
   if (menuShardsEl) menuShardsEl.textContent = `Shards: ${game.shards}`;
   if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
+  if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
   livesEl.textContent = `Core HP: ${game.lives}`;
   waveEl.textContent = `Wave: ${game.wave}`;
   buildBtn.textContent = `Build ${selectedTower.name} (${placement.placed}/${placement.cap}) (B) - ${selectedTower.cost}`;
