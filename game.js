@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-17";
+const BUILD_ID = "2026-02-19-18";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -903,14 +903,14 @@ const audioSystem = {
 };
 
 const TOWER_UNLOCKS = {
-  ion: { shardCost: 28 },
-  frost: { shardCost: 14 },
-  quarry: { shardCost: 22 },
-  rift: { shardCost: 16 },
-  volt: { shardCost: 18 },
-  bastion: { shardCost: 24 },
-  photon: { shardCost: 26 },
-  citadel: { shardCost: 36 },
+  ion: { shardCost: 56 },
+  frost: { shardCost: 28 },
+  quarry: { shardCost: 44 },
+  rift: { shardCost: 32 },
+  volt: { shardCost: 36 },
+  bastion: { shardCost: 48 },
+  photon: { shardCost: 52 },
+  citadel: { shardCost: 72 },
 };
 
 const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "rift", "volt", "bastion", "photon", "citadel"];
@@ -953,9 +953,11 @@ const TOWER_CAP_HARD_LIMIT = 8;
 const TOWER_CAP_UPGRADE_MAX_LEVEL = 3;
 const TOWER_DAMAGE_UPGRADE_MAX_LEVEL = 6;
 const TOWER_ATTACK_SPEED_UPGRADE_MAX_LEVEL = 6;
+const TOWER_RANGE_UPGRADE_MAX_LEVEL = 6;
 const SPAWNER_COOLDOWN_UPGRADE_MAX_LEVEL = 6;
 const TOWER_DAMAGE_UPGRADE_STEP = 0.22;
 const TOWER_ATTACK_SPEED_UPGRADE_STEP = 0.12;
+const TOWER_RANGE_UPGRADE_STEP = 0.1;
 const SPAWNER_COOLDOWN_UPGRADE_STEP = 0.1;
 
 const HALF_COLS = (COLS - 1) / 2;
@@ -1477,6 +1479,10 @@ function getTowerAttackSpeedUpgradeMaxLevel(towerTypeId) {
   return isSpawnerTowerId(towerTypeId) ? 0 : TOWER_ATTACK_SPEED_UPGRADE_MAX_LEVEL;
 }
 
+function getTowerRangeUpgradeMaxLevel(towerTypeId) {
+  return isSpawnerTowerId(towerTypeId) ? 0 : TOWER_RANGE_UPGRADE_MAX_LEVEL;
+}
+
 function getSpawnerCooldownUpgradeMaxLevel(towerTypeId) {
   return isSpawnerTowerId(towerTypeId) ? SPAWNER_COOLDOWN_UPGRADE_MAX_LEVEL : 0;
 }
@@ -1495,6 +1501,13 @@ function getTowerAttackSpeedUpgradeLevel(towerTypeId) {
   return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
 }
 
+function getTowerRangeUpgradeLevel(towerTypeId) {
+  const maxLevel = getTowerRangeUpgradeMaxLevel(towerTypeId);
+  const rawLevel = Number(game.towerRangeUpgrades?.[towerTypeId] || 0);
+  if (!Number.isFinite(rawLevel)) return 0;
+  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+}
+
 function getSpawnerCooldownUpgradeLevel(towerTypeId) {
   const maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
   const rawLevel = Number(game.spawnerCooldownUpgrades?.[towerTypeId] || 0);
@@ -1509,6 +1522,10 @@ function getTowerDamageMultiplier(towerTypeId) {
 function getTowerFireIntervalMultiplier(towerTypeId) {
   const level = getTowerAttackSpeedUpgradeLevel(towerTypeId);
   return Math.max(0.35, 1 - level * TOWER_ATTACK_SPEED_UPGRADE_STEP);
+}
+
+function getTowerRangeMultiplier(towerTypeId) {
+  return 1 + getTowerRangeUpgradeLevel(towerTypeId) * TOWER_RANGE_UPGRADE_STEP;
 }
 
 function getSpawnerCooldownMultiplier(towerTypeId) {
@@ -1531,6 +1548,13 @@ function getTowerAttackSpeedUpgradeCost(towerTypeId, nextLevel) {
   return Math.max(8, Math.round(14 + baseTower.cost * 0.05 + speedWeight * 3 + level * 15));
 }
 
+function getTowerRangeUpgradeCost(towerTypeId, nextLevel) {
+  const baseTower = TOWER_TYPES[towerTypeId];
+  if (!baseTower) return 0;
+  const level = Math.max(1, Math.floor(nextLevel || 1));
+  return Math.max(8, Math.round(12 + baseTower.cost * 0.042 + baseTower.range * 5.2 + level * 13));
+}
+
 function getSpawnerCooldownUpgradeCost(towerTypeId, nextLevel) {
   const spawnerType = getSpawnerTowerType(towerTypeId);
   if (!spawnerType) return 0;
@@ -1543,13 +1567,16 @@ function getTowerType(towerTypeId) {
   if (baseTower) {
     const damageMultiplier = getTowerDamageMultiplier(towerTypeId);
     const fireIntervalMultiplier = getTowerFireIntervalMultiplier(towerTypeId);
+    const rangeMultiplier = getTowerRangeMultiplier(towerTypeId);
     const damage = Math.max(1, Math.round(baseTower.damage * damageMultiplier));
     const fireInterval = Math.max(0.05, Number((baseTower.fireInterval * fireIntervalMultiplier).toFixed(3)));
-    if (damage === baseTower.damage && fireInterval === baseTower.fireInterval) return baseTower;
+    const range = Math.max(1.2, Number((baseTower.range * rangeMultiplier).toFixed(2)));
+    if (damage === baseTower.damage && fireInterval === baseTower.fireInterval && range === baseTower.range) return baseTower;
     return {
       ...baseTower,
       damage,
       fireInterval,
+      range,
     };
   }
 
@@ -1641,6 +1668,21 @@ function normalizeTowerAttackSpeedUpgrades(rawUpgrades) {
   if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
   for (const towerTypeId of knownTowerIds) {
     const maxLevel = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
+    if (maxLevel <= 0) continue;
+    const rawLevel = Number(rawUpgrades[towerTypeId]);
+    if (!Number.isFinite(rawLevel)) continue;
+    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+    if (level > 0) normalized[towerTypeId] = level;
+  }
+  return normalized;
+}
+
+function normalizeTowerRangeUpgrades(rawUpgrades) {
+  const normalized = {};
+  const knownTowerIds = Object.keys(TOWER_TYPES);
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+  for (const towerTypeId of knownTowerIds) {
+    const maxLevel = getTowerRangeUpgradeMaxLevel(towerTypeId);
     if (maxLevel <= 0) continue;
     const rawLevel = Number(rawUpgrades[towerTypeId]);
     if (!Number.isFinite(rawLevel)) continue;
@@ -2915,6 +2957,7 @@ const game = {
   towerCapUpgrades: {},
   towerDamageUpgrades: {},
   towerAttackSpeedUpgrades: {},
+  towerRangeUpgrades: {},
   spawnerCooldownUpgrades: {},
   loadoutUpgradeTargetId: null,
   maxLoadoutSlots: BASE_LOADOUT_SLOTS,
@@ -3753,6 +3796,7 @@ function createAccountRecord(name = "Commander", seed = null) {
   const towerCapUpgrades = normalizeTowerCapUpgrades(seed?.towerCapUpgrades);
   const towerDamageUpgrades = normalizeTowerDamageUpgrades(seed?.towerDamageUpgrades);
   const towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(seed?.towerAttackSpeedUpgrades);
+  const towerRangeUpgrades = normalizeTowerRangeUpgrades(seed?.towerRangeUpgrades);
   const spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(seed?.spawnerCooldownUpgrades);
   const maxLoadoutSlots = clampLoadoutSlotLimit(Number(seed?.maxLoadoutSlots));
   let loadout = normalizeTowerIds(
@@ -3783,6 +3827,7 @@ function createAccountRecord(name = "Commander", seed = null) {
     towerCapUpgrades,
     towerDamageUpgrades,
     towerAttackSpeedUpgrades,
+    towerRangeUpgrades,
     spawnerCooldownUpgrades,
   };
 }
@@ -3859,6 +3904,7 @@ function applyAccountToGame(account) {
   game.towerCapUpgrades = normalizeTowerCapUpgrades(account.towerCapUpgrades);
   game.towerDamageUpgrades = normalizeTowerDamageUpgrades(account.towerDamageUpgrades);
   game.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(account.towerAttackSpeedUpgrades);
+  game.towerRangeUpgrades = normalizeTowerRangeUpgrades(account.towerRangeUpgrades);
   game.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(account.spawnerCooldownUpgrades);
   game.enemyKillCounts = normalizeEnemyKillCounts(account.enemyKillCounts);
   game.unlockedSpawnerTowers = normalizeUnlockedSpawnerTypes(
@@ -3907,6 +3953,7 @@ function savePlayerProgress() {
   current.towerCapUpgrades = normalizeTowerCapUpgrades(game.towerCapUpgrades);
   current.towerDamageUpgrades = normalizeTowerDamageUpgrades(game.towerDamageUpgrades);
   current.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades);
+  current.towerRangeUpgrades = normalizeTowerRangeUpgrades(game.towerRangeUpgrades);
   current.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades);
   current.enemyKillCounts = normalizeEnemyKillCounts(game.enemyKillCounts);
   current.unlockedSpawnerTowers = Array.from(game.unlockedSpawnerTowers).filter((enemyTypeId) =>
@@ -5977,6 +6024,7 @@ function buildMultiplayerSnapshot() {
     towerCapUpgrades: normalizeTowerCapUpgrades(game.towerCapUpgrades),
     towerDamageUpgrades: normalizeTowerDamageUpgrades(game.towerDamageUpgrades),
     towerAttackSpeedUpgrades: normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades),
+    towerRangeUpgrades: normalizeTowerRangeUpgrades(game.towerRangeUpgrades),
     spawnerCooldownUpgrades: normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades),
     unlockedSpawnerTowers: Array.from(game.unlockedSpawnerTowers),
     laneCells: Array.from(pathCellSet),
@@ -6233,6 +6281,7 @@ function applyMultiplayerSnapshot(snapshot) {
   game.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(
     snapshot.towerAttackSpeedUpgrades || game.towerAttackSpeedUpgrades
   );
+  game.towerRangeUpgrades = normalizeTowerRangeUpgrades(snapshot.towerRangeUpgrades || game.towerRangeUpgrades);
   game.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(
     snapshot.spawnerCooldownUpgrades || game.spawnerCooldownUpgrades
   );
@@ -6288,6 +6337,10 @@ function applyMultiplayerSnapshot(snapshot) {
     Object.keys(game.towerAttackSpeedUpgrades || {})
       .sort()
       .map((towerTypeId) => `${towerTypeId}:${game.towerAttackSpeedUpgrades[towerTypeId]}`)
+      .join(","),
+    Object.keys(game.towerRangeUpgrades || {})
+      .sort()
+      .map((towerTypeId) => `${towerTypeId}:${game.towerRangeUpgrades[towerTypeId]}`)
       .join(","),
     Object.keys(game.spawnerCooldownUpgrades || {})
       .sort()
@@ -7073,6 +7126,23 @@ function getLoadoutUpgradeOptions(towerTypeId) {
       cost: attackSpeedCost,
       detail: attackSpeedAtMax ? `${currentShots}/s` : `${currentShots}/s -> ${nextShots}/s`,
     });
+
+    const rangeMax = getTowerRangeUpgradeMaxLevel(towerTypeId);
+    const rangeLevel = getTowerRangeUpgradeLevel(towerTypeId);
+    const rangeAtMax = rangeLevel >= rangeMax;
+    const rangeNextLevel = rangeLevel + 1;
+    const rangeCost = rangeAtMax ? 0 : getTowerRangeUpgradeCost(towerTypeId, rangeNextLevel);
+    const nextRangeMultiplier = 1 + rangeNextLevel * TOWER_RANGE_UPGRADE_STEP;
+    const nextRange = Math.max(1.2, Number((baseTowerType.range * nextRangeMultiplier).toFixed(2)));
+    options.push({
+      kind: "range",
+      label: "Range",
+      level: rangeLevel,
+      maxLevel: rangeMax,
+      atMax: rangeAtMax,
+      cost: rangeCost,
+      detail: rangeAtMax ? `${towerType.range.toFixed(1)}` : `${towerType.range.toFixed(1)} -> ${nextRange.toFixed(1)}`,
+    });
   }
 
   const capMax = getTowerCapUpgradeMaxLevel(towerTypeId);
@@ -7144,6 +7214,24 @@ function tryPurchaseLoadoutUpgrade(towerTypeId, kind) {
     game.shards -= cost;
     game.towerAttackSpeedUpgrades[towerTypeId] = nextLevel;
     successMessage = `${towerName} attack speed upgraded (${nextLevel}/${maxLevel}).`;
+  } else if (kind === "range") {
+    maxLevel = getTowerRangeUpgradeMaxLevel(towerTypeId);
+    const currentLevel = getTowerRangeUpgradeLevel(towerTypeId);
+    if (maxLevel <= 0) return false;
+    if (currentLevel >= maxLevel) {
+      setStatus(`${towerName} range is already maxed.`);
+      return false;
+    }
+    nextLevel = currentLevel + 1;
+    cost = getTowerRangeUpgradeCost(towerTypeId, nextLevel);
+    if (game.shards < cost) {
+      setStatus("Not enough shards for that upgrade.", true);
+      updateHud();
+      return false;
+    }
+    game.shards -= cost;
+    game.towerRangeUpgrades[towerTypeId] = nextLevel;
+    successMessage = `${towerName} range upgraded (${nextLevel}/${maxLevel}).`;
   } else if (kind === "cooldown") {
     maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
     const currentLevel = getSpawnerCooldownUpgradeLevel(towerTypeId);
