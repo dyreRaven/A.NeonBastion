@@ -111,7 +111,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-3";
+const BUILD_ID = "2026-02-19-4";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1287,14 +1287,14 @@ const ENEMY_TYPES = {
     hp: 960,
     speed: 2.78,
     reward: 80,
-    radius: 6.25,
+    radius: 1.68,
     coreDamage: 7,
     hpGrowth: 0.44,
     speedGrowth: 0.009,
     rewardGrowth: 3.6,
     colorA: "#7b62ff",
     colorB: "#f2ddff",
-    hoverHeight: 3.9,
+    hoverHeight: 1.3,
   },
   icosahedron: {
     name: "Icosahedron",
@@ -3946,7 +3946,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       coreRadius: 0.19,
       coreY: 0.1,
     },
-    monolith: { shape: "cube", sizeX: 7.2, sizeY: 7.2, sizeZ: 7.2, ringRadius: 0, coreRadius: 1.05, coreY: 1.05 },
+    monolith: { shape: "cube", sizeX: 2.7, sizeY: 2.7, sizeZ: 2.7, ringRadius: 0, coreRadius: 0.34, coreY: 0.34 },
     icosahedron: {
       shape: "icosa",
       radius: 1.95,
