@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-7";
+const BUILD_ID = "2026-02-19-8";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1312,6 +1312,20 @@ const ENEMY_TYPES = {
     colorB: "#ff2b2b",
     hoverHeight: 1.38,
   },
+  star: {
+    name: "Star",
+    hp: 38754,
+    speed: 0.42,
+    reward: 900,
+    radius: 2.4,
+    coreDamage: 36,
+    hpGrowth: 0,
+    speedGrowth: 0,
+    rewardGrowth: 0,
+    colorA: "#ffd200",
+    colorB: "#fff4a3",
+    hoverHeight: 1.62,
+  },
   rhombus: {
     name: "Rhombus",
     hp: 7424,
@@ -1751,6 +1765,7 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
 
 function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   if (level === 1 && wave === 20) return ["icosahedron", ...Array(12).fill("minion")];
+  if (level >= 3 && wave === 40) return ["star"];
   if (level >= 2 && wave === 30) {
     const escortBlock = Array(4).fill("rhombusMinus");
     return [...escortBlock, "rhombus", ...escortBlock, "rhombus", ...escortBlock];
@@ -1806,7 +1821,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
   const baseReward = type.reward + type.rewardGrowth * waveFactor;
   const rewardScaled = (typeId === "crawler" ? baseReward : baseReward / 3) * profile.rewardMultiplier;
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
-  let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : scaledHp;
+  let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 38754 : scaledHp;
   if (level === 1 && typeId === "icosahedron") hp = Math.max(1, Math.round(hp * 2));
 
   return {
@@ -1825,6 +1840,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 3) {
+    if (wave === 40) return "Ember threat: Star-class apex boss detected. Massive HP, extremely slow advance.";
     if (wave === 30) return "Ember threat: Twin Rhombus apex bosses with molten escort formations.";
     if (wave >= 21) return "Ember threat: Monolith command cores entering the rift lane.";
     if (wave >= 10) return "Ember threat: Leviathan siege wave under volcanic pressure.";
@@ -3938,6 +3954,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     leviathan: 1.3,
     monolith: 1.48,
     icosahedron: 1.5,
+    star: 1.72,
     rhombus: 1.64,
     rhombusMinus: 1.36,
   }[typeId] || 1;
@@ -4064,6 +4081,16 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spikeLength: 0.7,
       spikeRadius: 0.14,
     },
+    star: {
+      shape: "star",
+      outerRadius: 2.4,
+      innerRadius: 1.08,
+      depth: 0.96,
+      spikes: 5,
+      ringRadius: 0,
+      coreRadius: 0.34,
+      coreY: 0.12,
+    },
     rhombus: {
       shape: "rhombus",
       radius: 2.15,
@@ -4155,6 +4182,34 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spike.position.copy(spikeDir).multiplyScalar(setup.radius + (setup.spikeLength || 0.7) * 0.32);
       group.add(spike);
     }
+  } else if (setup.shape === "star") {
+    const spikes = Math.max(5, Math.floor(setup.spikes || 5));
+    const outerRadius = Math.max(0.6, setup.outerRadius || 2.2);
+    const innerRadius = Math.max(0.3, Math.min(outerRadius * 0.8, setup.innerRadius || outerRadius * 0.45));
+    const starShape = new THREE.Shape();
+    const points = spikes * 2;
+    for (let i = 0; i < points; i += 1) {
+      const angle = (i / points) * Math.PI * 2 - Math.PI / 2;
+      const radius = i % 2 === 0 ? outerRadius : innerRadius;
+      const px = Math.cos(angle) * radius;
+      const py = Math.sin(angle) * radius;
+      if (i === 0) starShape.moveTo(px, py);
+      else starShape.lineTo(px, py);
+    }
+    starShape.closePath();
+    const starGeometry = new THREE.ExtrudeGeometry(starShape, {
+      depth: setup.depth || 0.96,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: 0.11,
+      bevelSize: 0.14,
+      bevelSegments: 2,
+      curveSegments: 24,
+    });
+    starGeometry.center();
+    body = cast(new THREE.Mesh(starGeometry, bodyMat));
+    body.rotation.x = Math.PI / 2;
+    group.add(body);
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
     body.rotation.y = Math.PI / 4;
@@ -4786,6 +4841,7 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
 
 function getEnemySpinSpeed(typeId) {
   if (typeId === "icosahedron") return 1.25;
+  if (typeId === "star") return 0.48;
   if (typeId === "rhombus") return 1.05;
   if (typeId === "rhombusMinus") return 1.22;
   if (typeId === "monolith") return 1.18;
@@ -5004,7 +5060,7 @@ class Enemy {
   shatter() {
     if (this.shattered) return;
     this.shattered = true;
-    audioSystem.playEnemyShatter(this.radius, this.typeId === "icosahedron" || this.typeId === "rhombus");
+    audioSystem.playEnemyShatter(this.radius, this.typeId === "icosahedron" || this.typeId === "rhombus" || this.typeId === "star");
 
     const origin = this.mesh.position.clone();
     const colorA = new THREE.Color(this.colorA);
@@ -6185,7 +6241,7 @@ function setStatus(message, danger = false) {
 
 function getActiveBossEnemies() {
   return game.enemies.filter(
-    (enemy) => enemy.alive && (enemy.typeId === "icosahedron" || enemy.typeId === "rhombus")
+    (enemy) => enemy.alive && (enemy.typeId === "icosahedron" || enemy.typeId === "rhombus" || enemy.typeId === "star")
   );
 }
 
@@ -7984,7 +8040,7 @@ function spawnEnemy() {
   const enemy = new Enemy(stats);
   game.spawnLeft = game.spawnQueue.length;
   game.enemies.push(enemy);
-  if (typeId === "icosahedron" || typeId === "rhombus") game.bossEnemy = enemy;
+  if (typeId === "icosahedron" || typeId === "rhombus" || typeId === "star") game.bossEnemy = enemy;
   return typeId;
 }
 
