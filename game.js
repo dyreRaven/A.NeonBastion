@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-13";
+const BUILD_ID = "2026-02-19-14";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1314,7 +1314,7 @@ const ENEMY_TYPES = {
   },
   star: {
     name: "Star",
-    hp: 38754,
+    hp: 77508,
     speed: 0.42,
     reward: 900,
     radius: 2.4,
@@ -1821,7 +1821,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
   const baseReward = type.reward + type.rewardGrowth * waveFactor;
   const rewardScaled = (typeId === "crawler" ? baseReward : baseReward / 3) * profile.rewardMultiplier;
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
-  let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 38754 : scaledHp;
+  let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 77508 : scaledHp;
   if (level === 1 && typeId === "icosahedron") hp = Math.max(1, Math.round(hp * 2));
 
   return {
