@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-10";
+const BUILD_ID = "2026-02-19-11";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4104,8 +4104,8 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     star: {
       shape: "starBall",
       radius: 1.38,
-      spikeLength: 1.64,
-      spikeRadius: 0.38,
+      spikeLength: 2.32,
+      spikeRadius: 0.58,
       ringRadius: 0,
       coreRadius: 0.3,
       coreY: 0.12,
