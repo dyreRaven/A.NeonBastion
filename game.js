@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-23";
+const BUILD_ID = "2026-02-19-24";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1376,7 +1376,7 @@ const ENEMY_TYPES = {
     hoverHeight: 1.3,
   },
   star: {
-    name: "Star",
+    name: "Solar Tyrant",
     hp: 77508,
     speed: 0.84,
     reward: 900,
@@ -1439,7 +1439,7 @@ const CREATURE_SPAWNER_UNLOCKS = {
   trapiziod: { killRequirement: 42, towerCost: 1360, spawnInterval: 6.9 },
   cross: { killRequirement: 44, towerCost: 1320, spawnInterval: 6.6 },
   icosahedron: { killRequirement: 6, towerCost: 1620, spawnInterval: 8.4 },
-  star: { killRequirement: 3, towerCost: 2450, spawnInterval: 11.8 },
+  star: { killRequirement: 3, towerCost: 2450, spawnInterval: 23.6 },
   rhombus: { killRequirement: 6, towerCost: 1780, spawnInterval: 9.2, spawnCount: 2 },
   rhombusMinus: { killRequirement: 36, towerCost: 920, spawnInterval: 5.2 },
 };
@@ -1950,7 +1950,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 3) {
-    if (wave === 40) return "Ember threat: Star-class apex boss detected. Massive HP, extremely slow advance.";
+    if (wave === 40) return "Ember threat: Solar Tyrant apex boss detected. Massive HP, extremely slow advance.";
     if (wave >= 21) return "Ember threat: Monolith command cores entering the rift lane.";
     if (wave >= 10) return "Ember threat: Trapiziod and Cross assault frames cutting through the rift.";
     if (wave >= 9) return "Ember threat: Colossus and Warden heat-shield column advancing.";
@@ -5085,6 +5085,7 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   group.add(rim);
 
   let symbolGeometry = null;
+  let symbolObject = null;
   let symbolY = 0.67;
   if (enemyTypeId === "blink" || enemyTypeId === "skitter" || enemyTypeId === "minion" || enemyTypeId === "raider") {
     symbolGeometry = new THREE.TetrahedronGeometry(0.54);
@@ -5127,30 +5128,14 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   } else if (enemyTypeId === "icosahedron") {
     symbolGeometry = new THREE.IcosahedronGeometry(0.56, 0);
   } else if (enemyTypeId === "star") {
-    const starShape = new THREE.Shape();
-    const outer = 0.58;
-    const inner = 0.26;
-    const points = 10;
-    for (let i = 0; i < points; i += 1) {
-      const angle = (i / points) * Math.PI * 2 - Math.PI / 2;
-      const radius = i % 2 === 0 ? outer : inner;
-      const px = Math.cos(angle) * radius;
-      const py = Math.sin(angle) * radius;
-      if (i === 0) starShape.moveTo(px, py);
-      else starShape.lineTo(px, py);
-    }
-    starShape.closePath();
-    symbolGeometry = new THREE.ExtrudeGeometry(starShape, {
-      depth: 0.2,
-      steps: 1,
-      bevelEnabled: true,
-      bevelThickness: 0.04,
-      bevelSize: 0.04,
-      bevelSegments: 2,
-      curveSegments: 18,
-    });
-    symbolGeometry.center();
-    symbolY = 0.7;
+    const miniStar = createEnemyMesh("star", bodyColor, coreColor, { hideRings: true });
+    const miniHeight = Math.max(0.001, miniStar.maxY - miniStar.minY);
+    const targetHeight = 1.06;
+    const miniScale = targetHeight / miniHeight;
+    miniStar.group.scale.setScalar(miniScale);
+    miniStar.group.position.y = -miniStar.minY * miniScale + 0.02;
+    symbolObject = miniStar.group;
+    symbolY = 0.42;
   } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
     symbolGeometry = new THREE.OctahedronGeometry(0.58, 0);
   } else {
@@ -5161,7 +5146,7 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   symbolPivot.position.y = symbolY;
   group.add(symbolPivot);
 
-  const symbol = cast(new THREE.Mesh(symbolGeometry, symbolMat));
+  const symbol = symbolObject || cast(new THREE.Mesh(symbolGeometry, symbolMat));
   if (enemyTypeId === "blink" || enemyTypeId === "skitter" || enemyTypeId === "minion" || enemyTypeId === "raider") {
     symbol.rotation.y = Math.PI / 3;
   } else if (enemyTypeId === "trapiziod") {
@@ -5174,24 +5159,25 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   } else if (enemyTypeId === "icosahedron") {
     symbol.rotation.y = Math.PI / 10;
   } else if (enemyTypeId === "star") {
-    symbol.rotation.x = Math.PI / 2;
-    symbol.rotation.z = Math.PI / 10;
+    symbol.rotation.y = Math.PI / 5;
   }
   symbolPivot.add(symbol);
 
-  const symbolGlow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.52, 24),
-    new THREE.MeshBasicMaterial({
-      color: coreBase.clone().lerp(new THREE.Color("#ffffff"), 0.2),
-      transparent: true,
-      opacity: 0.4,
-      depthWrite: false,
-    })
-  );
-  symbolGlow.rotation.x = -Math.PI / 2;
-  symbolGlow.position.y = 0.45;
-  symbolGlow.renderOrder = 2;
-  group.add(symbolGlow);
+  if (enemyTypeId !== "star") {
+    const symbolGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.52, 24),
+      new THREE.MeshBasicMaterial({
+        color: coreBase.clone().lerp(new THREE.Color("#ffffff"), 0.2),
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+      })
+    );
+    symbolGlow.rotation.x = -Math.PI / 2;
+    symbolGlow.position.y = 0.45;
+    symbolGlow.renderOrder = 2;
+    group.add(symbolGlow);
+  }
 
   return { group, turret: symbolPivot, muzzle: null, spinNode: symbolPivot };
 }

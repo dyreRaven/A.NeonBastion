@@ -234,6 +234,25 @@ body:not(.menu-active) .menu-screen {
   min-height: 2.2rem;
 }
 
+.menu-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.34rem;
+}
+
+.menu-card button::before {
+  content: "+";
+  font-size: 0.56rem;
+  line-height: 1;
+  opacity: 0.86;
+}
+
+#mapPrevBtn::before,
+#mapNextBtn::before {
+  content: "";
+}
+
 .menu-action-row > .menu-map-select,
 .menu-action-row > .menu-play-btn {
   grid-column: 1 / -1;
