@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-19";
+const BUILD_ID = "2026-02-19-22";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1347,6 +1347,34 @@ const ENEMY_TYPES = {
     colorB: "#ff2b2b",
     hoverHeight: 1.38,
   },
+  trapiziod: {
+    name: "Trapiziod",
+    hp: 1660,
+    speed: 7.7,
+    reward: 98,
+    radius: 1.58,
+    coreDamage: 16,
+    hpGrowth: 0.34,
+    speedGrowth: 0.008,
+    rewardGrowth: 4.2,
+    colorA: "#ff5e3c",
+    colorB: "#ffd56a",
+    hoverHeight: 1.34,
+  },
+  cross: {
+    name: "Cross",
+    hp: 1480,
+    speed: 8.9,
+    reward: 92,
+    radius: 1.48,
+    coreDamage: 14,
+    hpGrowth: 0.32,
+    speedGrowth: 0.009,
+    rewardGrowth: 4,
+    colorA: "#37ffd0",
+    colorB: "#a7fffa",
+    hoverHeight: 1.3,
+  },
   star: {
     name: "Star",
     hp: 77508,
@@ -1821,6 +1849,7 @@ function getLevelDifficultyProfile(level = game.currentLevel) {
 function enemyWeightsForWave(wave, level = game.currentLevel) {
   const profile = getLevelDifficultyProfile(level);
   const moonLevel = level >= 2;
+  const emberLevel = level >= 3;
   const effectiveWave = Math.max(1, wave + profile.effectiveWaveOffset);
   const bulwarkStartWave = level >= 2 ? 5 : 4;
   const raiderStartWave = level >= 2 ? 6 : 5;
@@ -1836,6 +1865,8 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
     { id: "colossus", weight: effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 2.8, 16) : 0 },
     { id: "leviathan", weight: effectiveWave >= 12 ? Math.min((effectiveWave - 11) * 2.3, 14) : 0 },
     { id: "monolith", weight: moonLevel && wave >= 21 ? Math.min((effectiveWave - 22) * 2.4, 11) : 0 },
+    { id: "trapiziod", weight: emberLevel && effectiveWave >= 8 ? Math.min((effectiveWave - 7) * 3.3, 18) : 0 },
+    { id: "cross", weight: emberLevel && effectiveWave >= 10 ? Math.min((effectiveWave - 9) * 3.1, 17) : 0 },
   ].filter((entry) => entry.weight > 0);
 }
 
@@ -1856,7 +1887,8 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
     let forcedType = null;
     const slot = i + 1;
 
-    if (level >= 2 && wave >= 21 && slot % 19 === 0) forcedType = Math.random() < 0.7 ? "monolith" : "leviathan";
+    if (level >= 3 && effectiveWave >= 10 && slot % 10 === 0) forcedType = Math.random() < 0.58 ? "trapiziod" : "cross";
+    else if (level >= 2 && wave >= 21 && slot % 19 === 0) forcedType = Math.random() < 0.7 ? "monolith" : "leviathan";
     else if (effectiveWave >= 12 && slot % 17 === 0) {
       if (level >= 2 && wave >= 21 && Math.random() < 0.35) forcedType = "monolith";
       else forcedType = Math.random() < 0.55 ? "leviathan" : "colossus";
@@ -1918,7 +1950,7 @@ function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 3) {
     if (wave === 40) return "Ember threat: Star-class apex boss detected. Massive HP, extremely slow advance.";
     if (wave >= 21) return "Ember threat: Monolith command cores entering the rift lane.";
-    if (wave >= 10) return "Ember threat: Leviathan siege wave under volcanic pressure.";
+    if (wave >= 10) return "Ember threat: Trapiziod and Cross assault frames cutting through the rift.";
     if (wave >= 9) return "Ember threat: Colossus and Warden heat-shield column advancing.";
     if (wave >= 7) return "Ember threat: Prism assault casters with Raider and Specter support.";
     if (wave >= 5) return "Ember threat: Heavy assault units entering the rift.";
@@ -4034,6 +4066,8 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     leviathan: 1.3,
     monolith: 1.48,
     icosahedron: 1.5,
+    trapiziod: 1.46,
+    cross: 1.52,
     star: 1.9,
     rhombus: 1.64,
     rhombusMinus: 1.36,
@@ -4181,6 +4215,24 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spikeLength: 0.7,
       spikeRadius: 0.14,
     },
+    trapiziod: {
+      shape: "trapiziod",
+      topRadius: 0.7,
+      bottomRadius: 1.02,
+      height: 1.46,
+      ringRadius: 0,
+      coreRadius: 0.22,
+      coreY: 0.14,
+    },
+    cross: {
+      shape: "cross",
+      armHalfLen: 0.74,
+      armHalfWidth: 0.28,
+      depth: 0.92,
+      ringRadius: 0,
+      coreRadius: 0.2,
+      coreY: 0.12,
+    },
     star: {
       shape: "starBall",
       radius: 1.38,
@@ -4281,6 +4333,53 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       spike.position.copy(spikeDir).multiplyScalar(setup.radius + (setup.spikeLength || 0.7) * 0.32);
       group.add(spike);
     }
+  } else if (setup.shape === "trapiziod") {
+    body = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(setup.topRadius || 0.7, setup.bottomRadius || 1.02, setup.height || 1.46, 4),
+        bodyMat
+      )
+    );
+    body.rotation.y = Math.PI / 4;
+    group.add(body);
+
+    const braceSize = Math.max(0.1, (setup.bottomRadius || 1) * 0.2);
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const brace = cast(new THREE.Mesh(new THREE.BoxGeometry(braceSize, (setup.height || 1.46) * 0.7, braceSize), darkMat));
+      brace.position.set(Math.cos(angle) * (setup.bottomRadius || 1.02) * 0.56, 0, Math.sin(angle) * (setup.bottomRadius || 1.02) * 0.56);
+      group.add(brace);
+    }
+  } else if (setup.shape === "cross") {
+    const armHalfLen = Math.max(0.4, setup.armHalfLen || 0.7);
+    const armHalfWidth = Math.max(0.14, Math.min(armHalfLen * 0.6, setup.armHalfWidth || 0.26));
+    const crossShape = new THREE.Shape();
+    crossShape.moveTo(-armHalfWidth, armHalfLen);
+    crossShape.lineTo(armHalfWidth, armHalfLen);
+    crossShape.lineTo(armHalfWidth, armHalfWidth);
+    crossShape.lineTo(armHalfLen, armHalfWidth);
+    crossShape.lineTo(armHalfLen, -armHalfWidth);
+    crossShape.lineTo(armHalfWidth, -armHalfWidth);
+    crossShape.lineTo(armHalfWidth, -armHalfLen);
+    crossShape.lineTo(-armHalfWidth, -armHalfLen);
+    crossShape.lineTo(-armHalfWidth, -armHalfWidth);
+    crossShape.lineTo(-armHalfLen, -armHalfWidth);
+    crossShape.lineTo(-armHalfLen, armHalfWidth);
+    crossShape.lineTo(-armHalfWidth, armHalfWidth);
+    crossShape.closePath();
+    const crossGeometry = new THREE.ExtrudeGeometry(crossShape, {
+      depth: setup.depth || 0.9,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: 0.08,
+      bevelSize: 0.08,
+      bevelSegments: 2,
+      curveSegments: 16,
+    });
+    crossGeometry.center();
+    body = cast(new THREE.Mesh(crossGeometry, bodyMat));
+    body.rotation.x = Math.PI / 2;
+    group.add(body);
   } else if (setup.shape === "starBall") {
     const coreRadius = Math.max(0.7, setup.radius || 1.35);
     const spikeLength = Math.max(0.4, setup.spikeLength || 1.4);
@@ -5061,6 +5160,8 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
 
 function getEnemySpinSpeed(typeId) {
   if (typeId === "icosahedron") return 1.25;
+  if (typeId === "trapiziod") return 1.34;
+  if (typeId === "cross") return 1.42;
   if (typeId === "star") return 0.48;
   if (typeId === "rhombus") return 1.05;
   if (typeId === "rhombusMinus") return 1.22;
