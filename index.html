@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Bastion - Tower Defense</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="menu-screen" id="menuScreen" aria-label="Main menu">
+      <div class="menu-card" id="menuCard" data-view="home">
+        <div id="menuHomeView">
+          <p class="menu-kicker">Neon Bastion</p>
+          <h1>Command Uplink</h1>
+          <p class="menu-copy">Build your first defense line, then launch waves when you are ready.</p>
+          <div class="menu-action-row">
+            <button id="openAccountBtn" type="button">Account Setup</button>
+            <button id="openUnlockShopBtn" type="button">Open Tower Unlock Shop</button>
+            <button id="openLoadoutBtn" type="button">Change Loadout</button>
+            <button id="openMultiplayerBtn" type="button">Multiplayer</button>
+            <div class="menu-map-select" aria-label="Map selector">
+              <button id="mapPrevBtn" type="button" aria-label="Previous map">&lt;</button>
+              <div id="mapPreview" class="menu-map-preview">
+                <p id="mapPreviewIndex">Map 1 / 2</p>
+                <h3 id="mapPreviewName">Level 1 - Neon Bastion</h3>
+                <p id="mapPreviewDesc">Classic defense route with balanced pressure.</p>
+                <span id="mapPreviewLock" class="menu-map-lock unlocked">Unlocked</span>
+              </div>
+              <button id="mapNextBtn" type="button" aria-label="Next map">&gt;</button>
+            </div>
+            <button id="playBtn" class="menu-play-btn" type="button">Start Playing</button>
+          </div>
+        </div>
+
+        <section id="menuAccountPanel" class="menu-shop-panel" aria-label="Account setup">
+          <div class="menu-shop-head">
+            <h2>Account Setup</h2>
+            <span id="menuAccountCurrent">Account: -</span>
+          </div>
+          <div class="menu-account-create">
+            <input
+              id="accountNameInput"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="24"
+              placeholder="Enter account name"
+            />
+            <button id="createAccountBtn" type="button">Create / Switch</button>
+          </div>
+          <div id="menuAccountList" class="menu-shop-list"></div>
+          <p class="menu-shop-note">Progress is saved per account. Click any account to switch or delete.</p>
+          <div class="menu-shop-actions">
+            <button id="closeAccountBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+
+        <section id="menuShopPanel" class="menu-shop-panel" aria-label="Tower unlock shop">
+          <div class="menu-shop-head">
+            <h2>Tower Unlock Shop</h2>
+            <span id="menuShards">Shards: 0</span>
+          </div>
+          <div id="menuShop" class="menu-shop-list"></div>
+          <p class="menu-shop-note">Earn shards from cleared waves: 1% of wave credits, rounded up. Spend shards on tower unlocks.</p>
+          <div class="menu-shop-actions">
+            <button id="openCreatureFromUnlockBtn" type="button">Creature Spawner Shop</button>
+            <button id="closeUnlockShopBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+
+        <section id="menuCreaturePanel" class="menu-shop-panel" aria-label="Creature spawner shop">
+          <div class="menu-shop-head">
+            <h2>Creature Spawner Shop</h2>
+            <span id="menuCreatureSummary">Unlocked: 0</span>
+          </div>
+          <div id="menuCreatureShop" class="menu-shop-list"></div>
+          <p class="menu-shop-note">
+            Kill enemies to unlock their spawner tower. Spawned allies are green and march from core to entry.
+          </p>
+          <div class="menu-shop-actions">
+            <button id="closeCreatureShopBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+
+        <section id="menuLoadoutPanel" class="menu-shop-panel" aria-label="Tower loadout">
+          <div class="menu-shop-head">
+            <h2>Tower Loadout</h2>
+            <span id="menuLoadoutCount">0/0 Equipped</span>
+          </div>
+          <input
+            id="menuLoadoutSearch"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="24"
+            placeholder="Search unlocked towers"
+          />
+          <div id="menuLoadout" class="menu-shop-list"></div>
+          <p class="menu-shop-note">Only unlocked towers and spawners can be equipped. Equipped entries appear in the battle shop.</p>
+          <div class="menu-shop-actions">
+            <button id="closeLoadoutBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+
+        <section id="menuMultiplayerPanel" class="menu-shop-panel" aria-label="Multiplayer">
+          <div class="menu-shop-head">
+            <h2>Multiplayer</h2>
+            <span id="menuMultiplayerState">Solo</span>
+          </div>
+          <div class="menu-account-create">
+            <input
+              id="multiplayerRoomInput"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="16"
+              placeholder="Room code"
+            />
+            <button id="hostMultiplayerBtn" type="button">Create</button>
+          </div>
+          <div class="menu-shop-actions">
+            <button id="joinMultiplayerBtn" type="button">Join Room</button>
+            <button id="leaveMultiplayerBtn" type="button">Leave Room</button>
+          </div>
+          <p id="menuMultiplayerHint" class="menu-shop-note">Enter a room code, then Create or Join.</p>
+          <div id="menuMultiplayerLog" class="menu-shop-list"></div>
+          <p class="menu-shop-note">
+            Co-op uses your browser origin. Host is authoritative and shares the game state.
+          </p>
+          <div class="menu-shop-actions">
+            <button id="closeMultiplayerBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="confirm-screen" id="exitConfirm" aria-label="Exit map confirmation" hidden>
+      <div class="confirm-card">
+        <h2>Exit Map?</h2>
+        <p>Are you sure you want to exit the map?</p>
+        <div class="confirm-actions">
+          <button id="cancelExitBtn" type="button">No, Stay</button>
+          <button id="confirmExitBtn" type="button">Yes, Exit</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="confirm-screen" id="levelClearPanel" aria-label="Level clear" hidden>
+      <div class="confirm-card">
+        <h2>Level Cleared</h2>
+        <p>Level 1 complete. Access to Level 2 unlocked. +20 shards awarded.</p>
+        <div class="confirm-actions">
+          <button id="levelClearMenuBtn" type="button">Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="confirm-screen" id="defeatPanel" aria-label="Defeat" hidden>
+      <div class="confirm-card">
+        <h2>Defeat!</h2>
+        <p>Your core was destroyed.</p>
+        <div class="confirm-actions">
+          <button id="defeatMenuBtn" type="button">Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <main class="shell">
+      <header class="hud">
+        <div class="hud-top">
+          <div class="brand-block">
+            <h1>Neon Bastion</h1>
+            <div class="stats">
+              <span id="money">Credits: 0</span>
+              <span id="shards">Shards: 0</span>
+              <span id="lives">Core HP: 0</span>
+              <span id="wave">Wave: 0</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="controls-group">
+              <button id="buildBtn" type="button">Build Tower (B)</button>
+              <button id="sellBtn" type="button">Sell Tower (X)</button>
+              <button id="laneBtn" type="button">Edit Lanes (L)</button>
+              <button id="startWaveBtn" type="button">Start Wave</button>
+              <button id="pauseBtn" type="button">Pause (P)</button>
+              <button id="menuBtn" type="button">Menu Shop (M)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="shop-panel">
+          <h2>Tower Shop</h2>
+          <div id="shop" class="shop" aria-label="Tower shop"></div>
+        </div>
+        <section id="bossBarWrap" class="boss-bar-wrap" aria-label="Boss health" hidden>
+          <div class="boss-bar-head">
+            <strong id="bossName">Boss</strong>
+            <span id="bossHp">0 / 0</span>
+          </div>
+          <div class="boss-bar-track">
+            <div id="bossBarFill" class="boss-bar-fill"></div>
+            <div id="bossBarSplit" class="boss-bar-split" hidden>
+              <div class="boss-bar-half boss-bar-half-left">
+                <div id="bossBarFillLeft" class="boss-bar-half-fill"></div>
+              </div>
+              <div class="boss-bar-half boss-bar-half-right">
+                <div id="bossBarFillRight" class="boss-bar-half-fill"></div>
+              </div>
+              <div class="boss-bar-center-cut"></div>
+            </div>
+          </div>
+        </section>
+        <p id="status" class="status"></p>
+      </header>
+
+      <section class="arena-wrap">
+        <canvas id="game" width="1280" height="720" aria-label="Tower defense battlefield"></canvas>
+      </section>
+    </main>
+
+    <div id="speedControl" class="speed-control" aria-label="Game speed controls">
+      <button id="speedDownBtn" type="button" aria-label="Decrease speed">&lt;</button>
+      <span id="speedValue">1.0x</span>
+      <button id="speedUpBtn" type="button" aria-label="Increase speed">&gt;</button>
+    </div>
+    <button id="settingsToggleBtn" class="settings-toggle-btn" type="button" aria-label="Open settings">
+      SET
+    </button>
+    <section id="settingsPanel" class="settings-panel" aria-label="Audio settings" hidden>
+      <div class="settings-panel-head">
+        <strong>Audio Settings</strong>
+        <button id="settingsCloseBtn" type="button" aria-label="Close settings">X</button>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-row">
+          <span>Music</span>
+          <button id="settingMusicBtn" type="button">On</button>
+        </div>
+        <div class="settings-row">
+          <span>All SFX</span>
+          <button id="settingSfxBtn" type="button">On</button>
+        </div>
+        <div class="settings-row">
+          <span>Tower Shots</span>
+          <button id="settingShotBtn" type="button">On</button>
+        </div>
+        <div class="settings-row">
+          <span>Glass Shatter</span>
+          <button id="settingShatterBtn" type="button">On</button>
+        </div>
+      </div>
+    </section>
+    <button id="commandToggleBtn" class="command-toggle-btn" type="button" aria-label="Open command console">
+      CMD
+    </button>
+    <button id="autoWaveBtn" class="auto-wave-toggle-btn" type="button" aria-label="Toggle auto waves">
+      Auto: Off
+    </button>
+    <section id="commandConsole" class="command-console" aria-label="Command console" hidden>
+      <div class="command-console-head">
+        <strong>Command Console</strong>
+        <button id="commandCloseBtn" type="button" aria-label="Close command console">X</button>
+      </div>
+      <div class="command-console-row">
+        <input id="commandInput" type="text" autocomplete="off" spellcheck="false" placeholder="Enter command" />
+        <button id="commandRunBtn" type="button">Run</button>
+      </div>
+    </section>
+
+    <script src="vendor/three.min.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
