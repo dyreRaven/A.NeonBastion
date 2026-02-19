@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-15";
+const BUILD_ID = "2026-02-19-16";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1974,7 +1974,7 @@ const MAP_CATALOG = [
   {
     level: 2,
     name: "Level 2 - Moonfall",
-    description: "Harder lunar map. Grants a one-time credit carry when advancing from Level 1.",
+    description: "Harder lunar map with sharper early pressure and tighter survivability.",
   },
   {
     level: 3,
@@ -6634,7 +6634,7 @@ function resetTowersForNewLevel() {
   game.towers = [];
 }
 
-function prepareLevel(level, startingMoneyOverride = null) {
+function prepareLevel(level) {
   const targetLevel = Math.max(1, Math.min(getHighestUnlockedLevel(), Math.floor(level || 1)));
   const profile = getLevelDifficultyProfile(targetLevel);
   clearActiveCombatState();
@@ -6651,11 +6651,7 @@ function prepareLevel(level, startingMoneyOverride = null) {
   game.placing = false;
   game.selling = false;
   game.hoverCell = null;
-  if (Number.isFinite(startingMoneyOverride) && startingMoneyOverride >= 0) {
-    game.money = Math.max(0, Math.floor(startingMoneyOverride));
-  } else {
-    game.money = profile.startingCredits;
-  }
+  game.money = profile.startingCredits;
   game.lives = profile.startingLives;
   game.wave = 0;
   game.waveCreditsEarned = 0;
@@ -8643,25 +8639,10 @@ function startGameFromMenu(preferredLevel = null) {
   const shouldStartFresh = hasPreferredLevel || !game.started || game.over || game.levelOneDefeated;
 
   if (shouldStartFresh) {
-    const previousMoney = Math.max(0, Math.floor(game.money || 0));
-    // Only carry credits into Level 2 when advancing directly from a Level 1 clear.
-    const shouldCarryIntoLevelTwo =
-      targetLevel === 2 &&
-      game.levelOneDefeated &&
-      Math.max(1, Math.floor(game.currentLevel || 1)) === 1;
-    const startingMoneyOverride = shouldCarryIntoLevelTwo ? previousMoney * 2 : null;
     game.started = true;
-    prepareLevel(targetLevel, startingMoneyOverride);
+    prepareLevel(targetLevel);
     const levelLabel = getMapEntry(targetLevel)?.name || `Level ${targetLevel}`;
-    if (targetLevel === 2 && shouldCarryIntoLevelTwo) {
-      setStatus(
-        `${levelLabel} loaded. Starting credits doubled to ${game.money}. Build towers or use Edit Lanes (L), then start a wave.`
-      );
-    } else if (targetLevel === 2) {
-      setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes (L), then start a wave.`);
-    } else {
-      setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes (L), then start a wave.`);
-    }
+    setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes (L), then start a wave.`);
   }
   closeMenuShop();
   syncMusicState();
