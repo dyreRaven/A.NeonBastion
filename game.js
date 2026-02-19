@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-14";
+const BUILD_ID = "2026-02-19-15";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -909,9 +909,11 @@ const TOWER_UNLOCKS = {
   rift: { shardCost: 16 },
   volt: { shardCost: 18 },
   bastion: { shardCost: 24 },
+  photon: { shardCost: 26 },
+  citadel: { shardCost: 36 },
 };
 
-const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "rift", "volt", "bastion"];
+const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "rift", "volt", "bastion", "photon", "citadel"];
 const BASE_LOADOUT_SLOTS = 6;
 const MAX_LOADOUT_SLOTS = 10;
 const BASE_TOWER_PLACE_CAPS = {
@@ -927,6 +929,8 @@ const BASE_TOWER_PLACE_CAPS = {
   quarry: 1,
   rift: 2,
   bastion: 1,
+  photon: 2,
+  citadel: 1,
 };
 const SPAWNER_TOWER_PLACE_CAPS = {
   crawler: 3,
@@ -941,6 +945,7 @@ const SPAWNER_TOWER_PLACE_CAPS = {
   leviathan: 1,
   monolith: 1,
   icosahedron: 1,
+  star: 1,
   rhombus: 1,
   rhombusMinus: 2,
 };
@@ -1124,6 +1129,34 @@ const TOWER_TYPES = {
     bodyColor: "#ffb67d",
     coreColor: "#5c361a",
     summary: "Heavy platform",
+  },
+  photon: {
+    name: "Photon",
+    cost: 720,
+    range: 13.6,
+    damage: 58,
+    fireInterval: 0.16,
+    turnSpeed: 6.8,
+    projectileSpeed: 46,
+    projectileRadius: 0.17,
+    projectileColor: "#fff2a6",
+    bodyColor: "#d8ff70",
+    coreColor: "#4a5b12",
+    summary: "Laser stream",
+  },
+  citadel: {
+    name: "Citadel",
+    cost: 1420,
+    range: 19.6,
+    damage: 684,
+    fireInterval: 2.05,
+    turnSpeed: 2.3,
+    projectileSpeed: 64,
+    projectileRadius: 0.34,
+    projectileColor: "#ffe1b6",
+    bodyColor: "#ffc38a",
+    coreColor: "#5e361c",
+    summary: "Fortress cannon",
   },
 };
 
@@ -1374,6 +1407,7 @@ const CREATURE_SPAWNER_UNLOCKS = {
   leviathan: { killRequirement: 70, towerCost: 860, spawnInterval: 6.6 },
   monolith: { killRequirement: 80, towerCost: 1220, spawnInterval: 7.8 },
   icosahedron: { killRequirement: 6, towerCost: 1620, spawnInterval: 8.4 },
+  star: { killRequirement: 2, towerCost: 2450, spawnInterval: 11.8 },
   rhombus: { killRequirement: 6, towerCost: 1780, spawnInterval: 9.2, spawnCount: 2 },
   rhombusMinus: { killRequirement: 36, towerCost: 920, spawnInterval: 5.2 },
 };
@@ -4452,7 +4486,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   turret = new THREE.Group();
   group.add(turret);
 
-  if (towerTypeId === "lance" || towerTypeId === "ion" || towerTypeId === "quarry" || towerTypeId === "sentinel") {
+  if (towerTypeId === "lance" || towerTypeId === "ion" || towerTypeId === "quarry" || towerTypeId === "sentinel" || towerTypeId === "citadel") {
     turret.position.y = 1.9;
 
     const head = cast(new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.82, 0.78), bodyMat));
@@ -4550,6 +4584,36 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       scope.rotation.y = Math.PI / 2;
       scope.position.set(0, 0.72, 1.16);
       turret.add(scope);
+    } else if (towerTypeId === "citadel") {
+      head.scale.set(1.26, 1.14, 1.22);
+
+      const siegeBarrel = cast(new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.3, 3.56), coreMat));
+      siegeBarrel.position.set(0, 0.44, 1.96);
+      turret.add(siegeBarrel);
+
+      const barrelSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.24, 0.92, 12), darkMat));
+      barrelSleeve.rotation.x = Math.PI / 2;
+      barrelSleeve.position.set(0, 0.44, 2.84);
+      turret.add(barrelSleeve);
+
+      const recoilBox = cast(new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.54, 0.66), darkMat));
+      recoilBox.position.set(0, 0.44, 0.58);
+      turret.add(recoilBox);
+
+      const sideArmorL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 2.16), darkMat));
+      sideArmorL.position.set(-0.46, 0.3, 1.52);
+      turret.add(sideArmorL);
+      const sideArmorR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 2.16), darkMat));
+      sideArmorR.position.set(0.46, 0.3, 1.52);
+      turret.add(sideArmorR);
+
+      const dorsalPlate = cast(new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.16, 1.16), bodyMat));
+      dorsalPlate.position.set(0, 0.84, 0.82);
+      turret.add(dorsalPlate);
+
+      const rearMass = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.44, 0.44), darkMat));
+      rearMass.position.set(0, 0.34, -0.5);
+      turret.add(rearMass);
     }
 
     muzzle = new THREE.Object3D();
@@ -4557,8 +4621,9 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
     if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
     if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
+    if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
     turret.add(muzzle);
-  } else if (towerTypeId === "swarm" || towerTypeId === "volt" || towerTypeId === "frost" || towerTypeId === "nova") {
+  } else if (towerTypeId === "swarm" || towerTypeId === "volt" || towerTypeId === "frost" || towerTypeId === "nova" || towerTypeId === "photon") {
     turret.position.y = 1.78;
 
     const hub = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.45, 0.62, 20), coreMat));
@@ -4658,6 +4723,36 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const coreOrb = cast(new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), glowMat));
       coreOrb.position.set(0, 0.24, -0.22);
       turret.add(coreOrb);
+    } else if (towerTypeId === "photon") {
+      const photonRing = cast(new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 10, 30), glowMat));
+      photonRing.rotation.x = Math.PI / 2;
+      photonRing.position.set(0, 0.3, 0.9);
+      turret.add(photonRing);
+
+      const lens = cast(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), coreMat));
+      lens.position.set(0, 0.24, 1.34);
+      turret.add(lens);
+
+      const beamL = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.48, 10), coreMat));
+      beamL.rotation.x = Math.PI / 2;
+      beamL.position.set(-0.16, 0.24, 1.26);
+      turret.add(beamL);
+      const beamR = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.48, 10), coreMat));
+      beamR.rotation.x = Math.PI / 2;
+      beamR.position.set(0.16, 0.24, 1.26);
+      turret.add(beamR);
+
+      for (let i = 0; i < 4; i += 1) {
+        const angle = (i / 4) * Math.PI * 2;
+        const fin = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.58), darkMat));
+        fin.position.set(Math.cos(angle) * 0.42, 0.2, Math.sin(angle) * 0.42 + 0.26);
+        fin.rotation.y = angle;
+        turret.add(fin);
+      }
+
+      const rearNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), glowMat));
+      rearNode.position.set(0, 0.2, -0.38);
+      turret.add(rearNode);
     }
 
     muzzle = new THREE.Object3D();
@@ -4665,6 +4760,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     if (towerTypeId === "volt") muzzle.position.set(0, 0.24, 1.7);
     if (towerTypeId === "frost") muzzle.position.set(0, 0.24, 1.56);
     if (towerTypeId === "nova") muzzle.position.set(0, 0.22, 1.78);
+    if (towerTypeId === "photon") muzzle.position.set(0, 0.24, 1.98);
     turret.add(muzzle);
   } else if (towerTypeId === "ember" || towerTypeId === "rift" || towerTypeId === "bastion") {
     turret.position.y = 1.78;
@@ -4852,6 +4948,31 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     symbolGeometry = new THREE.CylinderGeometry(0.48, 0.48, 0.7, 6);
   } else if (enemyTypeId === "icosahedron") {
     symbolGeometry = new THREE.IcosahedronGeometry(0.56, 0);
+  } else if (enemyTypeId === "star") {
+    const starShape = new THREE.Shape();
+    const outer = 0.58;
+    const inner = 0.26;
+    const points = 10;
+    for (let i = 0; i < points; i += 1) {
+      const angle = (i / points) * Math.PI * 2 - Math.PI / 2;
+      const radius = i % 2 === 0 ? outer : inner;
+      const px = Math.cos(angle) * radius;
+      const py = Math.sin(angle) * radius;
+      if (i === 0) starShape.moveTo(px, py);
+      else starShape.lineTo(px, py);
+    }
+    starShape.closePath();
+    symbolGeometry = new THREE.ExtrudeGeometry(starShape, {
+      depth: 0.2,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: 0.04,
+      bevelSize: 0.04,
+      bevelSegments: 2,
+      curveSegments: 18,
+    });
+    symbolGeometry.center();
+    symbolY = 0.7;
   } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
     symbolGeometry = new THREE.OctahedronGeometry(0.58, 0);
   } else {
@@ -4869,6 +4990,9 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "icosahedron") {
     symbol.rotation.y = Math.PI / 10;
+  } else if (enemyTypeId === "star") {
+    symbol.rotation.x = Math.PI / 2;
+    symbol.rotation.z = Math.PI / 10;
   }
   symbolPivot.add(symbol);
 
