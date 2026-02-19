@@ -1610,7 +1610,7 @@ const MAP_CATALOG = [
   {
     level: 2,
     name: "Level 2 - Moonfall",
-    description: "Harder lunar map. Starts with 2x your current credits.",
+    description: "Harder lunar map. Grants a one-time credit carry when advancing from Level 1.",
   },
 ];
 
@@ -7684,14 +7684,21 @@ function startGameFromMenu(preferredLevel = null) {
 
   if (shouldStartFresh) {
     const previousMoney = Math.max(0, Math.floor(game.money || 0));
-    const startingMoneyOverride = targetLevel === 2 ? previousMoney * 2 : null;
+    // Only carry credits into Level 2 when advancing directly from a Level 1 clear.
+    const shouldCarryIntoLevelTwo =
+      targetLevel === 2 &&
+      game.levelOneDefeated &&
+      Math.max(1, Math.floor(game.currentLevel || 1)) === 1;
+    const startingMoneyOverride = shouldCarryIntoLevelTwo ? previousMoney * 2 : null;
     game.started = true;
     prepareLevel(targetLevel, startingMoneyOverride);
     const levelLabel = targetLevel === 2 ? "Level 2 (Moon)" : "Level 1";
-    if (targetLevel === 2) {
+    if (targetLevel === 2 && shouldCarryIntoLevelTwo) {
       setStatus(
         `${levelLabel} loaded. Starting credits doubled to ${game.money}. Build towers or use Edit Lanes (L), then start a wave.`
       );
+    } else if (targetLevel === 2) {
+      setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes (L), then start a wave.`);
     } else {
       setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes (L), then start a wave.`);
     }
