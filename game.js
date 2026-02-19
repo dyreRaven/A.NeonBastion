@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-9";
+const BUILD_ID = "2026-02-19-10";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1322,8 +1322,8 @@ const ENEMY_TYPES = {
     hpGrowth: 0,
     speedGrowth: 0,
     rewardGrowth: 0,
-    colorA: "#ffd200",
-    colorB: "#fff4a3",
+    colorA: "#ffe100",
+    colorB: "#fff7b8",
     hoverHeight: 1.62,
   },
   rhombus: {
@@ -3954,7 +3954,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     leviathan: 1.3,
     monolith: 1.48,
     icosahedron: 1.5,
-    star: 1.72,
+    star: 1.9,
     rhombus: 1.64,
     rhombusMinus: 1.36,
   }[typeId] || 1;
@@ -4045,6 +4045,26 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     depthWrite: false,
   });
 
+  if (typeId === "star") {
+    bodyMat.color.set("#ffe982");
+    bodyMat.emissive.set("#b88900");
+    bodyMat.emissiveIntensity = 0.28;
+    bodyMat.roughness = 0.03;
+    bodyMat.thickness = 1.25 * glassIntensity;
+    bodyMat.attenuationColor.set("#ffe56b");
+    bodyMat.attenuationDistance = 1.35;
+    bodyMat.envMapIntensity = 1.9;
+
+    accentMat.color.set("#fff9d2");
+    accentMat.emissive.set("#d49a00");
+    accentMat.emissiveIntensity = 0.36;
+    accentMat.roughness = 0.025;
+    accentMat.thickness = 1.12 * glassIntensity;
+    accentMat.attenuationColor.set("#fff0a8");
+    accentMat.attenuationDistance = 1.22;
+    accentMat.envMapIntensity = 1.95;
+  }
+
   const cast = (mesh) => {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -4083,11 +4103,11 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     },
     star: {
       shape: "starBall",
-      radius: 1.92,
-      spikeLength: 0.98,
-      spikeRadius: 0.2,
+      radius: 1.38,
+      spikeLength: 1.64,
+      spikeRadius: 0.38,
       ringRadius: 0,
-      coreRadius: 0.34,
+      coreRadius: 0.3,
       coreY: 0.12,
     },
     rhombus: {
@@ -4182,47 +4202,66 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       group.add(spike);
     }
   } else if (setup.shape === "starBall") {
-    const coreRadius = Math.max(0.8, setup.radius || 1.9);
-    const spikeLength = Math.max(0.25, setup.spikeLength || 0.9);
-    const spikeRadius = Math.max(0.1, setup.spikeRadius || 0.2);
+    const coreRadius = Math.max(0.7, setup.radius || 1.35);
+    const spikeLength = Math.max(0.4, setup.spikeLength || 1.4);
+    const spikeRadius = Math.max(0.16, setup.spikeRadius || 0.34);
 
-    body = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(coreRadius, 1), bodyMat));
+    const coreGeometry = new THREE.IcosahedronGeometry(coreRadius, 0);
+    body = cast(new THREE.Mesh(coreGeometry, bodyMat));
     body.rotation.y = Math.PI / 10;
     group.add(body);
 
-    const starTemplate = new THREE.IcosahedronGeometry(coreRadius, 1);
-    const pos = starTemplate.getAttribute("position");
-    const spikeDirs = [];
-    const dir = new THREE.Vector3();
+    const spikeMat = new THREE.MeshPhysicalMaterial({
+      color: secondary.clone().lerp(new THREE.Color("#ffffff"), 0.14),
+      emissive: primary.clone().multiplyScalar(0.16),
+      emissiveIntensity: 0.34,
+      roughness: 0.02,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.5,
+      thickness: 0.95 * glassIntensity,
+      attenuationColor: primary.clone().lerp(new THREE.Color("#ffe56b"), 0.6),
+      attenuationDistance: 1.08,
+      clearcoat: 1,
+      clearcoatRoughness: 0.015,
+      envMapIntensity: 2.05,
+      reflectivity: 0.9,
+      transparent: false,
+      opacity: 1,
+    });
+
+    const spikeGeometry = new THREE.ConeGeometry(spikeRadius, spikeLength, 4, 1, false);
+    spikeGeometry.rotateY(Math.PI / 4);
+
+    const faceGeometry = coreGeometry.toNonIndexed();
+    const pos = faceGeometry.getAttribute("position");
     const upAxis = new THREE.Vector3(0, 1, 0);
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    const edgeAB = new THREE.Vector3();
+    const edgeAC = new THREE.Vector3();
+    const normal = new THREE.Vector3();
 
-    for (let i = 0; i < pos.count; i += 1) {
-      dir.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
-      let exists = false;
-      for (const stored of spikeDirs) {
-        if (stored.dot(dir) > 0.995) {
-          exists = true;
-          break;
-        }
-      }
-      if (!exists) spikeDirs.push(dir.clone());
-    }
-    starTemplate.dispose();
+    for (let i = 0; i < pos.count; i += 3) {
+      a.set(pos.getX(i), pos.getY(i), pos.getZ(i));
+      b.set(pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1));
+      c.set(pos.getX(i + 2), pos.getY(i + 2), pos.getZ(i + 2));
+      center.copy(a).add(b).add(c).multiplyScalar(1 / 3);
 
-    for (let i = 0; i < spikeDirs.length; i += 1) {
-      const spikeDir = spikeDirs[i];
-      const lengthScale = i % 4 === 0 ? 1.18 : i % 3 === 0 ? 1.08 : 1;
-      const widthScale = i % 5 === 0 ? 1.12 : 1;
-      const spike = cast(
-        new THREE.Mesh(
-          new THREE.ConeGeometry(spikeRadius * widthScale, spikeLength * lengthScale, 9),
-          i % 2 === 0 ? darkMat : accentMat
-        )
-      );
-      spike.quaternion.setFromUnitVectors(upAxis, spikeDir);
-      spike.position.copy(spikeDir).multiplyScalar(coreRadius + (spikeLength * lengthScale) * 0.36);
+      edgeAB.copy(b).sub(a);
+      edgeAC.copy(c).sub(a);
+      normal.crossVectors(edgeAB, edgeAC).normalize();
+      if (normal.dot(center) < 0) normal.multiplyScalar(-1);
+
+      const spike = cast(new THREE.Mesh(spikeGeometry, spikeMat));
+      const offset = coreRadius * 0.1 + spikeLength * 0.44;
+      spike.position.copy(center).addScaledVector(normal, offset);
+      spike.quaternion.setFromUnitVectors(upAxis, normal);
       group.add(spike);
     }
+    faceGeometry.dispose();
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
     body.rotation.y = Math.PI / 4;
