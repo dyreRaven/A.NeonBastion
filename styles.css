@@ -544,9 +544,10 @@ body:not(.menu-active) .menu-screen {
 
 .menu-multiplayer-panels {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
   gap: 0.5rem;
   min-height: 0;
+  align-items: stretch;
 }
 
 .menu-multiplayer-pane {
@@ -560,6 +561,15 @@ body:not(.menu-active) .menu-screen {
   min-height: 0;
 }
 
+.menu-multiplayer-pane-players {
+  grid-template-rows: auto auto;
+  align-content: start;
+}
+
+.menu-multiplayer-pane-log {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .menu-multiplayer-pane .menu-shop-head {
   min-height: 1.4rem;
 }
@@ -571,6 +581,17 @@ body:not(.menu-active) .menu-screen {
   grid-template-columns: 1fr;
   gap: 0.4rem;
   padding-right: 0.06rem;
+}
+
+.menu-multiplayer-pane-players .menu-multiplayer-players {
+  overflow-y: visible;
+  padding-right: 0;
+}
+
+.menu-multiplayer-pane-log .menu-multiplayer-log {
+  overflow-y: auto;
+  max-height: 100%;
+  padding-right: 0.14rem;
 }
 
 .menu-mp-player-item {
@@ -1602,6 +1623,14 @@ canvas {
   .menu-multiplayer-panels {
     grid-template-columns: 1fr;
     gap: 0.44rem;
+  }
+
+  .menu-multiplayer-pane-players .menu-multiplayer-players {
+    overflow-y: visible;
+  }
+
+  .menu-multiplayer-pane-log {
+    min-height: 200px;
   }
 
   .menu-multiplayer-room-actions {
