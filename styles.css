@@ -422,7 +422,7 @@ body:not(.menu-active) .menu-screen {
 }
 
 #menuMultiplayerPanel {
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto auto;
 }
 
 .menu-shop-head {
@@ -466,7 +466,16 @@ body:not(.menu-active) .menu-screen {
   align-items: center;
 }
 
-#accountNameInput {
+.menu-multiplayer-server-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+}
+
+#accountNameInput,
+#menuLoadoutSearch,
+#multiplayerServerInput,
+#multiplayerRoomInput {
   min-height: 2.1rem;
   border-radius: 8px;
   border: 1px solid rgba(175, 218, 247, 0.35);
@@ -477,23 +486,10 @@ body:not(.menu-active) .menu-screen {
   outline: none;
 }
 
-#accountNameInput:focus {
-  border-color: rgba(99, 245, 212, 0.7);
-  box-shadow: 0 0 0 1px rgba(99, 245, 212, 0.35);
-}
-
-#menuLoadoutSearch {
-  min-height: 2.1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(175, 218, 247, 0.35);
-  background: rgba(8, 18, 30, 0.88);
-  color: #e8f6ff;
-  font: inherit;
-  padding: 0.34rem 0.54rem;
-  outline: none;
-}
-
-#menuLoadoutSearch:focus {
+#accountNameInput:focus,
+#menuLoadoutSearch:focus,
+#multiplayerServerInput:focus,
+#multiplayerRoomInput:focus {
   border-color: rgba(99, 245, 212, 0.7);
   box-shadow: 0 0 0 1px rgba(99, 245, 212, 0.35);
 }

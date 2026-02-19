@@ -55,6 +55,7 @@ const menuLoadoutCountEl = document.getElementById("menuLoadoutCount");
 const menuLoadoutSearchEl = document.getElementById("menuLoadoutSearch");
 const menuMultiplayerStateEl = document.getElementById("menuMultiplayerState");
 const menuMultiplayerHintEl = document.getElementById("menuMultiplayerHint");
+const multiplayerServerInputEl = document.getElementById("multiplayerServerInput");
 const multiplayerRoomInputEl = document.getElementById("multiplayerRoomInput");
 const hostMultiplayerBtn = document.getElementById("hostMultiplayerBtn");
 const joinMultiplayerBtn = document.getElementById("joinMultiplayerBtn");
@@ -102,8 +103,9 @@ const SHATTER_AIR_DRAG = 1.75;
 const SHATTER_GROUND_DRAG = 8.5;
 const HEALTH_BAR_SHOW_TIME = 1.5;
 const GAME_SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-const MULTIPLAYER_CHANNEL_PREFIX = "neon-bastion-room-";
 const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
+const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
+const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
 
 const audioSystem = {
@@ -2487,14 +2489,17 @@ const game = {
 };
 
 const multiplayer = {
-  supported: typeof BroadcastChannel === "function",
+  supported: typeof WebSocket === "function",
   role: "solo",
   roomCode: "",
   peerId: `peer_${Math.random().toString(36).slice(2, 10)}`,
   hostId: null,
   connected: false,
   peers: new Set(),
-  channel: null,
+  socket: null,
+  serverUrl: "",
+  connecting: false,
+  intentionalClose: false,
   snapshotTimer: 0,
   lastLaneSignature: "",
   lastStatusLine: "",
@@ -2507,6 +2512,44 @@ function sanitizeRoomCode(rawCode) {
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 16);
 }
+
+function normalizeMultiplayerServerUrl(rawUrl) {
+  const text = String(rawUrl || "").trim();
+  if (!text) return "";
+  try {
+    const parsed = new URL(text);
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") return "";
+    parsed.hash = "";
+    return parsed.href.replace(/\/+$/, "");
+  } catch (_) {
+    return "";
+  }
+}
+
+function getDefaultMultiplayerServerUrl() {
+  const host = window.location?.hostname || "";
+  const isLocalHost = host === "localhost" || host === "127.0.0.1";
+  if (!isLocalHost) return "";
+  const secure = window.location?.protocol === "https:";
+  return `${secure ? "wss" : "ws"}://${host}:8787`;
+}
+
+function loadPreferredMultiplayerServerUrl() {
+  let stored = "";
+  try {
+    stored = window.localStorage.getItem(MULTIPLAYER_SERVER_STORAGE_KEY) || "";
+  } catch (_) {}
+  return normalizeMultiplayerServerUrl(stored) || getDefaultMultiplayerServerUrl();
+}
+
+function persistPreferredMultiplayerServerUrl(serverUrl) {
+  try {
+    if (serverUrl) window.localStorage.setItem(MULTIPLAYER_SERVER_STORAGE_KEY, serverUrl);
+    else window.localStorage.removeItem(MULTIPLAYER_SERVER_STORAGE_KEY);
+  } catch (_) {}
+}
+
+multiplayer.serverUrl = loadPreferredMultiplayerServerUrl();
 
 function isMultiplayerHost() {
   return multiplayer.role === "host";
@@ -2522,6 +2565,7 @@ function isMultiplayerActive() {
 
 function getMultiplayerLabel() {
   if (!multiplayer.supported) return "Unavailable";
+  if (multiplayer.connecting) return "Connecting";
   if (!isMultiplayerActive()) return "Solo";
   if (isMultiplayerHost()) return `Host ${multiplayer.roomCode}`;
   if (isMultiplayerClient()) return `Joined ${multiplayer.roomCode}`;
@@ -2543,28 +2587,39 @@ function appendMultiplayerLog(message) {
 function refreshMultiplayerPanel() {
   const supported = multiplayer.supported;
   const active = isMultiplayerActive();
+  const connecting = multiplayer.connecting;
   const host = isMultiplayerHost();
   const client = isMultiplayerClient();
+  const rawServerUrl = multiplayerServerInputEl?.value || multiplayer.serverUrl || "";
+  const hasServerUrl = !!normalizeMultiplayerServerUrl(rawServerUrl);
   if (menuMultiplayerStateEl) menuMultiplayerStateEl.textContent = getMultiplayerLabel();
+  if (multiplayerServerInputEl) {
+    if (!multiplayerServerInputEl.value && multiplayer.serverUrl) multiplayerServerInputEl.value = multiplayer.serverUrl;
+    multiplayerServerInputEl.disabled = !supported || active || connecting;
+  }
   if (multiplayerRoomInputEl) {
     if (!multiplayerRoomInputEl.value && multiplayer.roomCode) multiplayerRoomInputEl.value = multiplayer.roomCode;
-    multiplayerRoomInputEl.disabled = !supported || active;
+    multiplayerRoomInputEl.disabled = !supported || active || connecting;
   }
   if (hostMultiplayerBtn) {
     hostMultiplayerBtn.textContent = host ? "Hosting" : "Create Room";
-    hostMultiplayerBtn.disabled = !supported || active;
+    hostMultiplayerBtn.disabled = !supported || active || connecting || !hasServerUrl;
   }
   if (joinMultiplayerBtn) {
     joinMultiplayerBtn.textContent = client ? "Joined" : "Join Room";
-    joinMultiplayerBtn.disabled = !supported || active;
+    joinMultiplayerBtn.disabled = !supported || active || connecting || !hasServerUrl;
   }
   if (leaveMultiplayerBtn) {
-    leaveMultiplayerBtn.textContent = "Leave Room";
-    leaveMultiplayerBtn.disabled = !supported || !active;
+    leaveMultiplayerBtn.textContent = connecting ? "Cancel" : "Leave Room";
+    leaveMultiplayerBtn.disabled = !supported || (!active && !connecting);
   }
   if (menuMultiplayerHintEl) {
     if (!supported) {
       menuMultiplayerHintEl.textContent = "Multiplayer is unavailable in this browser.";
+    } else if (connecting) {
+      menuMultiplayerHintEl.textContent = "Connecting to multiplayer server...";
+    } else if (!hasServerUrl) {
+      menuMultiplayerHintEl.textContent = "Enter a multiplayer server URL first (ws:// or wss://).";
     } else if (host) {
       menuMultiplayerHintEl.textContent = `Room ${multiplayer.roomCode} live. Share this code to invite players.`;
     } else if (client) {
@@ -2575,24 +2630,39 @@ function refreshMultiplayerPanel() {
   }
 }
 
-function closeMultiplayerChannel() {
-  if (!multiplayer.channel) return;
+function closeMultiplayerSocket() {
+  if (!multiplayer.socket) return;
+  multiplayer.intentionalClose = true;
   try {
-    multiplayer.channel.close();
+    multiplayer.socket.close();
   } catch (_) {}
-  multiplayer.channel = null;
+  multiplayer.socket = null;
+  multiplayer.connecting = false;
+}
+
+function sendMultiplayerTransportPacket(packet) {
+  if (!multiplayer.socket) return false;
+  if (multiplayer.socket.readyState !== WebSocket.OPEN) return false;
+  try {
+    multiplayer.socket.send(JSON.stringify(packet));
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function postMultiplayerMessage(payload) {
-  if (!multiplayer.channel || !isMultiplayerActive()) return;
-  try {
-    multiplayer.channel.postMessage({
+  if (!isMultiplayerActive()) return;
+  sendMultiplayerTransportPacket({
+    type: "relay",
+    roomCode: multiplayer.roomCode,
+    payload: {
       ...payload,
       roomCode: multiplayer.roomCode,
       from: multiplayer.peerId,
       sentAt: Date.now(),
-    });
-  } catch (_) {}
+    },
+  });
 }
 
 function serializeLaneSignature() {
@@ -2603,7 +2673,7 @@ function leaveMultiplayerSession(announce = true) {
   if (announce && isMultiplayerActive()) {
     postMultiplayerMessage({ type: "leave" });
   }
-  closeMultiplayerChannel();
+  closeMultiplayerSocket();
   multiplayer.role = "solo";
   multiplayer.roomCode = "";
   multiplayer.hostId = null;
@@ -2615,8 +2685,7 @@ function leaveMultiplayerSession(announce = true) {
   refreshMultiplayerPanel();
 }
 
-function onMultiplayerMessage(event) {
-  const message = event?.data;
+function onMultiplayerMessage(message) {
   if (!message || typeof message !== "object") return;
   if (!isMultiplayerActive()) return;
   if (message.roomCode !== multiplayer.roomCode) return;
@@ -2675,20 +2744,137 @@ function onMultiplayerMessage(event) {
   }
 }
 
-function openMultiplayerChannel(roomCode) {
-  closeMultiplayerChannel();
-  if (!multiplayer.supported) return false;
-  try {
-    multiplayer.channel = new BroadcastChannel(`${MULTIPLAYER_CHANNEL_PREFIX}${roomCode}`);
-    multiplayer.channel.addEventListener("message", onMultiplayerMessage);
-    return true;
-  } catch (_) {
-    multiplayer.channel = null;
-    return false;
+function openMultiplayerConnection(roomCode, role, serverUrl) {
+  closeMultiplayerSocket();
+  if (!multiplayer.supported) {
+    return Promise.reject(new Error("Multiplayer unavailable in this browser."));
   }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const socket = new WebSocket(serverUrl);
+    multiplayer.socket = socket;
+    multiplayer.connecting = true;
+    multiplayer.intentionalClose = false;
+    refreshMultiplayerPanel();
+
+    const timeoutId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      multiplayer.connecting = false;
+      multiplayer.intentionalClose = true;
+      try {
+        socket.close();
+      } catch (_) {}
+      refreshMultiplayerPanel();
+      reject(new Error("Multiplayer server timed out."));
+    }, MULTIPLAYER_CONNECT_TIMEOUT);
+
+    socket.addEventListener("open", () => {
+      const sent = sendMultiplayerTransportPacket({
+        type: "joinRoom",
+        roomCode,
+        role,
+        peerId: multiplayer.peerId,
+      });
+      if (sent || settled) return;
+      settled = true;
+      multiplayer.connecting = false;
+      window.clearTimeout(timeoutId);
+      refreshMultiplayerPanel();
+      reject(new Error("Failed to send multiplayer join request."));
+    });
+
+    socket.addEventListener("message", (event) => {
+      let packet = null;
+      try {
+        packet = JSON.parse(typeof event.data === "string" ? event.data : "");
+      } catch (_) {
+        return;
+      }
+      if (!packet || typeof packet !== "object") return;
+
+      if (packet.type === "joinedRoom") {
+        if (packet.roomCode !== roomCode) return;
+        multiplayer.connecting = false;
+        refreshMultiplayerPanel();
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        resolve(packet);
+        return;
+      }
+
+      if (packet.type === "roomError") {
+        const message = typeof packet.message === "string" ? packet.message : "Multiplayer room error.";
+        multiplayer.connecting = false;
+        appendMultiplayerLog(message);
+        refreshMultiplayerPanel();
+        if (!settled) {
+          settled = true;
+          window.clearTimeout(timeoutId);
+          reject(new Error(message));
+        }
+        multiplayer.intentionalClose = true;
+        try {
+          socket.close();
+        } catch (_) {}
+        return;
+      }
+
+      if (packet.type === "relay") {
+        onMultiplayerMessage(packet.payload);
+        return;
+      }
+
+      if (packet.type === "peerLeft" && isMultiplayerHost()) {
+        const peerId = typeof packet.peerId === "string" ? packet.peerId : "";
+        if (!peerId || !multiplayer.peers.has(peerId)) return;
+        multiplayer.peers.delete(peerId);
+        multiplayer.connected = multiplayer.peers.size > 0;
+        appendMultiplayerLog("A player left your room.");
+        refreshMultiplayerPanel();
+        return;
+      }
+
+      if (packet.type === "hostLeft" && isMultiplayerClient()) {
+        appendMultiplayerLog("Host left room.");
+        leaveMultiplayerSession(false);
+        setStatus("Host left multiplayer room.", true);
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      const wasActive = isMultiplayerActive();
+      const wasHost = isMultiplayerHost();
+      const intentional = multiplayer.intentionalClose;
+      multiplayer.connecting = false;
+      multiplayer.intentionalClose = false;
+      if (multiplayer.socket === socket) multiplayer.socket = null;
+      if (!settled) {
+        settled = true;
+        window.clearTimeout(timeoutId);
+        refreshMultiplayerPanel();
+        reject(new Error("Unable to connect to multiplayer server."));
+        return;
+      }
+      if (wasActive && !intentional) {
+        leaveMultiplayerSession(false);
+        appendMultiplayerLog("Disconnected from multiplayer server.");
+        setStatus(wasHost ? "Server connection lost. Room closed." : "Disconnected from multiplayer server.", true);
+      } else {
+        refreshMultiplayerPanel();
+      }
+    });
+
+    socket.addEventListener("error", () => {
+      if (settled) return;
+      multiplayer.connecting = false;
+      refreshMultiplayerPanel();
+    });
+  });
 }
 
-function hostMultiplayerSession() {
+async function hostMultiplayerSession() {
   if (!multiplayer.supported) {
     setStatus("Multiplayer unavailable in this browser.", true);
     return;
@@ -2700,14 +2886,30 @@ function hostMultiplayerSession() {
     return;
   }
 
+  const serverUrl = normalizeMultiplayerServerUrl(multiplayerServerInputEl?.value || multiplayer.serverUrl || "");
+  if (!serverUrl) {
+    setStatus("Enter a valid multiplayer server URL first.", true);
+    refreshMultiplayerPanel();
+    return;
+  }
+
   leaveMultiplayerSession(false);
-  if (!openMultiplayerChannel(roomCode)) {
-    setStatus("Failed to open multiplayer channel.", true);
+  multiplayer.serverUrl = serverUrl;
+  persistPreferredMultiplayerServerUrl(serverUrl);
+  if (multiplayerServerInputEl) multiplayerServerInputEl.value = serverUrl;
+
+  try {
+    await openMultiplayerConnection(roomCode, "host", serverUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to connect to multiplayer server.";
+    leaveMultiplayerSession(false);
+    setStatus(message, true);
     return;
   }
 
   multiplayer.role = "host";
   multiplayer.roomCode = roomCode;
+  multiplayer.hostId = multiplayer.peerId;
   multiplayer.connected = false;
   multiplayer.peers.clear();
   multiplayer.snapshotTimer = 0;
@@ -2718,7 +2920,7 @@ function hostMultiplayerSession() {
   setStatus(`Hosting multiplayer room ${roomCode}.`);
 }
 
-function joinMultiplayerSession() {
+async function joinMultiplayerSession() {
   if (!multiplayer.supported) {
     setStatus("Multiplayer unavailable in this browser.", true);
     return;
@@ -2730,16 +2932,32 @@ function joinMultiplayerSession() {
     return;
   }
 
+  const serverUrl = normalizeMultiplayerServerUrl(multiplayerServerInputEl?.value || multiplayer.serverUrl || "");
+  if (!serverUrl) {
+    setStatus("Enter a valid multiplayer server URL first.", true);
+    refreshMultiplayerPanel();
+    return;
+  }
+
   leaveMultiplayerSession(false);
-  if (!openMultiplayerChannel(roomCode)) {
-    setStatus("Failed to open multiplayer channel.", true);
+  multiplayer.serverUrl = serverUrl;
+  persistPreferredMultiplayerServerUrl(serverUrl);
+  if (multiplayerServerInputEl) multiplayerServerInputEl.value = serverUrl;
+
+  let joinedPacket = null;
+  try {
+    joinedPacket = await openMultiplayerConnection(roomCode, "client", serverUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to connect to multiplayer server.";
+    leaveMultiplayerSession(false);
+    setStatus(message, true);
     return;
   }
 
   multiplayer.role = "client";
   multiplayer.roomCode = roomCode;
   multiplayer.connected = false;
-  multiplayer.hostId = null;
+  multiplayer.hostId = typeof joinedPacket?.hostPeerId === "string" ? joinedPacket.hostPeerId : null;
   multiplayer.snapshotTimer = 0;
   multiplayer.lastLaneSignature = "";
   clearActiveCombatState();
@@ -6224,10 +6442,18 @@ function openMultiplayerMenu() {
   openMenuShop();
   setMenuView("multiplayer");
   refreshMultiplayerPanel();
+  if (multiplayerServerInputEl) {
+    if (!multiplayerServerInputEl.value && multiplayer.serverUrl) multiplayerServerInputEl.value = multiplayer.serverUrl;
+  }
   if (multiplayerRoomInputEl) {
     if (!multiplayerRoomInputEl.value && multiplayer.roomCode) multiplayerRoomInputEl.value = multiplayer.roomCode;
-    multiplayerRoomInputEl.focus();
-    multiplayerRoomInputEl.select();
+    if (multiplayerServerInputEl && !multiplayerServerInputEl.value) {
+      multiplayerServerInputEl.focus();
+      multiplayerServerInputEl.select();
+    } else {
+      multiplayerRoomInputEl.focus();
+      multiplayerRoomInputEl.select();
+    }
   }
 }
 
@@ -7186,6 +7412,39 @@ if (accountNameInputEl) {
     }
   });
 }
+if (multiplayerServerInputEl) {
+  if (!multiplayerServerInputEl.value && multiplayer.serverUrl) multiplayerServerInputEl.value = multiplayer.serverUrl;
+  multiplayerServerInputEl.addEventListener("blur", () => {
+    const serverUrl = normalizeMultiplayerServerUrl(multiplayerServerInputEl.value || multiplayer.serverUrl || "");
+    multiplayer.serverUrl = serverUrl;
+    persistPreferredMultiplayerServerUrl(serverUrl);
+    if (serverUrl) multiplayerServerInputEl.value = serverUrl;
+    refreshMultiplayerPanel();
+  });
+  multiplayerServerInputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const serverUrl = normalizeMultiplayerServerUrl(multiplayerServerInputEl.value || "");
+      if (!serverUrl) {
+        setStatus("Enter a valid ws:// or wss:// server URL.", true);
+        refreshMultiplayerPanel();
+        return;
+      }
+      multiplayer.serverUrl = serverUrl;
+      multiplayerServerInputEl.value = serverUrl;
+      persistPreferredMultiplayerServerUrl(serverUrl);
+      if (multiplayerRoomInputEl) {
+        multiplayerRoomInputEl.focus();
+        multiplayerRoomInputEl.select();
+      }
+      refreshMultiplayerPanel();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMultiplayerMenu();
+    }
+  });
+}
 if (multiplayerRoomInputEl) {
   multiplayerRoomInputEl.addEventListener("input", () => {
     multiplayerRoomInputEl.value = sanitizeRoomCode(multiplayerRoomInputEl.value);
@@ -7245,6 +7504,13 @@ window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
       closeLoadoutMenu();
+    }
+    return;
+  }
+  if (multiplayerServerInputEl && document.activeElement === multiplayerServerInputEl) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMultiplayerMenu();
     }
     return;
   }

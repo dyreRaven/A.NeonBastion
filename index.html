@@ -113,6 +113,16 @@
             <h2>Multiplayer</h2>
             <span id="menuMultiplayerState">Solo</span>
           </div>
+          <div class="menu-multiplayer-server-row">
+            <input
+              id="multiplayerServerInput"
+              type="url"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="180"
+              placeholder="Server URL (wss://your-server.example)"
+            />
+          </div>
           <div class="menu-account-create">
             <input
               id="multiplayerRoomInput"
@@ -131,7 +141,7 @@
           <p id="menuMultiplayerHint" class="menu-shop-note">Enter a room code, then Create or Join.</p>
           <div id="menuMultiplayerLog" class="menu-shop-list"></div>
           <p class="menu-shop-note">
-            Co-op uses your browser origin. Host is authoritative and shares the game state.
+            Use the same server URL and room code on every device. Host is authoritative and shares the game state.
           </p>
           <div class="menu-shop-actions">
             <button id="closeMultiplayerBtn" class="menu-play-btn" type="button">Menu Page</button>

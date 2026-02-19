@@ -1,41 +1,40 @@
-# Neon Bastion (3D Tower Defense Starter)
+# Neon Bastion
 
-A lightweight browser tower-defense prototype using plain HTML/CSS/JS + Three.js.
+## Play Online
 
-## Run
+- Live site: `https://dyreraven.github.io/A.NeonBastion/`
 
-Open `index.html` in a browser.
+## Local Run
 
-## Controls
+- Open `index.html` in a browser.
 
-- Select a tower from the `Tower Shop` to arm build mode
-- `Build ... (B)` button or `B` key: toggle build mode
-- `Sell Tower (X)` button or `X` key: delete a placed tower for 40% refund
-- Click/tap a valid tile: place selected tower (cost varies by type)
-- `Start Wave` button or `Space`: start next wave
-- `Auto Waves` button: auto-starts waves every 10 seconds when lane is clear
+## Cross-Device Multiplayer Setup
 
-## Current mechanics
+The game UI now supports real network rooms through a WebSocket server.
 
-- Fixed enemy path
-- Full 3D battlefield, towers, enemies, and projectiles
-- Tower shop with multiple purchasable tower classes
-- Sell mode with 40% tower refund
-- Progressive waves with scaling stats and mixed enemy compositions
-- Enemy archetypes with unique visuals and behavior profiles:
-  - `Crawler`: baseline assault unit
-  - `Blink`: fast scout
-  - `Bulwark`: heavy armored unit
-  - `Specter`: high-speed evasive unit
-  - `Colossus`: late-wave siege threat
-- Towers target enemies furthest along the path
-- Credits for kills and wave clear bonus
-- Core HP loss when enemies escape (heavier enemies deal more damage)
+1. Install Node.js 20+.
+2. Start the server:
+   - `cd server`
+   - `npm install`
+   - `npm start`
+3. In the game menu: `Multiplayer`
+4. Set `Server URL`:
+   - Local same-PC testing: `ws://localhost:8787`
+   - Same home network devices: `ws://<your-lan-ip>:8787`
+   - Internet-hosted server: `wss://<your-server-domain>`
+5. Use the same room code on all devices.
 
-## Next upgrades
+## Deploy Server (for Internet play)
 
-- Multiple tower types and upgrade trees
-- Enemy abilities (splitters, shields, on-death effects)
-- Start/restart menu and map selection
-- Sound and particle effects
-- Local save/progression
+Use Render/Railway/Fly.io and deploy the `server/` folder as a Node service.
+
+- Start command: `npm start`
+- Environment:
+  - `PORT` is provided by most hosts automatically
+  - optional `HOST=0.0.0.0`
+- After deploy, copy your `wss://...` URL into the game Multiplayer panel.
+
+## Notes
+
+- Host is authoritative (host controls wave flow/game speed).
+- GitHub Pages hosts the game frontend, and the WebSocket server hosts multiplayer relay.
