@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260219f" />
+    <link rel="stylesheet" href="styles.css?v=20260219g" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -28,7 +28,7 @@
             <div class="menu-map-select" aria-label="Map selector">
               <button id="mapPrevBtn" type="button" aria-label="Previous map">&lt;</button>
               <div id="mapPreview" class="menu-map-preview">
-                <p id="mapPreviewIndex">Map 1 / 2</p>
+                <p id="mapPreviewIndex">Map 1 / 3</p>
                 <h3 id="mapPreviewName">Level 1 - Neon Bastion</h3>
                 <p id="mapPreviewDesc">Classic defense route with balanced pressure.</p>
                 <span id="mapPreviewLock" class="menu-map-lock unlocked">Unlocked</span>
@@ -172,8 +172,8 @@
 
     <section class="confirm-screen" id="levelClearPanel" aria-label="Level clear" hidden>
       <div class="confirm-card">
-        <h2>Level Cleared</h2>
-        <p>Level 1 complete. Access to Level 2 unlocked. +20 shards awarded.</p>
+        <h2 id="levelClearTitle">Level Cleared</h2>
+        <p id="levelClearText">Victory confirmed. New map access awarded.</p>
         <div class="confirm-actions">
           <button id="levelClearMenuBtn" type="button">Menu</button>
         </div>
@@ -296,6 +296,6 @@
     </section>
 
     <script src="vendor/three.min.js"></script>
-    <script src="game.js?v=20260219f"></script>
+    <script src="game.js?v=20260219g"></script>
   </body>
 </html>

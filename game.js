@@ -24,6 +24,8 @@ const confirmExitBtn = document.getElementById("confirmExitBtn");
 const cancelExitBtn = document.getElementById("cancelExitBtn");
 const levelClearPanelEl = document.getElementById("levelClearPanel");
 const levelClearMenuBtn = document.getElementById("levelClearMenuBtn");
+const levelClearTitleEl = document.getElementById("levelClearTitle");
+const levelClearTextEl = document.getElementById("levelClearText");
 const defeatPanelEl = document.getElementById("defeatPanel");
 const defeatMenuBtn = document.getElementById("defeatMenuBtn");
 const playBtn = document.getElementById("playBtn");
@@ -111,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-6";
+const BUILD_ID = "2026-02-19-7";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1822,7 +1824,18 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 }
 
 function waveThreatLabel(wave, level = game.currentLevel) {
-  if (level >= 2) {
+  if (level >= 3) {
+    if (wave === 30) return "Ember threat: Twin Rhombus apex bosses with molten escort formations.";
+    if (wave >= 21) return "Ember threat: Monolith command cores entering the rift lane.";
+    if (wave >= 10) return "Ember threat: Leviathan siege wave under volcanic pressure.";
+    if (wave >= 9) return "Ember threat: Colossus and Warden heat-shield column advancing.";
+    if (wave >= 7) return "Ember threat: Prism assault casters with Raider and Specter support.";
+    if (wave >= 5) return "Ember threat: Heavy assault units entering the rift.";
+    if (wave >= 3) return "Ember threat: Fast Skitter packs igniting the lane.";
+    if (wave >= 2) return "Ember threat: Blink scouts and mixed pressure detected.";
+    return "Ember threat: Enemy probes gathering heat in the rift.";
+  }
+  if (level === 2) {
     if (wave === 30) return "Lunar threat: Twin Rhombus apex bosses with Rhombus Minion escorts.";
     if (wave >= 21) return "Lunar threat: Monolith command units escalating to apex intensity.";
     if (wave >= 10) return "Lunar threat: Leviathan-class siege swarm under low gravity.";
@@ -1889,6 +1902,19 @@ const LEVEL2_PATH_WAYPOINTS = [
   { x: 15, y: 3 },
 ];
 
+const LEVEL3_PATH_WAYPOINTS = [
+  { x: 0, y: 4 },
+  { x: 2, y: 4 },
+  { x: 2, y: 7 },
+  { x: 7, y: 7 },
+  { x: 7, y: 2 },
+  { x: 11, y: 2 },
+  { x: 11, y: 6 },
+  { x: 14, y: 6 },
+  { x: 14, y: 3 },
+  { x: 15, y: 3 },
+];
+
 const MAP_CATALOG = [
   {
     level: 1,
@@ -1899,6 +1925,11 @@ const MAP_CATALOG = [
     level: 2,
     name: "Level 2 - Moonfall",
     description: "Harder lunar map. Grants a one-time credit carry when advancing from Level 1.",
+  },
+  {
+    level: 3,
+    name: "Level 3 - Ember Rift",
+    description: "Lava-forged battleground with volatile lighting and high-contrast shadows.",
   },
 ];
 
@@ -1941,7 +1972,9 @@ function buildLaneSetFromWaypoints(waypoints) {
 }
 
 function getDefaultWaypointsForLevel(level) {
-  return level >= 2 ? LEVEL2_PATH_WAYPOINTS : DEFAULT_PATH_WAYPOINTS;
+  if (level >= 3) return LEVEL3_PATH_WAYPOINTS;
+  if (level === 2) return LEVEL2_PATH_WAYPOINTS;
+  return DEFAULT_PATH_WAYPOINTS;
 }
 
 function buildPathRoute(cellSet) {
@@ -2194,8 +2227,39 @@ prismFillLight.position.set(-14, 12, 14);
 scene.add(prismFillLight);
 
 function applyLevelLightingTheme(level) {
-  const moonLevel = level >= 2;
-  if (moonLevel) {
+  const moonLevel = level === 2;
+  const emberLevel = level >= 3;
+
+  if (emberLevel) {
+    scene.background.set("#110904");
+    scene.fog.color.set("#110904");
+    scene.fog.density = 0.014;
+    renderer.toneMappingExposure = 0.94;
+
+    hemiLight.color.set("#ffcf9a");
+    hemiLight.groundColor.set("#160904");
+    hemiLight.intensity = 0.52;
+
+    sunLight.color.set("#ffd47d");
+    sunLight.intensity = 0.98;
+    sunLight.position.set(25, 28, -8);
+
+    tealRim.color.set("#ff6842");
+    tealRim.intensity = 0.82;
+    tealRim.position.set(-26, 10, -16);
+
+    emberRim.color.set("#ffd66a");
+    emberRim.intensity = 0.58;
+    emberRim.position.set(20, 9, 18);
+
+    prismKeyLight.color.set("#ff7a45");
+    prismKeyLight.intensity = 0.64;
+    prismKeyLight.position.set(2, 15, -10);
+
+    prismFillLight.color.set("#ffb85f");
+    prismFillLight.intensity = 0.5;
+    prismFillLight.position.set(-12, 10, 17);
+  } else if (moonLevel) {
     scene.background.set("#060913");
     scene.fog.color.set("#060913");
     scene.fog.density = 0.01;
@@ -2314,19 +2378,20 @@ function rebuildWorld() {
 function buildMap() {
   const boardWidth = COLS * CELL_SIZE;
   const boardHeight = ROWS * CELL_SIZE;
-  const moonLevel = game.currentLevel >= 2;
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
   applyLevelLightingTheme(game.currentLevel);
 
   const base = new THREE.Mesh(
     new THREE.BoxGeometry(boardWidth + 14, 1.9, boardHeight + 14),
     new THREE.MeshPhysicalMaterial({
-      color: moonLevel ? "#121620" : "#0a1624",
+      color: emberLevel ? "#1f1209" : moonLevel ? "#121620" : "#0a1624",
       roughness: 0.82,
       metalness: 0.18,
       clearcoat: 0.3,
       clearcoatRoughness: 0.48,
-      emissive: moonLevel ? "#0b0f18" : "#050e19",
-      emissiveIntensity: moonLevel ? 0.58 : 0.66,
+      emissive: emberLevel ? "#140803" : moonLevel ? "#0b0f18" : "#050e19",
+      emissiveIntensity: emberLevel ? 0.62 : moonLevel ? 0.58 : 0.66,
       envMapIntensity: 1.05,
     })
   );
@@ -2337,11 +2402,11 @@ function buildMap() {
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(boardWidth + 5.2, 0.18, boardHeight + 5.2),
     new THREE.MeshStandardMaterial({
-      color: moonLevel ? "#1a202d" : "#102538",
+      color: emberLevel ? "#2a170d" : moonLevel ? "#1a202d" : "#102538",
       roughness: 0.72,
       metalness: 0.26,
-      emissive: moonLevel ? "#101722" : "#08192a",
-      emissiveIntensity: moonLevel ? 0.26 : 0.34,
+      emissive: emberLevel ? "#1b0d06" : moonLevel ? "#101722" : "#08192a",
+      emissiveIntensity: emberLevel ? 0.34 : moonLevel ? 0.26 : 0.34,
     })
   );
   deck.position.y = -0.06;
@@ -2352,9 +2417,9 @@ function buildMap() {
   const vignette = new THREE.Mesh(
     new THREE.RingGeometry(boardRadius * 0.58, boardRadius * 0.96, 72),
     new THREE.MeshBasicMaterial({
-      color: moonLevel ? "#04070e" : "#01060c",
+      color: emberLevel ? "#150601" : moonLevel ? "#04070e" : "#01060c",
       transparent: true,
-      opacity: moonLevel ? 0.56 : 0.48,
+      opacity: emberLevel ? 0.62 : moonLevel ? 0.56 : 0.48,
       side: THREE.DoubleSide,
       depthWrite: false,
     })
@@ -2366,9 +2431,9 @@ function buildMap() {
   const shadowWash = new THREE.Mesh(
     new THREE.PlaneGeometry(boardWidth + 4.8, boardHeight + 4.8),
     new THREE.MeshBasicMaterial({
-      color: moonLevel ? "#02050a" : "#01050a",
+      color: emberLevel ? "#150702" : moonLevel ? "#02050a" : "#01050a",
       transparent: true,
-      opacity: moonLevel ? 0.26 : 0.2,
+      opacity: emberLevel ? 0.32 : moonLevel ? 0.26 : 0.2,
       depthWrite: false,
     })
   );
@@ -2376,15 +2441,30 @@ function buildMap() {
   shadowWash.position.y = 0.03;
   worldGroup.add(shadowWash);
 
-  const mapLightA = new THREE.PointLight(moonLevel ? 0x8ab5ff : 0x58c6ff, moonLevel ? 0.38 : 0.46, boardWidth * 1.4, 2);
+  const mapLightA = new THREE.PointLight(
+    emberLevel ? 0xff6a3a : moonLevel ? 0x8ab5ff : 0x58c6ff,
+    emberLevel ? 0.48 : moonLevel ? 0.38 : 0.46,
+    boardWidth * 1.4,
+    2
+  );
   mapLightA.position.set(-boardWidth * 0.34, 6.2, -boardHeight * 0.26);
   worldGroup.add(mapLightA);
 
-  const mapLightB = new THREE.PointLight(moonLevel ? 0x8aa0d8 : 0xff9f57, moonLevel ? 0.3 : 0.38, boardWidth * 1.4, 2);
+  const mapLightB = new THREE.PointLight(
+    emberLevel ? 0xffcc66 : moonLevel ? 0x8aa0d8 : 0xff9f57,
+    emberLevel ? 0.4 : moonLevel ? 0.3 : 0.38,
+    boardWidth * 1.4,
+    2
+  );
   mapLightB.position.set(boardWidth * 0.36, 6.8, boardHeight * 0.3);
   worldGroup.add(mapLightB);
 
-  const mapLightC = new THREE.PointLight(moonLevel ? 0xd4e0ff : 0x63f2d3, moonLevel ? 0.22 : 0.28, boardWidth * 1.2, 2);
+  const mapLightC = new THREE.PointLight(
+    emberLevel ? 0xff8a52 : moonLevel ? 0xd4e0ff : 0x63f2d3,
+    emberLevel ? 0.3 : moonLevel ? 0.22 : 0.28,
+    boardWidth * 1.2,
+    2
+  );
   mapLightC.position.set(0, 7.5, 0);
   worldGroup.add(mapLightC);
   mapState.mapLights.push(mapLightA, mapLightB, mapLightC);
@@ -2407,7 +2487,10 @@ function buildMap() {
       );
 
       const tileColor = new THREE.Color();
-      if (moonLevel) {
+      if (emberLevel) {
+        if (onPath) tileColor.setHSL(0.08 + n * 0.015, 0.78, 0.24 + n * 0.04 - edgeBlend * 0.05);
+        else tileColor.setHSL(0.05 + n * 0.02, 0.62, 0.16 + n * 0.06 - edgeBlend * 0.08);
+      } else if (moonLevel) {
         if (onPath) tileColor.setHSL(0.6 + n * 0.01, 0.24, 0.26 + n * 0.05 - edgeBlend * 0.05);
         else tileColor.setHSL(0.62 + n * 0.01, 0.12, 0.2 + n * 0.08 - edgeBlend * 0.07 - craterFactor * 0.08);
       } else {
@@ -2417,12 +2500,32 @@ function buildMap() {
 
       const tileMaterial = new THREE.MeshPhysicalMaterial({
         color: tileColor,
-        roughness: onPath ? (moonLevel ? 0.36 : 0.3) : (moonLevel ? 0.86 - n * 0.08 : 0.79 - n * 0.1),
-        metalness: onPath ? (moonLevel ? 0.18 : 0.34) : (moonLevel ? 0.05 : 0.14),
-        clearcoat: onPath ? (moonLevel ? 0.48 : 0.76) : (moonLevel ? 0.08 : 0.16),
-        clearcoatRoughness: onPath ? (moonLevel ? 0.3 : 0.14) : (moonLevel ? 0.62 : 0.56),
-        emissive: onPath ? (moonLevel ? "#2f486c" : "#7b3212") : moonLevel ? "#111926" : "#0a2d4f",
-        emissiveIntensity: onPath ? (moonLevel ? 0.72 : 1.06) : moonLevel ? 0.16 + (1 - edgeBlend) * 0.08 : 0.34 + (1 - edgeBlend) * 0.12,
+        roughness: onPath
+          ? emberLevel
+            ? 0.28
+            : moonLevel
+              ? 0.36
+              : 0.3
+          : emberLevel
+            ? 0.74 - n * 0.08
+            : moonLevel
+              ? 0.86 - n * 0.08
+              : 0.79 - n * 0.1,
+        metalness: onPath ? (emberLevel ? 0.3 : moonLevel ? 0.18 : 0.34) : emberLevel ? 0.1 : moonLevel ? 0.05 : 0.14,
+        clearcoat: onPath ? (emberLevel ? 0.68 : moonLevel ? 0.48 : 0.76) : emberLevel ? 0.14 : moonLevel ? 0.08 : 0.16,
+        clearcoatRoughness: onPath ? (emberLevel ? 0.16 : moonLevel ? 0.3 : 0.14) : emberLevel ? 0.52 : moonLevel ? 0.62 : 0.56,
+        emissive: onPath ? (emberLevel ? "#8b2f14" : moonLevel ? "#2f486c" : "#7b3212") : emberLevel ? "#3a1209" : moonLevel ? "#111926" : "#0a2d4f",
+        emissiveIntensity: onPath
+          ? emberLevel
+            ? 1.05
+            : moonLevel
+              ? 0.72
+              : 1.06
+          : emberLevel
+            ? 0.24 + (1 - edgeBlend) * 0.12
+            : moonLevel
+              ? 0.16 + (1 - edgeBlend) * 0.08
+              : 0.34 + (1 - edgeBlend) * 0.12,
         envMapIntensity: 1.16,
       });
 
@@ -2438,9 +2541,9 @@ function buildMap() {
       const glaze = new THREE.Mesh(
         new THREE.PlaneGeometry(CELL_SIZE * 0.84, CELL_SIZE * 0.84),
         new THREE.MeshBasicMaterial({
-          color: onPath ? (moonLevel ? "#b7cdff" : "#ffae60") : moonLevel ? "#8ea6d6" : "#5cbfff",
+          color: onPath ? (emberLevel ? "#ffc178" : moonLevel ? "#b7cdff" : "#ffae60") : emberLevel ? "#ff7a5e" : moonLevel ? "#8ea6d6" : "#5cbfff",
           transparent: true,
-          opacity: onPath ? (moonLevel ? 0.22 : 0.24) : moonLevel ? 0.1 : 0.12,
+          opacity: onPath ? (emberLevel ? 0.27 : moonLevel ? 0.22 : 0.24) : emberLevel ? 0.14 : moonLevel ? 0.1 : 0.12,
           depthWrite: false,
         })
       );
@@ -2452,14 +2555,14 @@ function buildMap() {
         const inlay = new THREE.Mesh(
           new THREE.CylinderGeometry(CELL_SIZE * 0.2, CELL_SIZE * 0.2, 0.06, 14),
           new THREE.MeshPhysicalMaterial({
-            color: moonLevel ? "#d7e4ff" : "#ffd5a0",
-            emissive: moonLevel ? "#8ea6d8" : "#ff9750",
-            emissiveIntensity: moonLevel ? 0.92 : 1.18,
-            metalness: moonLevel ? 0.36 : 0.5,
-            roughness: moonLevel ? 0.24 : 0.18,
-            transmission: moonLevel ? 0.14 : 0.22,
-            clearcoat: moonLevel ? 0.78 : 0.9,
-            clearcoatRoughness: moonLevel ? 0.2 : 0.12,
+            color: emberLevel ? "#ffd08b" : moonLevel ? "#d7e4ff" : "#ffd5a0",
+            emissive: emberLevel ? "#ff7a32" : moonLevel ? "#8ea6d8" : "#ff9750",
+            emissiveIntensity: emberLevel ? 1.24 : moonLevel ? 0.92 : 1.18,
+            metalness: emberLevel ? 0.46 : moonLevel ? 0.36 : 0.5,
+            roughness: emberLevel ? 0.16 : moonLevel ? 0.24 : 0.18,
+            transmission: emberLevel ? 0.2 : moonLevel ? 0.14 : 0.22,
+            clearcoat: emberLevel ? 0.9 : moonLevel ? 0.78 : 0.9,
+            clearcoatRoughness: emberLevel ? 0.1 : moonLevel ? 0.2 : 0.12,
           })
         );
         inlay.position.set(world.x, 0.28, world.z);
@@ -2470,11 +2573,11 @@ function buildMap() {
           const panel = new THREE.Mesh(
             new THREE.BoxGeometry(CELL_SIZE * 0.42, 0.12, CELL_SIZE * 0.22),
             new THREE.MeshStandardMaterial({
-              color: moonLevel ? "#3a4457" : "#294a63",
-              emissive: moonLevel ? "#1a2230" : "#0f2638",
-              emissiveIntensity: moonLevel ? 0.22 : 0.4,
-              metalness: moonLevel ? 0.34 : 0.52,
-              roughness: moonLevel ? 0.62 : 0.42,
+              color: emberLevel ? "#5b3323" : moonLevel ? "#3a4457" : "#294a63",
+              emissive: emberLevel ? "#2a120b" : moonLevel ? "#1a2230" : "#0f2638",
+              emissiveIntensity: emberLevel ? 0.34 : moonLevel ? 0.22 : 0.4,
+              metalness: emberLevel ? 0.45 : moonLevel ? 0.34 : 0.52,
+              roughness: emberLevel ? 0.56 : moonLevel ? 0.62 : 0.42,
             })
           );
           panel.position.set(
@@ -2496,26 +2599,27 @@ function buildMap() {
 }
 
 function buildPathRails() {
-  const moonLevel = game.currentLevel >= 2;
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
   const railMaterial = new THREE.MeshPhysicalMaterial({
-    color: moonLevel ? "#c8d8ff" : "#ffb873",
-    emissive: moonLevel ? "#5e78a8" : "#8c3714",
-    emissiveIntensity: moonLevel ? 0.9 : 1.12,
-    metalness: moonLevel ? 0.42 : 0.56,
-    roughness: moonLevel ? 0.28 : 0.2,
-    clearcoat: moonLevel ? 0.8 : 0.88,
-    clearcoatRoughness: moonLevel ? 0.2 : 0.12,
-    transmission: moonLevel ? 0.08 : 0.15,
+    color: emberLevel ? "#ffc27c" : moonLevel ? "#c8d8ff" : "#ffb873",
+    emissive: emberLevel ? "#9f3b1a" : moonLevel ? "#5e78a8" : "#8c3714",
+    emissiveIntensity: emberLevel ? 1.02 : moonLevel ? 0.9 : 1.12,
+    metalness: emberLevel ? 0.5 : moonLevel ? 0.42 : 0.56,
+    roughness: emberLevel ? 0.24 : moonLevel ? 0.28 : 0.2,
+    clearcoat: emberLevel ? 0.86 : moonLevel ? 0.8 : 0.88,
+    clearcoatRoughness: emberLevel ? 0.14 : moonLevel ? 0.2 : 0.12,
+    transmission: emberLevel ? 0.1 : moonLevel ? 0.08 : 0.15,
   });
 
   const laneMaterial = new THREE.MeshPhysicalMaterial({
-    color: moonLevel ? "#3c4f73" : "#874822",
-    emissive: moonLevel ? "#1f2d47" : "#5f260f",
-    emissiveIntensity: moonLevel ? 0.74 : 0.94,
-    metalness: moonLevel ? 0.24 : 0.32,
-    roughness: moonLevel ? 0.44 : 0.33,
-    clearcoat: moonLevel ? 0.54 : 0.66,
-    clearcoatRoughness: moonLevel ? 0.25 : 0.18,
+    color: emberLevel ? "#7f341a" : moonLevel ? "#3c4f73" : "#874822",
+    emissive: emberLevel ? "#4a170c" : moonLevel ? "#1f2d47" : "#5f260f",
+    emissiveIntensity: emberLevel ? 1.04 : moonLevel ? 0.74 : 0.94,
+    metalness: emberLevel ? 0.36 : moonLevel ? 0.24 : 0.32,
+    roughness: emberLevel ? 0.3 : moonLevel ? 0.44 : 0.33,
+    clearcoat: emberLevel ? 0.7 : moonLevel ? 0.54 : 0.66,
+    clearcoatRoughness: emberLevel ? 0.16 : moonLevel ? 0.25 : 0.18,
   });
 
   for (const segment of pathSegments) {
@@ -2537,9 +2641,9 @@ function buildPathRails() {
     const laneGlow = new THREE.Mesh(
       new THREE.PlaneGeometry(segment.length + 0.1, 0.46),
       new THREE.MeshBasicMaterial({
-        color: moonLevel ? "#b9d0ff" : "#ffb870",
+        color: emberLevel ? "#ff8c5b" : moonLevel ? "#b9d0ff" : "#ffb870",
         transparent: true,
-        opacity: moonLevel ? 0.24 : 0.3,
+        opacity: emberLevel ? 0.34 : moonLevel ? 0.24 : 0.3,
         depthWrite: false,
       })
     );
@@ -2562,13 +2666,14 @@ function buildPathRails() {
 }
 
 function buildPathPulseOrbs() {
-  const moonLevel = game.currentLevel >= 2;
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
   const orbMaterial = new THREE.MeshStandardMaterial({
-    color: moonLevel ? "#d6e3ff" : "#ffe7ba",
-    emissive: moonLevel ? "#92aee8" : "#ffb169",
-    emissiveIntensity: moonLevel ? 0.95 : 1.1,
-    metalness: moonLevel ? 0.24 : 0.32,
-    roughness: moonLevel ? 0.34 : 0.28,
+    color: emberLevel ? "#ffd08b" : moonLevel ? "#d6e3ff" : "#ffe7ba",
+    emissive: emberLevel ? "#ff7838" : moonLevel ? "#92aee8" : "#ffb169",
+    emissiveIntensity: emberLevel ? 1.22 : moonLevel ? 0.95 : 1.1,
+    metalness: emberLevel ? 0.36 : moonLevel ? 0.24 : 0.32,
+    roughness: emberLevel ? 0.24 : moonLevel ? 0.34 : 0.28,
   });
 
   const count = 9;
@@ -2582,8 +2687,9 @@ function buildPathPulseOrbs() {
 }
 
 function buildSkyBits(boardWidth, boardHeight) {
-  const moonLevel = game.currentLevel >= 2;
-  const count = moonLevel ? 560 : 420;
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
+  const count = emberLevel ? 340 : moonLevel ? 560 : 420;
   const positions = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i += 1) {
@@ -2595,10 +2701,10 @@ function buildSkyBits(boardWidth, boardHeight) {
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const starMaterial = new THREE.PointsMaterial({
-    color: moonLevel ? "#d6e7ff" : "#a8dcff",
-    size: moonLevel ? 0.24 : 0.22,
+    color: emberLevel ? "#ff9f5e" : moonLevel ? "#d6e7ff" : "#a8dcff",
+    size: emberLevel ? 0.28 : moonLevel ? 0.24 : 0.22,
     transparent: true,
-    opacity: moonLevel ? 0.42 : 0.34,
+    opacity: emberLevel ? 0.28 : moonLevel ? 0.42 : 0.34,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
@@ -2608,7 +2714,8 @@ function buildSkyBits(boardWidth, boardHeight) {
 }
 
 function buildPerimeterBeacons(boardWidth, boardHeight) {
-  const moonLevel = game.currentLevel >= 2;
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
   const positions = [
     [-boardWidth / 2 - 3.4, -boardHeight / 2 - 3.2],
     [boardWidth / 2 + 3.4, -boardHeight / 2 - 3.2],
@@ -2620,9 +2727,9 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
     const post = new THREE.Mesh(
       new THREE.CylinderGeometry(0.3, 0.45, 2.2, 12),
       new THREE.MeshStandardMaterial({
-        color: moonLevel ? "#465270" : "#355670",
+        color: emberLevel ? "#5c3020" : moonLevel ? "#465270" : "#355670",
         roughness: 0.52,
-        metalness: moonLevel ? 0.48 : 0.6,
+        metalness: emberLevel ? 0.52 : moonLevel ? 0.48 : 0.6,
       })
     );
     post.position.set(x, 0.95, z);
@@ -2632,11 +2739,11 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
     const lamp = new THREE.Mesh(
       new THREE.SphereGeometry(0.28, 12, 12),
       new THREE.MeshStandardMaterial({
-        color: moonLevel ? "#d2e4ff" : "#a2ffe9",
-        emissive: moonLevel ? "#8eaee8" : "#63f5d4",
-        emissiveIntensity: moonLevel ? 1.05 : 1.2,
-        roughness: moonLevel ? 0.36 : 0.3,
-        metalness: moonLevel ? 0.38 : 0.5,
+        color: emberLevel ? "#ffd69e" : moonLevel ? "#d2e4ff" : "#a2ffe9",
+        emissive: emberLevel ? "#ff7d3e" : moonLevel ? "#8eaee8" : "#63f5d4",
+        emissiveIntensity: emberLevel ? 1.28 : moonLevel ? 1.05 : 1.2,
+        roughness: emberLevel ? 0.24 : moonLevel ? 0.36 : 0.3,
+        metalness: emberLevel ? 0.46 : moonLevel ? 0.38 : 0.5,
       })
     );
     lamp.position.set(x, 2.15, z);
@@ -2742,6 +2849,8 @@ const game = {
   levelClearOpen: false,
   defeatOpen: false,
   levelClearTimer: null,
+  levelClearTitle: "Level Cleared",
+  levelClearText: "Victory confirmed. New map access awarded.",
   settingsOpen: false,
   money: 220,
   shards: 0,
@@ -6122,16 +6231,22 @@ function updateBossBar() {
   bossBarWrapEl.hidden = false;
 }
 
-function onIcosahedronDefeated() {
+function completeCurrentLevel(nextLevel, shardReward, statusMessage, panelMessage) {
   if (game.levelOneDefeated) return;
-
   clearPendingLevelClearPanel();
   audioSystem.stopBossMusic();
   audioSystem.stopFluteMusic(true);
   game.levelOneDefeated = true;
-  game.maxLevelUnlocked = Math.max(game.maxLevelUnlocked, 2);
-  game.menuSelectedLevel = clampMenuSelectedLevel(2);
-  game.shards += 20;
+  if (Number.isFinite(nextLevel)) {
+    const targetLevel = Math.max(1, Math.floor(nextLevel));
+    game.maxLevelUnlocked = Math.max(game.maxLevelUnlocked, targetLevel);
+    game.menuSelectedLevel = clampMenuSelectedLevel(targetLevel);
+  }
+  if (Number.isFinite(shardReward) && shardReward > 0) {
+    game.shards += Math.floor(shardReward);
+  }
+  game.levelClearTitle = "Level Cleared";
+  game.levelClearText = panelMessage || "Victory confirmed. New map access awarded.";
   game.over = true;
   game.inWave = false;
   game.autoWaveEnabled = false;
@@ -6150,12 +6265,30 @@ function onIcosahedronDefeated() {
   renderMenuShop();
   renderCreatureShop();
   updateHud();
-  setStatus("Level One Defeated. Level 2 unlocked. +20 shards.");
+  setStatus(statusMessage || "Level cleared.");
 
   game.levelClearTimer = setTimeout(() => {
     game.levelClearTimer = null;
     openLevelClearPanel();
   }, 1000);
+}
+
+function onIcosahedronDefeated() {
+  completeCurrentLevel(
+    2,
+    20,
+    "Level 1 Defeated. Level 2 unlocked. +20 shards.",
+    "Level 1 complete. Access to Level 2 unlocked. +20 shards awarded."
+  );
+}
+
+function onRhombusDefeated() {
+  completeCurrentLevel(
+    3,
+    30,
+    "Level 2 Cleared. Level 3 unlocked. +30 shards.",
+    "Level 2 complete. Access to Level 3 unlocked. +30 shards awarded."
+  );
 }
 
 function clearActiveCombatState() {
@@ -6279,6 +6412,8 @@ function prepareLevel(level, startingMoneyOverride = null) {
   game.currentLevel = targetLevel;
   game.over = false;
   game.levelOneDefeated = false;
+  game.levelClearTitle = "Level Cleared";
+  game.levelClearText = "Victory confirmed. New map access awarded.";
   game.autoWaveEnabled = false;
   game.autoWaveCountdown = game.autoWaveInterval;
   game.paused = false;
@@ -6471,13 +6606,18 @@ function registerEnemyKill(enemyTypeId) {
 
 function handleEnemyDefeated(enemy) {
   if (!enemy || !enemy.alive) return;
-  const wasIcosahedronBoss = enemy.typeId === "icosahedron";
+  const wasIcosahedronBoss = enemy.typeId === "icosahedron" && game.currentLevel === 1;
+  const wasRhombusBoss = enemy.typeId === "rhombus" && game.currentLevel === 2;
   enemy.alive = false;
   enemy.shatter();
   game.money += enemy.reward;
   if (game.inWave) game.waveCreditsEarned += enemy.reward;
   registerEnemyKill(enemy.typeId);
   if (wasIcosahedronBoss) onIcosahedronDefeated();
+  if (wasRhombusBoss) {
+    const anyRhombusAlive = game.enemies.some((entry) => entry.alive && entry.typeId === "rhombus");
+    if (!anyRhombusAlive && game.wave >= 30) onRhombusDefeated();
+  }
 }
 
 function createAllyStatsForType(enemyTypeId) {
@@ -7470,6 +7610,8 @@ function openLevelClearPanel() {
   }
   closeSettingsPanel();
   closeCommandConsole();
+  if (levelClearTitleEl) levelClearTitleEl.textContent = game.levelClearTitle || "Level Cleared";
+  if (levelClearTextEl) levelClearTextEl.textContent = game.levelClearText || "Victory confirmed. New map access awarded.";
   game.levelClearOpen = true;
   levelClearPanelEl.hidden = false;
   updateHud();
@@ -7854,7 +7996,7 @@ function startWave() {
   audioSystem.unlock();
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.levelOneDefeated) {
-    setStatus("Level One already defeated. Return to menu for the next map.");
+    setStatus("Current level already cleared. Return to menu for the next map.");
     return;
   }
   if (game.over) return;
@@ -8064,24 +8206,32 @@ function updatePlacementPreview() {
 }
 
 function updateMapEffects(dt) {
-  const moonLevel = game.currentLevel >= 2;
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
   const showPulses = !game.inWave;
   for (const pulse of mapState.pulseOrbs) {
     pulse.mesh.visible = showPulses;
     if (!showPulses) continue;
-    const pulseSpeed = moonLevel ? 5.4 : 6.6;
-    const pulseY = moonLevel ? 0.8 : 0.84;
-    const pulseWave = moonLevel ? 5.8 : 7;
-    const pulseAmp = moonLevel ? 0.06 : 0.08;
+    const pulseSpeed = emberLevel ? 6.1 : moonLevel ? 5.4 : 6.6;
+    const pulseY = emberLevel ? 0.82 : moonLevel ? 0.8 : 0.84;
+    const pulseWave = emberLevel ? 6.4 : moonLevel ? 5.8 : 7;
+    const pulseAmp = emberLevel ? 0.07 : moonLevel ? 0.06 : 0.08;
     const point = pointOnPath(game.time * pulseSpeed + pulse.offset);
     pulse.mesh.position.set(point.x, pulseY + Math.sin(game.time * pulseWave + pulse.offset) * pulseAmp, point.z);
   }
 
   if (mapState.starField) {
-    mapState.starField.rotation.y += dt * (moonLevel ? 0.024 : 0.018);
+    mapState.starField.rotation.y += dt * (emberLevel ? 0.014 : moonLevel ? 0.024 : 0.018);
   }
 
-  if (moonLevel) {
+  if (emberLevel) {
+    tealRim.intensity = 0.78 + Math.sin(game.time * 1.4) * 0.1;
+    emberRim.intensity = 0.52 + Math.sin(game.time * 1.1 + 1.2) * 0.08;
+    prismKeyLight.intensity = 0.62 + Math.sin(game.time * 1.6 + 0.4) * 0.11;
+    prismFillLight.intensity = 0.48 + Math.sin(game.time * 1.32 + 1.9) * 0.09;
+    prismKeyLight.position.x = 2 + Math.sin(game.time * 0.3) * 10;
+    prismFillLight.position.z = 17 + Math.cos(game.time * 0.25) * 5.5;
+  } else if (moonLevel) {
     tealRim.intensity = 0.54 + Math.sin(game.time * 1.3) * 0.08;
     emberRim.intensity = 0.28 + Math.sin(game.time * 1.15 + 1.2) * 0.05;
     prismKeyLight.intensity = 0.56 + Math.sin(game.time * 1.5 + 0.4) * 0.1;
@@ -8098,7 +8248,11 @@ function updateMapEffects(dt) {
   }
 
   if (mapState.mapLights.length >= 3) {
-    if (moonLevel) {
+    if (emberLevel) {
+      mapState.mapLights[0].intensity = 0.46 + Math.sin(game.time * 1.15 + 0.2) * 0.12;
+      mapState.mapLights[1].intensity = 0.36 + Math.sin(game.time * 1.04 + 1.6) * 0.1;
+      mapState.mapLights[2].intensity = 0.28 + Math.sin(game.time * 1.22 + 2.2) * 0.08;
+    } else if (moonLevel) {
       mapState.mapLights[0].intensity = 0.34 + Math.sin(game.time * 0.95 + 0.2) * 0.08;
       mapState.mapLights[1].intensity = 0.26 + Math.sin(game.time * 0.88 + 1.6) * 0.06;
       mapState.mapLights[2].intensity = 0.2 + Math.sin(game.time * 1.05 + 2.2) * 0.05;
@@ -8250,7 +8404,7 @@ function startGameFromMenu(preferredLevel = null) {
   const hasPreferredLevel = Number.isFinite(preferredLevel);
   const requestedLevel = hasPreferredLevel ? Math.max(1, Math.floor(preferredLevel)) : getHighestUnlockedLevel();
   if (hasPreferredLevel && !isLevelUnlocked(requestedLevel)) {
-    setStatus(`Level ${requestedLevel} is locked. Clear Level 1 first.`, true);
+    setStatus(`Level ${requestedLevel} is locked. Clear earlier levels first.`, true);
     updateHud();
     return;
   }
@@ -8268,7 +8422,7 @@ function startGameFromMenu(preferredLevel = null) {
     const startingMoneyOverride = shouldCarryIntoLevelTwo ? previousMoney * 2 : null;
     game.started = true;
     prepareLevel(targetLevel, startingMoneyOverride);
-    const levelLabel = targetLevel === 2 ? "Level 2 (Moon)" : "Level 1";
+    const levelLabel = getMapEntry(targetLevel)?.name || `Level ${targetLevel}`;
     if (targetLevel === 2 && shouldCarryIntoLevelTwo) {
       setStatus(
         `${levelLabel} loaded. Starting credits doubled to ${game.money}. Build towers or use Edit Lanes (L), then start a wave.`
