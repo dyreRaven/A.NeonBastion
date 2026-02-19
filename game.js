@@ -113,7 +113,7 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-12";
+const BUILD_ID = "2026-02-19-13";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4105,7 +4105,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       shape: "starBall",
       radius: 1.38,
       spikeLength: 2.32,
-      spikeRadius: 0.58,
+      spikeRadius: 0.86,
       ringRadius: 0,
       coreRadius: 0,
       coreY: 0.12,
@@ -4253,7 +4253,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       if (normal.dot(center) < 0) normal.multiplyScalar(-1);
 
       const spike = cast(new THREE.Mesh(spikeGeometry, spikeMat));
-      const offset = coreRadius * 0.1 + spikeLength * 0.44;
+      const offset = coreRadius * 0.03 + spikeLength * 0.33;
       spike.position.copy(center).addScaledVector(normal, offset);
       spike.quaternion.setFromUnitVectors(upAxis, normal);
       group.add(spike);
