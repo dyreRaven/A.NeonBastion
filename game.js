@@ -152,7 +152,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-39";
+const BUILD_ID = "2026-02-20-40";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -2526,6 +2526,12 @@ const mapState = {
   meteorStorm: {
     active: false,
     spawnTimer: 0,
+    maxActiveEffects: 8,
+    screenShake: {
+      time: 0,
+      power: 0,
+      offset: new THREE.Vector3(),
+    },
   },
 };
 
@@ -2560,6 +2566,12 @@ function rebuildWorld() {
 
   for (const geometry of geometries) geometry.dispose();
   for (const material of materials) material.dispose();
+
+  const shakeOffset = mapState.meteorStorm?.screenShake?.offset;
+  if (shakeOffset && shakeOffset.lengthSq() > 0) {
+    camera.position.sub(shakeOffset);
+    shakeOffset.set(0, 0, 0);
+  }
   for (const meteor of mapState.meteorEffects) meteor.dispose();
 
   mapState.pulseOrbs = [];
@@ -2569,6 +2581,8 @@ function rebuildWorld() {
   mapState.meteorEffects = [];
   mapState.meteorStorm.active = false;
   mapState.meteorStorm.spawnTimer = 0;
+  mapState.meteorStorm.screenShake.time = 0;
+  mapState.meteorStorm.screenShake.power = 0;
   applyLevelLightingTheme(game.currentLevel);
   buildMap();
 
@@ -2957,6 +2971,39 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
 const EMBER_METEOR_UP_AXIS = new THREE.Vector3(0, 1, 0);
 const emberMeteorTargetScratch = new THREE.Vector3();
 
+function triggerMeteorScreenShake(power = 1) {
+  const shake = mapState.meteorStorm?.screenShake;
+  if (!shake) return;
+  const clampedPower = Math.max(0.6, Math.min(2.4, Number(power) || 1));
+  shake.time = Math.max(shake.time, 0.14 + clampedPower * 0.1);
+  shake.power = Math.max(shake.power, 0.12 + clampedPower * 0.09);
+}
+
+function updateMeteorScreenShake(dt) {
+  const shake = mapState.meteorStorm?.screenShake;
+  if (!shake) return;
+
+  if (shake.offset.lengthSq() > 0) {
+    camera.position.sub(shake.offset);
+    shake.offset.set(0, 0, 0);
+  }
+
+  if (shake.time <= 0 || shake.power <= 0) return;
+
+  const step = Math.max(0, Number(dt) || 0);
+  shake.time = Math.max(0, shake.time - step);
+  shake.power = Math.max(0, shake.power - step * 0.95);
+  if (shake.power <= 0) return;
+
+  const jitter = shake.power * (0.7 + Math.random() * 0.5);
+  shake.offset.set(
+    (Math.random() * 2 - 1) * jitter,
+    (Math.random() * 2 - 1) * jitter * 0.48,
+    (Math.random() * 2 - 1) * jitter * 0.32
+  );
+  camera.position.add(shake.offset);
+}
+
 function disposeSceneObject(root) {
   if (!root) return;
   if (root.parent) root.parent.remove(root);
@@ -2975,9 +3022,10 @@ class EmberMeteorDecorEffect {
   constructor(targetX, targetY, targetZ) {
     this.phase = "falling";
     this.age = 0;
-    this.fallDuration = 0.48 + Math.random() * 0.4;
-    this.impactDuration = 1.35 + Math.random() * 0.45;
+    this.fallDuration = 0.52 + Math.random() * 0.34;
+    this.impactDuration = 1.05 + Math.random() * 0.35;
     this.trailSpawnTimer = 0;
+    this.maxTrailParticles = 8;
 
     this.target = new THREE.Vector3(targetX, targetY + 0.06, targetZ);
     const arcAngle = Math.random() * Math.PI * 2;
@@ -2996,7 +3044,8 @@ class EmberMeteorDecorEffect {
     this.root.position.copy(this.start);
     worldGroup.add(this.root);
 
-    const coreRadius = 0.3 + Math.random() * 0.16;
+    const coreRadius = 0.38 + Math.random() * 0.2;
+    this.coreRadius = coreRadius;
     this.core = new THREE.Mesh(
       new THREE.IcosahedronGeometry(coreRadius, 0),
       new THREE.MeshStandardMaterial({
@@ -3050,13 +3099,14 @@ class EmberMeteorDecorEffect {
   }
 
   spawnTrailParticle() {
-    const size = 0.08 + Math.random() * 0.1;
+    if (this.trail.length >= this.maxTrailParticles) return;
+    const size = 0.11 + Math.random() * 0.09;
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(size, 8, 8),
+      new THREE.SphereGeometry(size, 7, 7),
       new THREE.MeshBasicMaterial({
         color: Math.random() < 0.55 ? "#ff934b" : "#ffd18f",
         transparent: true,
-        opacity: 0.76,
+        opacity: 0.68,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
@@ -3067,17 +3117,17 @@ class EmberMeteorDecorEffect {
     mesh.position.z += (Math.random() * 2 - 1) * 0.35;
     worldGroup.add(mesh);
 
-    const velocity = this.fallDir.clone().multiplyScalar(-2.8 - Math.random() * 2.8);
-    velocity.x += (Math.random() * 2 - 1) * 1.2;
-    velocity.y += (Math.random() * 2 - 1) * 0.9;
-    velocity.z += (Math.random() * 2 - 1) * 1.2;
+    const velocity = this.fallDir.clone().multiplyScalar(-2.3 - Math.random() * 2.1);
+    velocity.x += (Math.random() * 2 - 1) * 1.05;
+    velocity.y += (Math.random() * 2 - 1) * 0.75;
+    velocity.z += (Math.random() * 2 - 1) * 1.05;
 
     this.trail.push({
       mesh,
       velocity,
       age: 0,
-      life: 0.2 + Math.random() * 0.24,
-      baseScale: 1 + Math.random() * 0.6,
+      life: 0.16 + Math.random() * 0.2,
+      baseScale: 1 + Math.random() * 0.42,
     });
   }
 
@@ -3090,7 +3140,7 @@ class EmberMeteorDecorEffect {
       particle.velocity.y += 2.2 * dt;
 
       const lifeT = Math.min(1, particle.age / particle.life);
-      const opacity = (1 - lifeT) * 0.76;
+      const opacity = (1 - lifeT) * 0.68;
       particle.mesh.material.opacity = Math.max(0, opacity);
       const scale = Math.max(0.05, particle.baseScale * (0.6 + lifeT * 1.5));
       particle.mesh.scale.setScalar(scale);
@@ -3120,7 +3170,7 @@ class EmberMeteorDecorEffect {
     worldGroup.add(this.impactRoot);
 
     const flash = new THREE.Mesh(
-      new THREE.CircleGeometry(0.64, 24),
+      new THREE.CircleGeometry(0.96, 24),
       new THREE.MeshBasicMaterial({
         color: "#ffe4b4",
         transparent: true,
@@ -3134,11 +3184,11 @@ class EmberMeteorDecorEffect {
     this.impactRoot.add(flash);
 
     const fireDisk = new THREE.Mesh(
-      new THREE.CircleGeometry(0.9, 28),
+      new THREE.CircleGeometry(1.5, 28),
       new THREE.MeshBasicMaterial({
         color: "#ff7a3f",
         transparent: true,
-        opacity: 0.64,
+        opacity: 0.72,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
@@ -3147,8 +3197,22 @@ class EmberMeteorDecorEffect {
     fireDisk.position.y = 0.05;
     this.impactRoot.add(fireDisk);
 
+    const fireDiskHot = new THREE.Mesh(
+      new THREE.CircleGeometry(1.08, 24),
+      new THREE.MeshBasicMaterial({
+        color: "#ffc783",
+        transparent: true,
+        opacity: 0.76,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    fireDiskHot.rotation.x = -Math.PI / 2;
+    fireDiskHot.position.y = 0.06;
+    this.impactRoot.add(fireDiskHot);
+
     const ringA = new THREE.Mesh(
-      new THREE.RingGeometry(0.26, 0.42, 28),
+      new THREE.RingGeometry(0.34, 0.58, 28),
       new THREE.MeshBasicMaterial({
         color: "#ffb067",
         transparent: true,
@@ -3163,7 +3227,7 @@ class EmberMeteorDecorEffect {
     this.impactRoot.add(ringA);
 
     const ringB = new THREE.Mesh(
-      new THREE.RingGeometry(0.2, 0.3, 24),
+      new THREE.RingGeometry(0.28, 0.46, 24),
       new THREE.MeshBasicMaterial({
         color: "#ff6f3e",
         transparent: true,
@@ -3178,11 +3242,11 @@ class EmberMeteorDecorEffect {
     this.impactRoot.add(ringB);
 
     const plume = new THREE.Mesh(
-      new THREE.ConeGeometry(0.52, 2.45, 12, 1, true),
+      new THREE.ConeGeometry(0.84, 3.35, 12, 1, true),
       new THREE.MeshBasicMaterial({
         color: "#ff7a40",
         transparent: true,
-        opacity: 0.72,
+        opacity: 0.8,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
         depthWrite: false,
@@ -3192,11 +3256,11 @@ class EmberMeteorDecorEffect {
     this.impactRoot.add(plume);
 
     const plumeCore = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34, 12, 12),
+      new THREE.SphereGeometry(0.52, 12, 12),
       new THREE.MeshBasicMaterial({
         color: "#ffd7a5",
         transparent: true,
-        opacity: 0.78,
+        opacity: 0.86,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
@@ -3204,21 +3268,23 @@ class EmberMeteorDecorEffect {
     plumeCore.position.y = 0.66;
     this.impactRoot.add(plumeCore);
 
-    const impactLight = new THREE.PointLight(0xff8a44, 2.4, 28, 2);
+    const impactLight = new THREE.PointLight(0xff8a44, 3.35, 34, 2);
     impactLight.position.set(0, 1.2, 0);
     this.impactRoot.add(impactLight);
 
     this.impactRings = [
-      { mesh: flash, grow: 9.8, fade: 2.9 },
-      { mesh: fireDisk, grow: 5.4, fade: 1.8 },
-      { mesh: ringA, grow: 11.5, fade: 2.1 },
-      { mesh: ringB, grow: 8.6, fade: 2.35 },
+      { mesh: flash, grow: 12.8, fade: 2.8 },
+      { mesh: fireDisk, grow: 7.2, fade: 1.65 },
+      { mesh: fireDiskHot, grow: 6.1, fade: 1.95 },
+      { mesh: ringA, grow: 13.4, fade: 2.05 },
+      { mesh: ringB, grow: 10.6, fade: 2.3 },
     ];
     this.impactPlume = plume;
     this.impactPlumeCore = plumeCore;
     this.impactLight = impactLight;
+    triggerMeteorScreenShake(0.95 + this.coreRadius * 1.55);
 
-    const sparkCount = 18 + Math.floor(Math.random() * 8);
+    const sparkCount = 10 + Math.floor(Math.random() * 5);
     for (let i = 0; i < sparkCount; i += 1) {
       const size = 0.06 + Math.random() * 0.12;
       const mesh = new THREE.Mesh(
@@ -3248,7 +3314,7 @@ class EmberMeteorDecorEffect {
       this.sparks.push({ mesh, velocity, spin, age: 0, life: 0.45 + Math.random() * 0.7 });
     }
 
-    const smokeCount = 8 + Math.floor(Math.random() * 6);
+    const smokeCount = 6 + Math.floor(Math.random() * 4);
     for (let i = 0; i < smokeCount; i += 1) {
       const size = 0.22 + Math.random() * 0.24;
       const mesh = new THREE.Mesh(
@@ -3300,7 +3366,7 @@ class EmberMeteorDecorEffect {
     this.trailSpawnTimer -= dt;
     while (this.trailSpawnTimer <= 0) {
       this.spawnTrailParticle();
-      this.trailSpawnTimer += 0.025 + Math.random() * 0.02;
+      this.trailSpawnTimer += 0.055 + Math.random() * 0.04;
     }
     this.updateTrailParticles(dt);
 
@@ -3330,7 +3396,7 @@ class EmberMeteorDecorEffect {
     }
     if (this.impactLight) {
       const fade = Math.max(0, 1 - impactT);
-      this.impactLight.intensity = 2.4 * fade * fade;
+      this.impactLight.intensity = 3.35 * fade * fade;
     }
 
     const aliveSparks = [];
@@ -3441,8 +3507,10 @@ function randomMeteorStrikeTarget(out = emberMeteorTargetScratch) {
 }
 
 function spawnEmberMeteorDecor() {
+  if (mapState.meteorEffects.length >= mapState.meteorStorm.maxActiveEffects) return false;
   const strikeTarget = randomMeteorStrikeTarget();
   mapState.meteorEffects.push(new EmberMeteorDecorEffect(strikeTarget.x, strikeTarget.y, strikeTarget.z));
+  return true;
 }
 
 function updateEmberWave40MeteorStorm(dt) {
@@ -3452,27 +3520,31 @@ function updateEmberWave40MeteorStorm(dt) {
   if (active) {
     if (!storm.active) {
       storm.active = true;
-      storm.spawnTimer = 0.12;
+      storm.spawnTimer = 0.34;
     }
 
     storm.spawnTimer -= dt;
     while (storm.spawnTimer <= 0) {
-      const burstCount = Math.random() < 0.34 ? 2 : 1;
-      for (let i = 0; i < burstCount; i += 1) spawnEmberMeteorDecor();
-      storm.spawnTimer += 0.26 + Math.random() * 0.44;
+      const burstCount = Math.random() < 0.18 ? 2 : 1;
+      for (let i = 0; i < burstCount; i += 1) {
+        if (!spawnEmberMeteorDecor()) break;
+      }
+      storm.spawnTimer += 0.56 + Math.random() * 0.72;
     }
   } else {
     storm.active = false;
     storm.spawnTimer = 0;
   }
 
-  if (mapState.meteorEffects.length === 0) return;
-  const aliveEffects = [];
-  for (const meteor of mapState.meteorEffects) {
-    if (meteor.update(dt)) aliveEffects.push(meteor);
-    else meteor.dispose();
+  if (mapState.meteorEffects.length > 0) {
+    const aliveEffects = [];
+    for (const meteor of mapState.meteorEffects) {
+      if (meteor.update(dt)) aliveEffects.push(meteor);
+      else meteor.dispose();
+    }
+    mapState.meteorEffects = aliveEffects;
   }
-  mapState.meteorEffects = aliveEffects;
+  updateMeteorScreenShake(dt);
 }
 
 const previewBaseMat = new THREE.MeshStandardMaterial({
