@@ -170,7 +170,7 @@ const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
 const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
 const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-53";
+const BUILD_ID = "2026-02-20-54";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -2450,6 +2450,10 @@ const CAMERA_FRAME_SAMPLE_POINTS = [
   new THREE.Vector3(BOARD_FRAME_HALF_WIDTH, BOARD_FRAME_TOP_Y, BOARD_FRAME_HALF_HEIGHT),
 ];
 const cameraFrameProbe = new THREE.Vector3();
+const rendererCoarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+const rendererLowPowerMode = rendererCoarsePointer || window.innerWidth <= 980;
+const rendererPixelRatioCap = rendererLowPowerMode ? 1.2 : 2;
+let rendererContextLost = false;
 
 function setBattleCameraDistance(distance) {
   camera.position.copy(BATTLE_CAMERA_TARGET).addScaledVector(BATTLE_CAMERA_VIEW_DIR, distance);
@@ -2486,23 +2490,40 @@ function fitBattleCameraToViewport() {
   setBattleCameraDistance(farDistance);
 }
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+let renderer = null;
+try {
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: !rendererLowPowerMode,
+    powerPreference: rendererLowPowerMode ? "low-power" : "high-performance",
+  });
+} catch (_) {
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      powerPreference: "low-power",
+    });
+  } catch (error) {
+    setStatus("WebGL failed on this device. Try reloading or lowering browser graphics load.", true);
+    throw error;
+  }
+}
 if ("outputColorSpace" in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 else if ("outputEncoding" in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, rendererPixelRatioCap));
+renderer.shadowMap.enabled = !rendererLowPowerMode;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
 
 const hemiLight = new THREE.HemisphereLight(0x8ec8ff, 0x1a100a, 0.58);
 scene.add(hemiLight);
 
 const sunLight = new THREE.DirectionalLight(0xffefd4, 1.08);
 sunLight.position.set(18, 32, 12);
-sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(1024, 1024);
+sunLight.castShadow = renderer.shadowMap.enabled;
+sunLight.shadow.mapSize.set(rendererLowPowerMode ? 512 : 1024, rendererLowPowerMode ? 512 : 1024);
 sunLight.shadow.camera.left = -42;
 sunLight.shadow.camera.right = 42;
 sunLight.shadow.camera.top = 38;
@@ -11169,8 +11190,9 @@ function startGameFromMenu(preferredLevel = null) {
 }
 
 function onResize() {
-  const width = canvas.clientWidth || 960;
-  const height = canvas.clientHeight || 540;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.floor(rect.width || canvas.clientWidth || window.innerWidth || 960));
+  const height = Math.max(1, Math.floor(rect.height || canvas.clientHeight || window.innerHeight || 540));
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
@@ -11188,7 +11210,7 @@ function loop(now) {
   update(simDt);
   updatePlacementPreview();
   updateMapEffects(effectDt);
-  renderer.render(scene, camera);
+  if (!rendererContextLost) renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
 
@@ -11397,6 +11419,17 @@ canvas.addEventListener("contextmenu", (event) => {
 });
 canvas.addEventListener("pointerleave", () => {
   game.hoverCell = null;
+});
+canvas.addEventListener("webglcontextlost", (event) => {
+  event.preventDefault();
+  rendererContextLost = true;
+  setStatus("Graphics context lost. Reducing quality and recovering...", true);
+});
+canvas.addEventListener("webglcontextrestored", () => {
+  rendererContextLost = false;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, rendererPixelRatioCap));
+  onResize();
+  setStatus("Graphics restored.");
 });
 
 window.addEventListener("keydown", (event) => {
