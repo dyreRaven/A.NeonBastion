@@ -200,7 +200,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-81";
+const BUILD_ID = "2026-02-20-82";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1418,7 +1418,7 @@ const TOWER_TYPES = {
   bombarder: {
     name: "Bombarder",
     cost: 980,
-    range: 14.8,
+    range: 16.8,
     damage: 428,
     fireInterval: 2.35,
     turnSpeed: 2.4,
@@ -1898,7 +1898,7 @@ function getTowerAttackSpeedUpgradeMaxLevel(towerTypeId) {
 }
 
 function getTowerRangeUpgradeMaxLevel(towerTypeId) {
-  return isSpawnerTowerId(towerTypeId) ? 0 : TOWER_RANGE_UPGRADE_MAX_LEVEL;
+  return isSpawnerTowerId(towerTypeId) || isTrapTowerId(towerTypeId) ? 0 : TOWER_RANGE_UPGRADE_MAX_LEVEL;
 }
 
 function getSpawnerCooldownUpgradeMaxLevel(towerTypeId) {
@@ -7939,14 +7939,39 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       return mesh;
     };
 
-    const base = cast(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.3, 0.16, 26), plateMat));
+    const base = cast(new THREE.Mesh(new THREE.BoxGeometry(2.34, 0.16, 2.34), plateMat));
     base.position.y = 0.08;
     group.add(base);
 
-    const rim = cast(new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.07, 10, 30), spikeMat));
-    rim.rotation.x = Math.PI / 2;
-    rim.position.y = 0.16;
-    group.add(rim);
+    const underPlate = cast(new THREE.Mesh(new THREE.BoxGeometry(2.52, 0.06, 2.52), spikeMat));
+    underPlate.position.y = 0.03;
+    group.add(underPlate);
+
+    const frameY = 0.16;
+    const frameOuter = 2.06;
+    const frameThickness = 0.14;
+    const frameHeight = 0.08;
+
+    const frameFront = cast(new THREE.Mesh(new THREE.BoxGeometry(frameOuter, frameHeight, frameThickness), spikeMat));
+    frameFront.position.set(0, frameY, frameOuter * 0.5);
+    group.add(frameFront);
+    const frameBack = cast(new THREE.Mesh(new THREE.BoxGeometry(frameOuter, frameHeight, frameThickness), spikeMat));
+    frameBack.position.set(0, frameY, -frameOuter * 0.5);
+    group.add(frameBack);
+    const frameLeft = cast(new THREE.Mesh(new THREE.BoxGeometry(frameThickness, frameHeight, frameOuter), spikeMat));
+    frameLeft.position.set(-frameOuter * 0.5, frameY, 0);
+    group.add(frameLeft);
+    const frameRight = cast(new THREE.Mesh(new THREE.BoxGeometry(frameThickness, frameHeight, frameOuter), spikeMat));
+    frameRight.position.set(frameOuter * 0.5, frameY, 0);
+    group.add(frameRight);
+
+    for (let i = 0; i < 4; i += 1) {
+      const sx = i === 0 || i === 3 ? -0.92 : 0.92;
+      const sz = i === 0 || i === 1 ? -0.92 : 0.92;
+      const cornerNode = cast(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.16), spikeMat));
+      cornerNode.position.set(sx, 0.19, sz);
+      group.add(cornerNode);
+    }
 
     const spikeRing = new THREE.Group();
     spikeRing.position.y = 0.12;
@@ -7974,10 +7999,10 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     centerCrystal.position.y = 0.28;
     group.add(centerCrystal);
 
-    const glowDisk = new THREE.Mesh(new THREE.CircleGeometry(0.86, 28), glowMat);
-    glowDisk.rotation.x = -Math.PI / 2;
-    glowDisk.position.y = 0.03;
-    group.add(glowDisk);
+    const glowPlate = new THREE.Mesh(new THREE.PlaneGeometry(1.84, 1.84), glowMat);
+    glowPlate.rotation.x = -Math.PI / 2;
+    glowPlate.position.y = 0.03;
+    group.add(glowPlate);
 
     return { group, turret: null, muzzle: null, spinNode: spikeRing };
   }
@@ -11745,7 +11770,7 @@ function renderShop() {
     const detailLine = type.spawnerEnemyTypeId
       ? `Spawns ${type.spawnCount || 1} every ${type.spawnInterval.toFixed(1)}s | Lane ally`
       : type.isTrap
-        ? `Trap DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        ? `Trap DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
         : type.manualAreaTargeting
           ? `DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
         : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
@@ -11840,95 +11865,105 @@ function getLoadoutUpgradeOptions(towerTypeId) {
 
   if (isSpawner) {
     const cooldownMax = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
-    const cooldownLevel = getSpawnerCooldownUpgradeLevel(towerTypeId);
-    const cooldownAtMax = cooldownLevel >= cooldownMax;
-    const cooldownNextLevel = cooldownLevel + 1;
-    const cooldownCost = cooldownAtMax ? 0 : getSpawnerCooldownUpgradeCost(towerTypeId, cooldownNextLevel);
-    const baseSpawnerType = getSpawnerTowerType(towerTypeId) || towerType;
-    const nextCooldownMultiplier = Math.max(0.4, 1 - cooldownNextLevel * SPAWNER_COOLDOWN_UPGRADE_STEP);
-    const nextCooldown = Math.max(0.35, Number((baseSpawnerType.spawnInterval * nextCooldownMultiplier).toFixed(2)));
-    options.push({
-      kind: "cooldown",
-      label: "Cooldown",
-      level: cooldownLevel,
-      maxLevel: cooldownMax,
-      atMax: cooldownAtMax,
-      cost: cooldownCost,
-      detail: cooldownAtMax
-        ? `Spawn every ${towerType.spawnInterval.toFixed(2)}s`
-        : `${towerType.spawnInterval.toFixed(2)}s -> ${nextCooldown.toFixed(2)}s`,
-    });
+    if (cooldownMax > 0) {
+      const cooldownLevel = getSpawnerCooldownUpgradeLevel(towerTypeId);
+      const cooldownAtMax = cooldownLevel >= cooldownMax;
+      const cooldownNextLevel = cooldownLevel + 1;
+      const cooldownCost = cooldownAtMax ? 0 : getSpawnerCooldownUpgradeCost(towerTypeId, cooldownNextLevel);
+      const baseSpawnerType = getSpawnerTowerType(towerTypeId) || towerType;
+      const nextCooldownMultiplier = Math.max(0.4, 1 - cooldownNextLevel * SPAWNER_COOLDOWN_UPGRADE_STEP);
+      const nextCooldown = Math.max(0.35, Number((baseSpawnerType.spawnInterval * nextCooldownMultiplier).toFixed(2)));
+      options.push({
+        kind: "cooldown",
+        label: "Cooldown",
+        level: cooldownLevel,
+        maxLevel: cooldownMax,
+        atMax: cooldownAtMax,
+        cost: cooldownCost,
+        detail: cooldownAtMax
+          ? `Spawn every ${towerType.spawnInterval.toFixed(2)}s`
+          : `${towerType.spawnInterval.toFixed(2)}s -> ${nextCooldown.toFixed(2)}s`,
+      });
+    }
   } else {
     const damageMax = getTowerDamageUpgradeMaxLevel(towerTypeId);
-    const damageLevel = getTowerDamageUpgradeLevel(towerTypeId);
-    const damageAtMax = damageLevel >= damageMax;
-    const damageNextLevel = damageLevel + 1;
-    const damageCost = damageAtMax ? 0 : getTowerDamageUpgradeCost(towerTypeId, damageNextLevel);
     const baseTowerType = TOWER_TYPES[towerTypeId] || towerType;
-    const nextDamage = Math.max(1, Math.round(baseTowerType.damage * (1 + damageNextLevel * TOWER_DAMAGE_UPGRADE_STEP)));
-    options.push({
-      kind: "damage",
-      label: "Damage",
-      level: damageLevel,
-      maxLevel: damageMax,
-      atMax: damageAtMax,
-      cost: damageCost,
-      detail: damageAtMax ? `${towerType.damage}` : `${towerType.damage} -> ${nextDamage}`,
-    });
+    if (damageMax > 0) {
+      const damageLevel = getTowerDamageUpgradeLevel(towerTypeId);
+      const damageAtMax = damageLevel >= damageMax;
+      const damageNextLevel = damageLevel + 1;
+      const damageCost = damageAtMax ? 0 : getTowerDamageUpgradeCost(towerTypeId, damageNextLevel);
+      const nextDamage = Math.max(1, Math.round(baseTowerType.damage * (1 + damageNextLevel * TOWER_DAMAGE_UPGRADE_STEP)));
+      options.push({
+        kind: "damage",
+        label: "Damage",
+        level: damageLevel,
+        maxLevel: damageMax,
+        atMax: damageAtMax,
+        cost: damageCost,
+        detail: damageAtMax ? `${towerType.damage}` : `${towerType.damage} -> ${nextDamage}`,
+      });
+    }
 
     const attackSpeedMax = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
-    const attackSpeedLevel = getTowerAttackSpeedUpgradeLevel(towerTypeId);
-    const attackSpeedAtMax = attackSpeedLevel >= attackSpeedMax;
-    const attackSpeedNextLevel = attackSpeedLevel + 1;
-    const attackSpeedCost = attackSpeedAtMax ? 0 : getTowerAttackSpeedUpgradeCost(towerTypeId, attackSpeedNextLevel);
-    const nextIntervalMultiplier = Math.max(0.35, 1 - attackSpeedNextLevel * TOWER_ATTACK_SPEED_UPGRADE_STEP);
-    const nextFireInterval = Math.max(0.05, Number((baseTowerType.fireInterval * nextIntervalMultiplier).toFixed(3)));
-    const currentShots = (1 / Math.max(0.01, towerType.fireInterval)).toFixed(2);
-    const nextShots = (1 / Math.max(0.01, nextFireInterval)).toFixed(2);
-    options.push({
-      kind: "attackSpeed",
-      label: "Attack Speed",
-      level: attackSpeedLevel,
-      maxLevel: attackSpeedMax,
-      atMax: attackSpeedAtMax,
-      cost: attackSpeedCost,
-      detail: attackSpeedAtMax ? `${currentShots}/s` : `${currentShots}/s -> ${nextShots}/s`,
-    });
+    if (attackSpeedMax > 0) {
+      const attackSpeedLevel = getTowerAttackSpeedUpgradeLevel(towerTypeId);
+      const attackSpeedAtMax = attackSpeedLevel >= attackSpeedMax;
+      const attackSpeedNextLevel = attackSpeedLevel + 1;
+      const attackSpeedCost = attackSpeedAtMax ? 0 : getTowerAttackSpeedUpgradeCost(towerTypeId, attackSpeedNextLevel);
+      const nextIntervalMultiplier = Math.max(0.35, 1 - attackSpeedNextLevel * TOWER_ATTACK_SPEED_UPGRADE_STEP);
+      const nextFireInterval = Math.max(0.05, Number((baseTowerType.fireInterval * nextIntervalMultiplier).toFixed(3)));
+      const currentShots = (1 / Math.max(0.01, towerType.fireInterval)).toFixed(2);
+      const nextShots = (1 / Math.max(0.01, nextFireInterval)).toFixed(2);
+      options.push({
+        kind: "attackSpeed",
+        label: "Attack Speed",
+        level: attackSpeedLevel,
+        maxLevel: attackSpeedMax,
+        atMax: attackSpeedAtMax,
+        cost: attackSpeedCost,
+        detail: attackSpeedAtMax ? `${currentShots}/s` : `${currentShots}/s -> ${nextShots}/s`,
+      });
+    }
 
     const rangeMax = getTowerRangeUpgradeMaxLevel(towerTypeId);
-    const rangeLevel = getTowerRangeUpgradeLevel(towerTypeId);
-    const rangeAtMax = rangeLevel >= rangeMax;
-    const rangeNextLevel = rangeLevel + 1;
-    const rangeCost = rangeAtMax ? 0 : getTowerRangeUpgradeCost(towerTypeId, rangeNextLevel);
-    const nextRangeMultiplier = 1 + rangeNextLevel * TOWER_RANGE_UPGRADE_STEP;
-    const nextRange = Math.max(1.2, Number((baseTowerType.range * nextRangeMultiplier).toFixed(2)));
-    options.push({
-      kind: "range",
-      label: "Range",
-      level: rangeLevel,
-      maxLevel: rangeMax,
-      atMax: rangeAtMax,
-      cost: rangeCost,
-      detail: rangeAtMax ? `${towerType.range.toFixed(1)}` : `${towerType.range.toFixed(1)} -> ${nextRange.toFixed(1)}`,
-    });
+    if (rangeMax > 0) {
+      const rangeLevel = getTowerRangeUpgradeLevel(towerTypeId);
+      const rangeAtMax = rangeLevel >= rangeMax;
+      const rangeNextLevel = rangeLevel + 1;
+      const rangeCost = rangeAtMax ? 0 : getTowerRangeUpgradeCost(towerTypeId, rangeNextLevel);
+      const nextRangeMultiplier = 1 + rangeNextLevel * TOWER_RANGE_UPGRADE_STEP;
+      const nextRange = Math.max(1.2, Number((baseTowerType.range * nextRangeMultiplier).toFixed(2)));
+      options.push({
+        kind: "range",
+        label: "Range",
+        level: rangeLevel,
+        maxLevel: rangeMax,
+        atMax: rangeAtMax,
+        cost: rangeCost,
+        detail: rangeAtMax ? `${towerType.range.toFixed(1)}` : `${towerType.range.toFixed(1)} -> ${nextRange.toFixed(1)}`,
+      });
+    }
   }
 
   const capMax = getTowerCapUpgradeMaxLevel(towerTypeId);
-  const capLevel = getTowerCapUpgradeLevel(towerTypeId);
-  const capAtMax = capLevel >= capMax;
-  const capNextLevel = capLevel + 1;
-  const capCost = capAtMax ? 0 : getTowerCapUpgradeCost(towerTypeId, capNextLevel);
-  const capCurrent = getTowerPlaceCap(towerTypeId);
-  const capNext = Math.min(TOWER_CAP_HARD_LIMIT, capCurrent + 1);
-  options.push({
-    kind: "placementCap",
-    label: "Placement Cap",
-    level: capLevel,
-    maxLevel: capMax,
-    atMax: capAtMax,
-    cost: capCost,
-    detail: capAtMax ? `${capCurrent}` : `${capCurrent} -> ${capNext}`,
-  });
+  if (capMax > 0) {
+    const capLevel = getTowerCapUpgradeLevel(towerTypeId);
+    const capAtMax = capLevel >= capMax;
+    const capNextLevel = capLevel + 1;
+    const capCost = capAtMax ? 0 : getTowerCapUpgradeCost(towerTypeId, capNextLevel);
+    const capCurrent = getTowerPlaceCap(towerTypeId);
+    const capNext = Math.min(TOWER_CAP_HARD_LIMIT, capCurrent + 1);
+    options.push({
+      kind: "placementCap",
+      label: "Placement Cap",
+      level: capLevel,
+      maxLevel: capMax,
+      atMax: capAtMax,
+      cost: capCost,
+      detail: capAtMax ? `${capCurrent}` : `${capCurrent} -> ${capNext}`,
+    });
+  }
 
   return options;
 }
@@ -12089,7 +12124,7 @@ function renderLoadoutMenu() {
     const infoLine = isSpawner
       ? `Spawner | Spawn ${Math.max(1, Math.floor(type.spawnCount || 1))} every ${type.spawnInterval.toFixed(2)}s`
       : isTrap
-        ? `Trap | DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        ? `Trap | DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
         : type.manualAreaTargeting
           ? `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
         : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
@@ -12648,7 +12683,7 @@ function renderTrapShop() {
       <div class="${itemClasses}">
         <div>
           <strong>${type.name}</strong>
-          <span>Trap | DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}</span>
+          <span>Trap | DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}</span>
           <span>${type.summary} | Lane tile only</span>
         </div>
         <button
