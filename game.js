@@ -36,6 +36,7 @@ const speedUpBtn = $id("speedUpBtn");
 const menuScreenEl = $id("menuScreen");
 const menuCardEl = $id("menuCard");
 const buildStampEl = $id("buildStamp");
+const menuShardCornerEl = $id("menuShardCorner");
 const playBtn = $id("playBtn");
 const mapPrevBtn = $id("mapPrevBtn");
 const mapNextBtn = $id("mapNextBtn");
@@ -199,7 +200,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-76";
+const BUILD_ID = "2026-02-20-77";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4053,6 +4054,7 @@ function updateMenuHud() {
   if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
   if (menuShardsEl) menuShardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
+  if (menuShardCornerEl) menuShardCornerEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
   if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
   if (speedControlEl) speedControlEl.hidden = true;
   if (autoWaveBtn) autoWaveBtn.hidden = true;
