@@ -25,6 +25,7 @@ const unlockBtn = $id("unlockBtn");
 const menuBtn = $id("menuBtn");
 const startWaveBtn = $id("startWaveBtn");
 const pauseBtn = $id("pauseBtn");
+const fullscreenBtn = $id("fullscreenBtn");
 const autoWaveBtn = $id("autoWaveBtn");
 const shopEl = $id("shop");
 const speedControlEl = $id("speedControl");
@@ -38,6 +39,7 @@ const menuCardEl = $id("menuCard");
 const buildStampEl = $id("buildStamp");
 const menuShardCornerEl = $id("menuShardCorner");
 const playBtn = $id("playBtn");
+const menuFullscreenBtn = $id("menuFullscreenBtn");
 const mapPrevBtn = $id("mapPrevBtn");
 const mapNextBtn = $id("mapNextBtn");
 const mapPreviewEl = $id("mapPreview");
@@ -1797,6 +1799,9 @@ const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
 const ALLY_SPAWN_GAP_PADDING = 0.08;
 const ALLY_SPAWN_SLOT_MAX = 8;
+const SAME_TYPE_SPAWNER_GAP_FRACTION = 0.08;
+const SAME_TYPE_SPAWNER_GAP_MIN = 0.08;
+const SAME_TYPE_SPAWNER_GAP_MAX = 0.24;
 
 const CREATURE_SPAWNER_UNLOCKS = {
   crawler: { killRequirement: 200, towerCost: 260, spawnInterval: 2.3 },
@@ -2912,7 +2917,7 @@ const mapState = {
   meteorStorm: {
     active: false,
     spawnTimer: 0,
-    maxActiveEffects: 8,
+    maxActiveEffects: 6,
     screenShake: {
       time: 0,
       power: 0,
@@ -3356,6 +3361,8 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
 
 const EMBER_METEOR_UP_AXIS = new THREE.Vector3(0, 1, 0);
 const emberMeteorTargetScratch = new THREE.Vector3();
+const EMBER_METEOR_SPAWN_ATTEMPT_CAP_PER_TICK = 6;
+const EMBER_METEOR_TRAIL_LOOP_CAP_PER_TICK = 6;
 
 function triggerMeteorScreenShake(power = 1) {
   const shake = mapState.meteorStorm?.screenShake;
@@ -3411,7 +3418,7 @@ class EmberMeteorDecorEffect {
     this.fallDuration = 0.52 + Math.random() * 0.34;
     this.impactDuration = 1.05 + Math.random() * 0.35;
     this.trailSpawnTimer = 0;
-    this.maxTrailParticles = 8;
+    this.maxTrailParticles = 6;
 
     this.target = new THREE.Vector3(targetX, targetY + 0.06, targetZ);
     const arcAngle = Math.random() * Math.PI * 2;
@@ -3670,7 +3677,7 @@ class EmberMeteorDecorEffect {
     this.impactLight = impactLight;
     triggerMeteorScreenShake(0.95 + this.coreRadius * 1.55);
 
-    const sparkCount = 10 + Math.floor(Math.random() * 5);
+    const sparkCount = 8 + Math.floor(Math.random() * 4);
     for (let i = 0; i < sparkCount; i += 1) {
       const size = 0.06 + Math.random() * 0.12;
       const mesh = new THREE.Mesh(
@@ -3700,7 +3707,7 @@ class EmberMeteorDecorEffect {
       this.sparks.push({ mesh, velocity, spin, age: 0, life: 0.45 + Math.random() * 0.7 });
     }
 
-    const smokeCount = 6 + Math.floor(Math.random() * 4);
+    const smokeCount = 5 + Math.floor(Math.random() * 3);
     for (let i = 0; i < smokeCount; i += 1) {
       const size = 0.22 + Math.random() * 0.24;
       const mesh = new THREE.Mesh(
@@ -3729,7 +3736,9 @@ class EmberMeteorDecorEffect {
   }
 
   updateFalling(dt) {
-    this.age += dt;
+    if (!this.root || !this.core || !this.shell || !this.tail || !this.light) return false;
+    const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    this.age += safeDt;
     const t = THREE.MathUtils.clamp(this.age / this.fallDuration, 0, 1);
     const eased = 1 - Math.pow(1 - t, 2.45);
     this.position.lerpVectors(this.start, this.target, eased);
@@ -3742,32 +3751,39 @@ class EmberMeteorDecorEffect {
     this.root.position.copy(this.position);
     this.prevPosition.copy(this.position);
 
-    this.core.rotation.y += dt * 10;
-    this.core.rotation.z += dt * 7.2;
+    this.core.rotation.y += safeDt * 10;
+    this.core.rotation.z += safeDt * 7.2;
     const flicker = 0.86 + Math.sin(game.time * 20 + this.target.x * 0.06 + this.target.z * 0.08) * 0.16;
     this.shell.scale.setScalar(flicker);
     this.tail.scale.set(1, 0.9 + Math.sin(game.time * 18 + this.target.z * 0.04) * 0.22, 1);
     this.light.intensity = 1.15 + Math.sin(game.time * 24 + this.target.x * 0.05) * 0.28;
 
-    this.trailSpawnTimer -= dt;
-    while (this.trailSpawnTimer <= 0) {
+    this.trailSpawnTimer -= safeDt;
+    let trailLoops = 0;
+    while (this.trailSpawnTimer <= 0 && trailLoops < EMBER_METEOR_TRAIL_LOOP_CAP_PER_TICK) {
       this.spawnTrailParticle();
       this.trailSpawnTimer += 0.055 + Math.random() * 0.04;
+      trailLoops += 1;
     }
-    this.updateTrailParticles(dt);
+    if (this.trailSpawnTimer <= 0) {
+      // Failsafe: recover timer if it drifted too far negative so one frame can't stall.
+      this.trailSpawnTimer = 0.06 + Math.random() * 0.04;
+    }
+    this.updateTrailParticles(safeDt);
 
     if (t >= 1) this.beginImpact();
     return true;
   }
 
   updateImpact(dt) {
-    this.age += dt;
+    const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    this.age += safeDt;
     const impactT = THREE.MathUtils.clamp(this.age / this.impactDuration, 0, 1);
 
     for (const ring of this.impactRings) {
       const scale = 1 + impactT * ring.grow;
       ring.mesh.scale.set(scale, scale, scale);
-      ring.mesh.material.opacity = Math.max(0, ring.mesh.material.opacity - dt * ring.fade);
+      ring.mesh.material.opacity = Math.max(0, ring.mesh.material.opacity - safeDt * ring.fade);
     }
 
     if (this.impactPlume) {
@@ -3787,12 +3803,12 @@ class EmberMeteorDecorEffect {
 
     const aliveSparks = [];
     for (const spark of this.sparks) {
-      spark.age += dt;
-      spark.velocity.y += -17 * dt;
-      spark.mesh.position.addScaledVector(spark.velocity, dt);
-      spark.mesh.rotation.x += spark.spin.x * dt;
-      spark.mesh.rotation.y += spark.spin.y * dt;
-      spark.mesh.rotation.z += spark.spin.z * dt;
+      spark.age += safeDt;
+      spark.velocity.y += -17 * safeDt;
+      spark.mesh.position.addScaledVector(spark.velocity, safeDt);
+      spark.mesh.rotation.x += spark.spin.x * safeDt;
+      spark.mesh.rotation.y += spark.spin.y * safeDt;
+      spark.mesh.rotation.z += spark.spin.z * safeDt;
 
       const floorY = getLaneSurfaceY(spark.mesh.position.x, spark.mesh.position.z) + 0.02;
       if (spark.mesh.position.y <= floorY && spark.velocity.y < 0) {
@@ -3816,10 +3832,10 @@ class EmberMeteorDecorEffect {
 
     const aliveSmoke = [];
     for (const puff of this.smoke) {
-      puff.age += dt;
-      puff.mesh.position.addScaledVector(puff.velocity, dt);
-      puff.velocity.multiplyScalar(Math.exp(-1.8 * dt));
-      puff.velocity.y += 0.4 * dt;
+      puff.age += safeDt;
+      puff.mesh.position.addScaledVector(puff.velocity, safeDt);
+      puff.velocity.multiplyScalar(Math.exp(-1.8 * safeDt));
+      puff.velocity.y += 0.4 * safeDt;
 
       const smokeT = Math.min(1, puff.age / puff.life);
       puff.mesh.material.opacity = Math.max(0, 0.46 * (1 - smokeT));
@@ -3834,11 +3850,12 @@ class EmberMeteorDecorEffect {
     }
     this.smoke = aliveSmoke;
 
-    this.updateTrailParticles(dt);
+    this.updateTrailParticles(safeDt);
     return impactT < 1 || this.trail.length > 0 || this.sparks.length > 0 || this.smoke.length > 0;
   }
 
   update(dt) {
+    if (!Number.isFinite(dt)) return false;
     if (this.phase === "falling") return this.updateFalling(dt);
     return this.updateImpact(dt);
   }
@@ -3902,6 +3919,7 @@ function spawnEmberMeteorDecor() {
 function updateEmberWave40MeteorStorm(dt) {
   const storm = mapState.meteorStorm;
   const active = isEmberWave40BossFightActive();
+  const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
 
   if (active) {
     if (!storm.active) {
@@ -3909,13 +3927,20 @@ function updateEmberWave40MeteorStorm(dt) {
       storm.spawnTimer = 0.34;
     }
 
-    storm.spawnTimer -= dt;
-    while (storm.spawnTimer <= 0) {
+    if (!Number.isFinite(storm.spawnTimer)) storm.spawnTimer = 0.34;
+    storm.spawnTimer -= safeDt;
+    let spawnAttempts = 0;
+    while (storm.spawnTimer <= 0 && spawnAttempts < EMBER_METEOR_SPAWN_ATTEMPT_CAP_PER_TICK) {
       const burstCount = Math.random() < 0.18 ? 2 : 1;
       for (let i = 0; i < burstCount; i += 1) {
         if (!spawnEmberMeteorDecor()) break;
       }
       storm.spawnTimer += 0.56 + Math.random() * 0.72;
+      spawnAttempts += 1;
+    }
+    if (storm.spawnTimer <= 0) {
+      // Failsafe: never let one update tick chew through an unbounded spawn backlog.
+      storm.spawnTimer = 0.18 + Math.random() * 0.16;
     }
   } else {
     storm.active = false;
@@ -3925,12 +3950,17 @@ function updateEmberWave40MeteorStorm(dt) {
   if (mapState.meteorEffects.length > 0) {
     const aliveEffects = [];
     for (const meteor of mapState.meteorEffects) {
-      if (meteor.update(dt)) aliveEffects.push(meteor);
-      else meteor.dispose();
+      try {
+        if (meteor.update(safeDt)) aliveEffects.push(meteor);
+        else meteor.dispose();
+      } catch (error) {
+        console.error("Ember meteor effect update failed:", error);
+        meteor.dispose();
+      }
     }
     mapState.meteorEffects = aliveEffects;
   }
-  updateMeteorScreenShake(dt);
+  updateMeteorScreenShake(safeDt);
 }
 
 const previewBaseMat = new THREE.MeshStandardMaterial({
@@ -4110,6 +4140,7 @@ const game = {
   wave: 0,
   inWave: false,
   waveCreditsEarned: 0,
+  allySpawnTypeLastTime: Object.create(null),
   spawnLeft: 0,
   spawnTimer: 0,
   spawnQueue: [],
@@ -9352,10 +9383,23 @@ class Tower {
     if (this.isSpawner) {
       if (!game.inWave) return;
       if (this.cooldown > 0) return;
+      const spawnTypeId = this.spawnEnemyTypeId;
+      const sameTypeGap = getSameTypeSpawnerGapSeconds(this.spawnInterval);
+      const lastSpawnTime = spawnTypeId ? game.allySpawnTypeLastTime[spawnTypeId] : null;
+      if (spawnTypeId && Number.isFinite(lastSpawnTime)) {
+        const sinceLastSpawn = game.time - lastSpawnTime;
+        if (sinceLastSpawn < sameTypeGap) {
+          this.cooldown = Math.max(this.cooldown, sameTypeGap - sinceLastSpawn);
+          return;
+        }
+      }
       let spawnedCount = 0;
       for (let i = 0; i < this.spawnCount; i += 1) {
-        if (!spawnAllyFromTower(this.spawnEnemyTypeId)) break;
+        if (!spawnAllyFromTower(spawnTypeId)) break;
         spawnedCount += 1;
+      }
+      if (spawnedCount > 0 && spawnTypeId) {
+        game.allySpawnTypeLastTime[spawnTypeId] = game.time;
       }
       this.cooldown = spawnedCount > 0 ? this.spawnInterval : Math.min(0.8, this.spawnInterval * 0.3);
       return;
@@ -10897,6 +10941,78 @@ function onStatusClick() {
   applyStatusExpansionState();
 }
 
+function canUseFullscreenApi() {
+  const root = document.documentElement;
+  if (!root) return false;
+  const request =
+    root.requestFullscreen ||
+    root.webkitRequestFullscreen ||
+    root.msRequestFullscreen;
+  const exit =
+    document.exitFullscreen ||
+    document.webkitExitFullscreen ||
+    document.msExitFullscreen;
+  return typeof request === "function" && typeof exit === "function";
+}
+
+function isFullscreenActive() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+}
+
+function updateFullscreenButtons() {
+  const supported = canUseFullscreenApi();
+  const active = supported && isFullscreenActive();
+  const label = !supported ? "Fullscreen N/A" : active ? "Exit Fullscreen" : "Fullscreen";
+  const title = !supported ? "Fullscreen not supported on this browser" : active ? "Exit fullscreen" : "Enter fullscreen";
+  if (fullscreenBtn) {
+    fullscreenBtn.textContent = label;
+    fullscreenBtn.title = title;
+    fullscreenBtn.disabled = !supported;
+  }
+  if (menuFullscreenBtn) {
+    menuFullscreenBtn.textContent = label;
+    menuFullscreenBtn.title = title;
+    menuFullscreenBtn.disabled = !supported;
+  }
+}
+
+function requestFullscreenCompat() {
+  const root = document.documentElement;
+  if (!root) return Promise.reject(new Error("Document root unavailable."));
+  const request =
+    root.requestFullscreen ||
+    root.webkitRequestFullscreen ||
+    root.msRequestFullscreen;
+  if (typeof request !== "function") return Promise.reject(new Error("Fullscreen request API unavailable."));
+  return Promise.resolve(request.call(root));
+}
+
+function exitFullscreenCompat() {
+  const exit =
+    document.exitFullscreen ||
+    document.webkitExitFullscreen ||
+    document.msExitFullscreen;
+  if (typeof exit !== "function") return Promise.reject(new Error("Fullscreen exit API unavailable."));
+  return Promise.resolve(exit.call(document));
+}
+
+async function toggleFullscreenMode() {
+  if (!canUseFullscreenApi()) {
+    setStatus("Fullscreen is not supported in this browser.", true);
+    updateFullscreenButtons();
+    return;
+  }
+  try {
+    if (isFullscreenActive()) await exitFullscreenCompat();
+    else await requestFullscreenCompat();
+  } catch (error) {
+    console.error("Fullscreen toggle failed:", error);
+    setStatus("Unable to change fullscreen mode on this device.", true);
+  } finally {
+    updateFullscreenButtons();
+  }
+}
+
 function setStatus(message, danger = false) {
   statusEl.innerHTML = decorateShardWordsForHtml(message);
   statusEl.style.color = danger ? "#ff8f8f" : "#bfd6e8";
@@ -11222,6 +11338,7 @@ function clearActiveCombatState() {
   game.debris = [];
   game.inWave = false;
   game.waveCreditsEarned = 0;
+  game.allySpawnTypeLastTime = Object.create(null);
   game.spawnQueue = [];
   game.spawnLeft = 0;
   game.spawnTimer = 0;
@@ -11615,6 +11732,11 @@ function createAllyStatsForType(enemyTypeId) {
     radius: enemyStats.radius,
     hoverHeight: enemyStats.hoverHeight,
   };
+}
+
+function getSameTypeSpawnerGapSeconds(spawnInterval) {
+  const interval = Number.isFinite(spawnInterval) ? Math.max(0.35, spawnInterval) : 1;
+  return Math.min(SAME_TYPE_SPAWNER_GAP_MAX, Math.max(SAME_TYPE_SPAWNER_GAP_MIN, interval * SAME_TYPE_SPAWNER_GAP_FRACTION));
 }
 
 function resolveAllySpawnPosition(radius) {
@@ -13718,6 +13840,7 @@ function startWave() {
   game.editingLane = false;
   game.wave += 1;
   game.inWave = true;
+  game.allySpawnTypeLastTime = Object.create(null);
   game.waveCreditsEarned = 0;
   const profile = getLevelDifficultyProfile(game.currentLevel);
   const baseSpawnCount = 7 + game.wave * 2;
@@ -14506,6 +14629,8 @@ if (menuLoadoutSearchEl) {
 }
 startWaveBtn.addEventListener("click", startWave);
 if (pauseBtn) pauseBtn.addEventListener("click", togglePause);
+if (fullscreenBtn) fullscreenBtn.addEventListener("click", toggleFullscreenMode);
+if (menuFullscreenBtn) menuFullscreenBtn.addEventListener("click", toggleFullscreenMode);
 if (speedDownBtn) speedDownBtn.addEventListener("click", () => stepGameSpeed(-1));
 if (speedUpBtn) speedUpBtn.addEventListener("click", () => stepGameSpeed(1));
 if (hostMultiplayerBtn) hostMultiplayerBtn.addEventListener("click", hostMultiplayerSession);
@@ -14723,6 +14848,9 @@ document.addEventListener("visibilitychange", () => {
     void flushPersistProgressToIndexedDb();
   }
 });
+document.addEventListener("fullscreenchange", updateFullscreenButtons);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButtons);
+document.addEventListener("MSFullscreenChange", updateFullscreenButtons);
 window.addEventListener("beforeunload", () => {
   leaveMultiplayerSession(true);
   savePlayerProgress();
@@ -14747,6 +14875,7 @@ openMenuShop();
 void initializeCloudAuth();
 if (menuScreenEl) menuScreenEl.hidden = false;
 if (playBtn) playBtn.addEventListener("click", () => startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel()));
+updateFullscreenButtons();
 if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
   const pendingName = getAccountDisplayName(pendingAccount, "your account");
