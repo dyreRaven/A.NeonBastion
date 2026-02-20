@@ -718,7 +718,16 @@ body:not(.menu-active) .menu-screen {
 }
 
 #menuAccountPanel {
+  margin-top: -0.18rem;
   grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  align-content: stretch;
+  height: min(80vh, 660px);
+}
+
+.menu-card[data-view="account"] {
+  max-height: min(95vh, 860px);
+  padding-top: 1.18rem;
+  padding-bottom: 1.02rem;
 }
 
 #menuShopPanel {
@@ -1108,6 +1117,7 @@ body:not(.menu-active) .menu-screen {
 #menuAccountList {
   min-height: 0;
   overflow-y: auto;
+  align-content: start;
 }
 
 #menuAccountNote {
@@ -2428,6 +2438,17 @@ canvas {
   .menu-shop-panel {
     height: auto;
     max-height: min(76vh, 620px);
+  }
+
+  .menu-card[data-view="account"] {
+    padding-top: 0.74rem;
+    padding-bottom: 0.72rem;
+  }
+
+  .menu-card[data-view="account"] #menuAccountPanel {
+    margin-top: -0.06rem;
+    height: min(82vh, 720px);
+    max-height: none;
   }
 
   .menu-account-auth {
