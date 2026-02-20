@@ -214,6 +214,7 @@ const audioSystem = {
   musicGain: null,
   compressor: null,
   shotCooldownUntil: 0,
+  bombShotCooldownUntil: 0,
   notificationCooldownUntil: 0,
   glassNoiseBuffer: null,
   bossPulseTimer: null,
@@ -513,6 +514,83 @@ const audioSystem = {
       clickGain.connect(this.sfxGain);
       click.start(now);
       click.stop(now + 0.02);
+    }
+  },
+
+  playBombarderShot(damage = 420, splashRadius = 2.8) {
+    const ctx = this.ensure();
+    if (!ctx || ctx.state !== "running" || !this.sfxGain || !this.sfxEnabled || !this.shotSfxEnabled) return;
+
+    const now = ctx.currentTime;
+    if (now < this.bombShotCooldownUntil) return;
+    this.bombShotCooldownUntil = now + 0.06;
+
+    const damageNorm = Math.max(120, Math.min(1600, Number(damage) || 420));
+    const splashNorm = Math.max(0.8, Math.min(6, Number(splashRadius) || 2.8));
+    const intensity = Math.max(0.68, Math.min(2.5, damageNorm / 560 + splashNorm * 0.2));
+    const boomDuration = 0.2 + intensity * 0.08;
+    const boomPeak = Math.min(0.21, 0.05 + intensity * 0.045);
+
+    const boom = ctx.createOscillator();
+    boom.type = "sine";
+    boom.frequency.setValueAtTime(96 + intensity * 12 + Math.random() * 6, now);
+    boom.frequency.exponentialRampToValueAtTime(Math.max(28, 40 + intensity * 2), now + boomDuration);
+
+    const boomFilter = ctx.createBiquadFilter();
+    boomFilter.type = "lowpass";
+    boomFilter.frequency.setValueAtTime(320 + intensity * 80, now);
+    boomFilter.Q.value = 0.85;
+
+    const boomGain = ctx.createGain();
+    boomGain.gain.setValueAtTime(0.0001, now);
+    boomGain.gain.exponentialRampToValueAtTime(boomPeak, now + 0.008);
+    boomGain.gain.exponentialRampToValueAtTime(0.0001, now + boomDuration);
+
+    boom.connect(boomFilter);
+    boomFilter.connect(boomGain);
+    boomGain.connect(this.sfxGain);
+    boom.start(now);
+    boom.stop(now + boomDuration + 0.04);
+
+    const body = ctx.createOscillator();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(142 + intensity * 18, now + 0.004);
+    body.frequency.exponentialRampToValueAtTime(Math.max(55, 74 + intensity * 6), now + boomDuration * 0.72);
+
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(0.0001, now + 0.004);
+    bodyGain.gain.exponentialRampToValueAtTime(Math.min(0.11, boomPeak * 0.6), now + 0.016);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + boomDuration * 0.8);
+    body.connect(bodyGain);
+    bodyGain.connect(this.sfxGain);
+    body.start(now + 0.004);
+    body.stop(now + boomDuration * 0.82 + 0.02);
+
+    const noiseBuffer = this.getGlassNoiseBuffer();
+    if (noiseBuffer) {
+      const blast = ctx.createBufferSource();
+      blast.buffer = noiseBuffer;
+
+      const blastBand = ctx.createBiquadFilter();
+      blastBand.type = "bandpass";
+      blastBand.Q.value = 1.35;
+      blastBand.frequency.setValueAtTime(520 + intensity * 120 + Math.random() * 80, now);
+
+      const blastHigh = ctx.createBiquadFilter();
+      blastHigh.type = "highpass";
+      blastHigh.frequency.setValueAtTime(120 + intensity * 60, now);
+
+      const blastGain = ctx.createGain();
+      blastGain.gain.setValueAtTime(0.0001, now);
+      blastGain.gain.exponentialRampToValueAtTime(Math.min(0.13, 0.04 + intensity * 0.03), now + 0.004);
+      blastGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.085 + intensity * 0.03);
+
+      blast.connect(blastBand);
+      blastBand.connect(blastHigh);
+      blastHigh.connect(blastGain);
+      blastGain.connect(this.sfxGain);
+      blast.start(now);
+      blast.stop(now + 0.12 + intensity * 0.03);
     }
   },
 
@@ -9198,9 +9276,14 @@ class Tower {
       const origin = new THREE.Vector3();
       if (this.muzzle) this.muzzle.getWorldPosition(origin);
       else origin.set(this.x, this.y + 1.1, this.z);
+      const muzzleDir = new THREE.Vector3(this.areaTargetX - origin.x, this.areaTargetY - origin.y, this.areaTargetZ - origin.z);
+      if (muzzleDir.lengthSq() > 1e-6) muzzleDir.normalize();
+      else muzzleDir.set(0, 0, 1);
 
       this.cooldown = this.fireInterval;
       audioSystem.playTowerShot(this.damage * 1.08);
+      audioSystem.playBombarderShot(this.damage, this.splashRadius);
+      game.debris.push(new BombardMuzzleFireEffect(origin, muzzleDir, this.projectileColor, this.projectileRadius));
       game.projectiles.push(
         new BombardProjectile(
           origin,
@@ -9432,6 +9515,90 @@ function applyBombardSplashDamage(centerX, centerZ, damage, splashRadius) {
     const splashDamage = Math.max(1, Math.round(safeDamage * falloff));
     const killed = enemy.applyDamage(splashDamage);
     if (killed) handleEnemyDefeated(enemy);
+  }
+}
+
+class BombardMuzzleFireEffect {
+  constructor(origin, direction, color, radius) {
+    this.age = 0;
+    this.life = 0.22;
+    this.baseSize = Math.max(0.08, Number(radius) || 0.08);
+    this.origin = origin.clone();
+    this.direction = direction.clone();
+    if (this.direction.lengthSq() > 1e-6) this.direction.normalize();
+    else this.direction.set(0, 0, 1);
+
+    const flameColor = new THREE.Color(color).lerp(new THREE.Color("#ffcf9a"), 0.32);
+    this.group = new THREE.Group();
+    this.group.position.copy(this.origin).addScaledVector(this.direction, this.baseSize * 0.2);
+    this.group.quaternion.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
+
+    this.flameMat = new THREE.MeshBasicMaterial({
+      color: flameColor,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.flame = new THREE.Mesh(
+      new THREE.ConeGeometry(this.baseSize * 0.86, this.baseSize * 3.7, 12, 1, true),
+      this.flameMat
+    );
+    this.flame.rotation.x = Math.PI / 2;
+    this.flame.position.z = this.baseSize * 1.24;
+    this.group.add(this.flame);
+
+    this.coreMat = new THREE.MeshBasicMaterial({
+      color: flameColor.clone().lerp(new THREE.Color("#fff0cb"), 0.38),
+      transparent: true,
+      opacity: 0.84,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.core = new THREE.Mesh(new THREE.SphereGeometry(this.baseSize * 0.78, 12, 12), this.coreMat);
+    this.core.position.z = this.baseSize * 0.34;
+    this.group.add(this.core);
+
+    this.ringMat = new THREE.MeshBasicMaterial({
+      color: flameColor,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.ring = new THREE.Mesh(
+      new THREE.RingGeometry(this.baseSize * 0.56, this.baseSize * 0.92, 20),
+      this.ringMat
+    );
+    this.ring.position.z = this.baseSize * 0.18;
+    this.group.add(this.ring);
+
+    this.light = new THREE.PointLight(flameColor, 2.7, 8.8, 2);
+    this.light.position.set(0, 0, this.baseSize * 0.26);
+    this.group.add(this.light);
+
+    scene.add(this.group);
+  }
+
+  update(dt) {
+    this.age += dt;
+    const t = THREE.MathUtils.clamp(this.age / this.life, 0, 1);
+    this.group.position.addScaledVector(this.direction, dt * (6.1 + this.baseSize * 7.8));
+    this.flame.scale.set(1 + t * 1.9, 1 + t * 1.9, 1 + t * 1.25);
+    this.core.scale.setScalar(1 + t * 1.3);
+    this.ring.scale.set(1 + t * 2.4, 1 + t * 2.4, 1);
+    this.flameMat.opacity = Math.max(0, 0.92 * (1 - t * 1.45));
+    this.coreMat.opacity = Math.max(0, 0.84 * (1 - t * 1.28));
+    this.ringMat.opacity = Math.max(0, 0.72 * (1 - t * 1.18));
+    this.light.intensity = Math.max(0, 2.7 * (1 - t) * (1 - t * 0.25));
+    return t < 1;
+  }
+
+  dispose() {
+    disposeSceneObject(this.group);
+    this.group = null;
   }
 }
 
