@@ -121,7 +121,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-27";
+const BUILD_ID = "2026-02-19-28";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -6766,7 +6766,7 @@ function updateMultiplayerNetwork(dt) {
 }
 
 function setStatus(message, danger = false) {
-  statusEl.textContent = message;
+  statusEl.innerHTML = decorateShardWordsForHtml(message);
   statusEl.style.color = danger ? "#ff8f8f" : "#bfd6e8";
 }
 
@@ -7629,7 +7629,7 @@ function renderLoadoutMenu() {
         <div class="menu-loadout-upgrade-panel">
           ${options
             .map((option) => {
-              const buttonLabel = option.atMax ? "Maxed" : `${option.cost} Shards`;
+              const buttonLabel = option.atMax ? "Maxed" : `${option.cost} ${formatShardWordHtml("Shards")}`;
               const buttonDisabled = option.atMax || option.maxLevel <= 0 ? "disabled" : "";
               return `
                 <div class="menu-loadout-upgrade-row">
@@ -7784,6 +7784,14 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;");
 }
 
+function decorateShardWordsForHtml(text) {
+  return escapeHtml(text).replace(/\b([Ss]hards?)\b/g, '<span class="shard-word-inline">$1</span>');
+}
+
+function formatShardWordHtml(word = "Shards") {
+  return `<span class="shard-word-inline">${escapeHtml(word)}</span>`;
+}
+
 function renderAccountMenu() {
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
   if (!menuAccountEl) return;
@@ -7797,7 +7805,7 @@ function renderAccountMenu() {
       <div class="menu-account-item ${active ? "active" : ""}">
         <div>
           <strong>${escapeHtml(account.name)}</strong>
-          <span>${account.shards} shards | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
+          <span>${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
         </div>
         <div class="menu-account-actions">
           <button type="button" data-account-action="switch" data-account-id="${account.id}" ${active ? "disabled" : ""}>
@@ -7973,7 +7981,7 @@ function renderMenuShop() {
           data-unlock-type="${towerTypeId}"
           ${unlocked ? "disabled" : ""}
         >
-          ${unlocked ? "Unlocked" : `${unlock.shardCost} Shards`}
+          ${unlocked ? "Unlocked" : `${unlock.shardCost} ${formatShardWordHtml("Shards")}`}
         </button>
       </div>
     `);
@@ -8229,7 +8237,11 @@ function openLevelClearPanel() {
   closeSettingsPanel();
   closeCommandConsole();
   if (levelClearTitleEl) levelClearTitleEl.textContent = game.levelClearTitle || "Level Cleared";
-  if (levelClearTextEl) levelClearTextEl.textContent = game.levelClearText || "Victory confirmed. New map access awarded.";
+  if (levelClearTextEl) {
+    levelClearTextEl.innerHTML = decorateShardWordsForHtml(
+      game.levelClearText || "Victory confirmed. New map access awarded."
+    );
+  }
   game.levelClearOpen = true;
   levelClearPanelEl.hidden = false;
   updateHud();
@@ -8347,8 +8359,8 @@ function updateHud() {
   const placement = getTowerPlacementStats(game.selectedTowerType);
   const selectedCapInfo = getTowerCapBreakdown(game.selectedTowerType);
   moneyEl.textContent = `Credits: ${game.money}`;
-  if (shardsEl) shardsEl.textContent = `Shards: ${game.shards}`;
-  if (menuShardsEl) menuShardsEl.textContent = `Shards: ${game.shards}`;
+  if (shardsEl) shardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
+  if (menuShardsEl) menuShardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
   if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
   if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();

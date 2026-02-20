@@ -10,6 +10,7 @@
   --line: rgba(179, 219, 255, 0.2);
   --line-strong: rgba(173, 223, 255, 0.32);
   --danger: #ff5d5d;
+  --shard-accent: #b67dff;
 }
 
 * {
@@ -483,6 +484,20 @@ body:not(.menu-active) .menu-screen {
 #menuMultiplayerPlayerCount {
   min-width: 52px;
   text-align: center;
+}
+
+.shard-word-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22em;
+  white-space: nowrap;
+}
+
+.shard-word-inline::before {
+  content: "◈";
+  color: var(--shard-accent);
+  font-size: 0.72em;
+  text-shadow: 0 0 8px rgba(182, 125, 255, 0.6);
 }
 
 .menu-multiplayer-players-head h3,
@@ -1427,7 +1442,10 @@ button.active {
   min-height: 24px;
   border-radius: 999px;
   padding: 0.12rem 0.36rem;
-  font-size: 0.62rem;
+  font-size: 0.9rem;
+  font-family: "Segoe UI Symbol", "Segoe UI", "Space Grotesk", sans-serif;
+  font-weight: 700;
+  line-height: 1;
   letter-spacing: 0.05em;
   border-color: rgba(189, 229, 255, 0.48);
   background: linear-gradient(180deg, rgba(126, 182, 220, 0.3), rgba(30, 58, 80, 0.5));

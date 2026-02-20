@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260219ab" />
+    <link rel="stylesheet" href="styles.css?v=20260219ac" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -65,10 +65,13 @@
         <section id="menuShopPanel" class="menu-shop-panel" aria-label="Tower unlock shop">
           <div class="menu-shop-head">
             <h2>Tower Unlock Shop</h2>
-            <span id="menuShards">Shards: 0</span>
+            <span id="menuShards"><span class="shard-word-inline">Shards</span>: 0</span>
           </div>
           <div id="menuShop" class="menu-shop-list"></div>
-          <p class="menu-shop-note">Earn shards from cleared waves: 1% of wave credits, rounded up. Spend shards on tower unlocks.</p>
+          <p class="menu-shop-note">
+            Earn <span class="shard-word-inline">shards</span> from cleared waves: 1% of wave credits, rounded up. Spend
+            <span class="shard-word-inline">shards</span> on tower unlocks.
+          </p>
           <div class="menu-shop-actions">
             <button id="openCreatureFromUnlockBtn" type="button">Creature Spawner Shop</button>
             <button id="closeUnlockShopBtn" class="menu-play-btn" type="button">Menu Page</button>
@@ -207,7 +210,7 @@
             <h1>Neon Bastion</h1>
             <div class="stats">
               <span id="money">Credits: 0</span>
-              <span id="shards">Shards: 0</span>
+              <span id="shards"><span class="shard-word-inline">Shards</span>: 0</span>
               <span id="lives">Core HP: 0</span>
               <span id="wave">Wave: 0</span>
               <span id="multiplayerPlayersHud">Players: Solo</span>
@@ -262,7 +265,7 @@
       <button id="speedUpBtn" type="button" aria-label="Increase speed">&gt;</button>
     </div>
     <button id="settingsToggleBtn" class="settings-toggle-btn" type="button" aria-label="Open settings">
-      SET
+      ⚙
     </button>
     <section id="settingsPanel" class="settings-panel" aria-label="Audio settings" hidden>
       <div class="settings-panel-head">
@@ -320,6 +323,6 @@
     </section>
 
     <script src="vendor/three.min.js"></script>
-    <script src="game.js?v=20260219ab"></script>
+    <script src="game.js?v=20260219ac"></script>
   </body>
 </html>
