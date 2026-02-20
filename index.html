@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260220am" />
+    <link rel="stylesheet" href="styles.css?v=20260220b" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -113,6 +113,7 @@
           </p>
           <div class="menu-shop-actions">
             <button id="openCreatureFromUnlockBtn" type="button">Creature Spawner Shop</button>
+            <button id="openTrapFromUnlockBtn" type="button">Trap Shop</button>
             <button id="closeUnlockShopBtn" class="menu-play-btn" type="button">Menu Page</button>
           </div>
         </section>
@@ -131,6 +132,20 @@
           </div>
         </section>
 
+        <section id="menuTrapPanel" class="menu-shop-panel" aria-label="Trap shop">
+          <div class="menu-shop-head">
+            <h2>Trap Shop</h2>
+            <span id="menuTrapSummary">Unlocked: 0/0</span>
+          </div>
+          <div id="menuTrapShop" class="menu-shop-list"></div>
+          <p class="menu-shop-note">
+            Trap unlocks are purchased with <span class="shard-word-inline">shards</span>. Traps place on lane tiles and only hit enemies.
+          </p>
+          <div class="menu-shop-actions">
+            <button id="closeTrapShopBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+
         <section id="menuLoadoutPanel" class="menu-shop-panel" aria-label="Tower loadout">
           <div class="menu-shop-head">
             <h2>Tower Loadout</h2>
@@ -145,7 +160,7 @@
             placeholder="Search unlocked towers"
           />
           <div id="menuLoadout" class="menu-shop-list"></div>
-          <p class="menu-shop-note">Only unlocked towers and spawners can be equipped. Use Upgrade next to Equip to open all upgrades.</p>
+          <p class="menu-shop-note">Only unlocked towers, traps, and spawners can be equipped. Use Upgrade next to Equip to open all upgrades.</p>
           <div class="menu-shop-actions">
             <button id="closeLoadoutBtn" class="menu-play-btn" type="button">Menu Page</button>
           </div>

@@ -60,11 +60,13 @@ const defeatMenuBtn = $id("defeatMenuBtn");
 const openAccountBtn = $id("openAccountBtn");
 const openUnlockShopBtn = $id("openUnlockShopBtn");
 const openCreatureFromUnlockBtn = $id("openCreatureFromUnlockBtn");
+const openTrapFromUnlockBtn = $id("openTrapFromUnlockBtn");
 const openLoadoutBtn = $id("openLoadoutBtn");
 const openMultiplayerBtn = $id("openMultiplayerBtn");
 const closeAccountBtn = $id("closeAccountBtn");
 const closeUnlockShopBtn = $id("closeUnlockShopBtn");
 const closeCreatureShopBtn = $id("closeCreatureShopBtn");
+const closeTrapShopBtn = $id("closeTrapShopBtn");
 const closeLoadoutBtn = $id("closeLoadoutBtn");
 const closeMultiplayerBtn = $id("closeMultiplayerBtn");
 
@@ -84,6 +86,8 @@ const menuShopEl = $id("menuShop");
 const menuShardsEl = $id("menuShards");
 const menuCreatureShopEl = $id("menuCreatureShop");
 const menuCreatureSummaryEl = $id("menuCreatureSummary");
+const menuTrapShopEl = $id("menuTrapShop");
+const menuTrapSummaryEl = $id("menuTrapSummary");
 const menuLoadoutEl = $id("menuLoadout");
 const menuLoadoutCountEl = $id("menuLoadoutCount");
 const menuLoadoutSearchEl = $id("menuLoadoutSearch");
@@ -152,7 +156,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-40";
+const BUILD_ID = "2026-02-20-41";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -942,6 +946,7 @@ const audioSystem = {
 };
 
 const TOWER_UNLOCKS = {
+  spikes: { shardCost: 16 },
   ion: { shardCost: 56 },
   frost: { shardCost: 28 },
   quarry: { shardCost: 44 },
@@ -953,9 +958,11 @@ const TOWER_UNLOCKS = {
 };
 
 const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "rift", "volt", "bastion", "photon", "citadel"];
+const MENU_TRAP_UNLOCK_TOWER_IDS = ["spikes"];
 const BASE_LOADOUT_SLOTS = 6;
 const MAX_LOADOUT_SLOTS = 10;
 const BASE_TOWER_PLACE_CAPS = {
+  spikes: 6,
   pulse: 4,
   swarm: 4,
   lance: 2,
@@ -1005,6 +1012,23 @@ const HALF_COLS = (COLS - 1) / 2;
 const HALF_ROWS = (ROWS - 1) / 2;
 
 const TOWER_TYPES = {
+  spikes: {
+    name: "Rift Spikes",
+    cost: 130,
+    range: 1.04,
+    damage: 52,
+    fireInterval: 0.46,
+    turnSpeed: 0,
+    projectileSpeed: 0,
+    projectileRadius: 0.16,
+    projectileColor: "#ffb07a",
+    bodyColor: "#ff925c",
+    coreColor: "#5b2716",
+    summary: "Lane trap",
+    isTrap: true,
+    trapDurability: 12,
+    trapTriggerRadius: 1.08,
+  },
   pulse: {
     name: "Pulse",
     cost: 130,
@@ -1541,6 +1565,11 @@ function enemyTypeFromSpawnerTowerId(towerTypeId) {
 
 function isSpawnerTowerId(towerTypeId) {
   return !!enemyTypeFromSpawnerTowerId(towerTypeId);
+}
+
+function isTrapTowerId(towerTypeId) {
+  const type = TOWER_TYPES[towerTypeId];
+  return !!(type && type.isTrap);
 }
 
 function isBossEnemyType(enemyTypeId) {
@@ -5495,6 +5524,81 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
 function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   const spawnerEnemyTypeId = enemyTypeFromSpawnerTowerId(towerTypeId);
   if (spawnerEnemyTypeId) return createSpawnerTowerMesh(spawnerEnemyTypeId, bodyColor, coreColor);
+  if (towerTypeId === "spikes") {
+    const group = new THREE.Group();
+    const bodyBase = new THREE.Color(bodyColor);
+    const coreBase = new THREE.Color(coreColor);
+
+    const plateMat = new THREE.MeshStandardMaterial({
+      color: bodyBase.clone().lerp(new THREE.Color("#10151f"), 0.28),
+      emissive: bodyBase.clone().multiplyScalar(0.26),
+      emissiveIntensity: 0.8,
+      roughness: 0.36,
+      metalness: 0.66,
+    });
+    const spikeMat = new THREE.MeshStandardMaterial({
+      color: coreBase.clone().lerp(new THREE.Color("#ffe2c4"), 0.14),
+      emissive: coreBase.clone().multiplyScalar(0.34),
+      emissiveIntensity: 0.88,
+      roughness: 0.22,
+      metalness: 0.74,
+    });
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: bodyBase.clone().lerp(new THREE.Color("#ffd0a1"), 0.28),
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const cast = (mesh) => {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    };
+
+    const base = cast(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.3, 0.16, 26), plateMat));
+    base.position.y = 0.08;
+    group.add(base);
+
+    const rim = cast(new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.07, 10, 30), spikeMat));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.16;
+    group.add(rim);
+
+    const spikeRing = new THREE.Group();
+    spikeRing.position.y = 0.12;
+    for (let i = 0; i < 12; i += 1) {
+      const angle = (i / 12) * Math.PI * 2;
+      const spike = cast(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.56 + Math.sin(i * 0.8) * 0.06, 6), spikeMat));
+      spike.position.set(Math.cos(angle) * 0.56, 0.32, Math.sin(angle) * 0.56);
+      spike.rotation.x = Math.PI;
+      spike.rotation.z = -0.14;
+      spike.rotation.y = angle;
+      spikeRing.add(spike);
+    }
+    for (let i = 0; i < 5; i += 1) {
+      const innerAngle = (i / 5) * Math.PI * 2 + 0.3;
+      const innerSpike = cast(new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.74, 6), spikeMat));
+      innerSpike.position.set(Math.cos(innerAngle) * 0.22, 0.38, Math.sin(innerAngle) * 0.22);
+      innerSpike.rotation.x = Math.PI;
+      innerSpike.rotation.z = -0.09;
+      innerSpike.rotation.y = innerAngle;
+      spikeRing.add(innerSpike);
+    }
+    group.add(spikeRing);
+
+    const centerCrystal = cast(new THREE.Mesh(new THREE.OctahedronGeometry(0.24, 0), spikeMat));
+    centerCrystal.position.y = 0.28;
+    group.add(centerCrystal);
+
+    const glowDisk = new THREE.Mesh(new THREE.CircleGeometry(0.86, 28), glowMat);
+    glowDisk.rotation.x = -Math.PI / 2;
+    glowDisk.position.y = 0.03;
+    group.add(glowDisk);
+
+    return { group, turret: null, muzzle: null, spinNode: spikeRing };
+  }
 
   const group = new THREE.Group();
   const bodyBase = new THREE.Color(bodyColor);
@@ -6700,7 +6804,10 @@ class Tower {
     this.towerTypeId = towerTypeId;
     this.name = config.name;
     this.cost = config.cost;
+    this.destroyed = false;
+    this.disposed = false;
     this.isSpawner = !!config.spawnerEnemyTypeId;
+    this.isTrap = !!config.isTrap;
     this.spawnEnemyTypeId = config.spawnerEnemyTypeId || null;
     this.spawnInterval = config.spawnInterval || config.fireInterval;
     this.spawnCount = Math.max(1, Math.floor(config.spawnCount || 1));
@@ -6712,6 +6819,9 @@ class Tower {
     this.projectileSpeed = config.projectileSpeed;
     this.projectileRadius = config.projectileRadius;
     this.projectileColor = config.projectileColor;
+    this.trapTriggerRadius = this.isTrap ? Math.max(0.5, Number(config.trapTriggerRadius || config.range || 1)) : 0;
+    this.trapDurabilityMax = this.isTrap ? Math.max(1, Math.floor(config.trapDurability || 10)) : 0;
+    this.trapDurability = this.trapDurabilityMax;
 
     const meshData = createTowerMesh(towerTypeId, config.bodyColor, config.coreColor);
     this.mesh = meshData.group;
@@ -6721,11 +6831,13 @@ class Tower {
 
     this.mesh.position.set(this.x, this.y + 0.02, this.z);
     scene.add(this.mesh);
+    if (this.isTrap) this.setTrapDurability(this.trapDurability);
   }
 
   update(dt) {
+    if (this.destroyed) return;
     if (this.spinNode) {
-      this.spinNode.rotation.y += dt * 2.5;
+      this.spinNode.rotation.y += dt * (this.isTrap ? 1.2 : 2.5);
     }
 
     if (this.isSpawner && this.turret) {
@@ -6743,6 +6855,26 @@ class Tower {
         spawnedCount += 1;
       }
       this.cooldown = spawnedCount > 0 ? this.spawnInterval : Math.min(0.8, this.spawnInterval * 0.3);
+      return;
+    }
+
+    if (this.isTrap) {
+      if (!game.inWave) return;
+      if (this.cooldown > 0) return;
+      let target = null;
+      for (const enemy of game.enemies) {
+        if (!enemy.alive) continue;
+        const reach = this.trapTriggerRadius + Math.max(0.15, enemy.radius * 0.35);
+        const dx = enemy.x - this.x;
+        const dz = enemy.z - this.z;
+        if (dx * dx + dz * dz > reach * reach) continue;
+        target = enemy;
+        break;
+      }
+      if (!target) return;
+      this.cooldown = this.fireInterval;
+      const killed = target.applyDamage(this.damage);
+      if (killed) handleEnemyDefeated(target);
       return;
     }
 
@@ -6788,7 +6920,27 @@ class Tower {
     );
   }
 
+  setTrapDurability(nextDurability) {
+    if (!this.isTrap) return;
+    const clamped = Math.max(0, Math.min(this.trapDurabilityMax, Math.floor(nextDurability)));
+    this.trapDurability = clamped;
+    const integrity = this.trapDurabilityMax > 0 ? clamped / this.trapDurabilityMax : 0;
+    const verticalScale = 0.56 + integrity * 0.44;
+    this.mesh.scale.set(1, verticalScale, 1);
+    this.mesh.position.y = this.y + 0.02 - (1 - verticalScale) * 0.14;
+    if (clamped <= 0) this.destroyed = true;
+  }
+
+  applyCoreDamage(amount) {
+    if (!this.isTrap || this.destroyed) return false;
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    this.setTrapDurability(this.trapDurability - Math.floor(amount));
+    return this.destroyed;
+  }
+
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     scene.remove(this.mesh);
   }
 }
@@ -7003,6 +7155,7 @@ function serializeTowerState(tower) {
     cooldown: tower.cooldown,
     turretYaw: tower.turret ? tower.turret.rotation.y : 0,
     spinYaw: tower.spinNode ? tower.spinNode.rotation.y : 0,
+    trapDurability: tower.isTrap ? tower.trapDurability : undefined,
   };
 }
 
@@ -7151,6 +7304,13 @@ function syncTowersFromMultiplayer(states) {
     tower.cooldown = Number.isFinite(state.cooldown) ? state.cooldown : 0;
     if (tower.turret && Number.isFinite(state.turretYaw)) tower.turret.rotation.y = state.turretYaw;
     if (tower.spinNode && Number.isFinite(state.spinYaw)) tower.spinNode.rotation.y = state.spinYaw;
+    if (tower.isTrap && Number.isFinite(state.trapDurability)) {
+      tower.setTrapDurability(state.trapDurability);
+    }
+    if (tower.destroyed) {
+      tower.dispose();
+      continue;
+    }
     next.push(tower);
   }
 
@@ -7436,6 +7596,7 @@ function applyMultiplayerSnapshot(snapshot) {
     multiplayer.lastShopSignature = shopSignature;
     renderShop();
     renderMenuShop();
+    renderTrapShop();
     renderCreatureShop();
     renderLoadoutMenu();
   }
@@ -7638,6 +7799,7 @@ function completeCurrentLevel(nextLevel, shardReward, statusMessage, panelMessag
   savePlayerProgress();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   updateHud();
   setStatus(statusMessage || "Level cleared.");
@@ -8174,11 +8336,20 @@ function renderShop() {
   const fragments = [];
   for (const [towerTypeId, type] of getAvailableTowerEntries()) {
     const placement = getTowerPlacementStats(towerTypeId);
+    const cardClasses = [
+      "shop-item",
+      type.spawnerEnemyTypeId ? "spawner" : "",
+      type.isTrap ? "trap" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     const detailLine = type.spawnerEnemyTypeId
       ? `Spawns ${type.spawnCount || 1} every ${type.spawnInterval.toFixed(1)}s | Lane ally`
-      : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
+      : type.isTrap
+        ? `Trap DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     fragments.push(`
-      <div class="shop-item" data-tower-type="${towerTypeId}" role="button" tabindex="0" aria-label="${escapeHtml(type.name)}">
+      <div class="${cardClasses}" data-tower-type="${towerTypeId}" role="button" tabindex="0" aria-label="${escapeHtml(type.name)}">
         <strong>${type.name} - ${type.cost}</strong>
         <span>${type.summary}</span>
         <span>${detailLine}</span>
@@ -8212,6 +8383,12 @@ function renderShop() {
           setStatus(
             `${type.name} selected. Place it to spawn green ${enemyName} allies. (${placement.placed}/${placement.cap})`
           );
+        }
+      } else if (type.isTrap) {
+        if (placement.atCap) {
+          setStatus(`${type.name} cap reached (${placement.placed}/${placement.cap}). Sell one to place another.`, true);
+        } else {
+          setStatus(`${type.name} selected. Place it on a lane tile. (${placement.placed}/${placement.cap})`);
         }
       } else {
         if (placement.atCap) {
@@ -8467,6 +8644,7 @@ function tryPurchaseLoadoutUpgrade(towerTypeId, kind) {
   savePlayerProgress();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
   renderShop();
@@ -8483,7 +8661,7 @@ function renderLoadoutMenu() {
   const rawSearchText = (menuLoadoutSearchEl?.value || "").trim();
   const searchText = rawSearchText.toLowerCase();
 
-  const renderLoadoutCard = (towerTypeId, type, isSpawner) => {
+  const renderLoadoutCard = (towerTypeId, type, isSpawner, isTrap = false) => {
     const equipped = isTowerInLoadout(towerTypeId);
     const capInfo = getTowerCapBreakdown(towerTypeId);
     let actionLabel = "Equip";
@@ -8502,11 +8680,15 @@ function renderLoadoutMenu() {
 
     const isUpgradeOpen = game.loadoutUpgradeTargetId === towerTypeId;
     const upgradeToggleLabel = isUpgradeOpen ? "CLOSE UPGRADE MENU" : "UPGRADE MENU";
-    const classes = ["menu-loadout-item", isSpawner ? "spawner" : "", equipped ? "equipped" : ""].filter(Boolean).join(" ");
+    const classes = ["menu-loadout-item", isSpawner ? "spawner" : "", isTrap ? "trap" : "", equipped ? "equipped" : ""]
+      .filter(Boolean)
+      .join(" ");
 
     const infoLine = isSpawner
       ? `Spawner | Spawn ${Math.max(1, Math.floor(type.spawnCount || 1))} every ${type.spawnInterval.toFixed(2)}s`
-      : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
+      : isTrap
+        ? `Trap | DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     const options = isUpgradeOpen ? getLoadoutUpgradeOptions(towerTypeId) : [];
     const upgradePanel = isUpgradeOpen
       ? `
@@ -8568,7 +8750,7 @@ function renderLoadoutMenu() {
     );
   });
   for (const [towerTypeId] of unlockedEntries) {
-    renderLoadoutCard(towerTypeId, getTowerType(towerTypeId), false);
+    renderLoadoutCard(towerTypeId, getTowerType(towerTypeId), false, isTrapTowerId(towerTypeId));
   }
 
   const unlockedSpawnerEntries = CREATURE_SHOP_ENEMY_IDS.map((enemyTypeId) => {
@@ -8585,18 +8767,18 @@ function renderLoadoutMenu() {
     );
   });
   for (const entry of unlockedSpawnerEntries) {
-    renderLoadoutCard(entry.towerTypeId, entry.type, true);
+    renderLoadoutCard(entry.towerTypeId, entry.type, true, false);
   }
 
   if (fragments.length === 0) {
     const message = searchText
       ? `No unlocked entries match "${escapeHtml(rawSearchText)}".`
-      : "No unlocked towers or spawners available.";
+      : "No unlocked towers, traps, or spawners available.";
     fragments.push(`
       <div class="menu-loadout-item">
         <div>
           <strong>${message}</strong>
-          <span>Unlock towers in Tower Unlock Shop and spawners in Creature Spawner Shop.</span>
+          <span>Unlock towers in Tower Unlock Shop, traps in Trap Shop, and spawners in Creature Spawner Shop.</span>
         </div>
       </div>
     `);
@@ -8752,6 +8934,7 @@ function deleteAccountById(accountId) {
   renderMapPreview();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
   renderShop();
@@ -8771,6 +8954,7 @@ function switchToAccount(accountId, quiet = false) {
   renderMapPreview();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
   renderShop();
@@ -8820,6 +9004,7 @@ function createAccountFromInput() {
   savePlayerProgress();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
   renderShop();
@@ -8874,6 +9059,7 @@ function resetAllProgressFromCommand() {
   savePlayerProgress();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
   renderShop();
@@ -8937,7 +9123,93 @@ function renderMenuShop() {
       savePlayerProgress();
       renderAccountMenu();
       renderMenuShop();
+      renderTrapShop();
       renderCreatureShop();
+      renderLoadoutMenu();
+      renderShop();
+      updateHud();
+    });
+  }
+}
+
+function renderTrapShop() {
+  if (!menuTrapShopEl) return;
+
+  const totalCount = MENU_TRAP_UNLOCK_TOWER_IDS.length;
+  const unlockedCount = MENU_TRAP_UNLOCK_TOWER_IDS.filter((towerTypeId) => isTowerUnlocked(towerTypeId)).length;
+  if (menuTrapSummaryEl) menuTrapSummaryEl.textContent = `Unlocked: ${unlockedCount}/${totalCount}`;
+
+  const fragments = [];
+  for (const towerTypeId of MENU_TRAP_UNLOCK_TOWER_IDS) {
+    const type = getTowerType(towerTypeId);
+    const unlock = TOWER_UNLOCKS[towerTypeId];
+    if (!type || !unlock) continue;
+    const unlocked = isTowerUnlocked(towerTypeId);
+    const canAfford = game.shards >= unlock.shardCost;
+    const itemClasses = [
+      "menu-unlock-item",
+      "menu-trap-item",
+      unlocked ? "unlocked" : "",
+      !unlocked && !canAfford ? "unaffordable" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    fragments.push(`
+      <div class="${itemClasses}">
+        <div>
+          <strong>${type.name}</strong>
+          <span>Trap | DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}</span>
+          <span>${type.summary} | Lane tile only</span>
+        </div>
+        <button
+          class="unlock-action"
+          type="button"
+          data-unlock-trap="${towerTypeId}"
+          ${unlocked ? "disabled" : ""}
+        >
+          ${unlocked ? "Unlocked" : `${unlock.shardCost} ${formatShardWordHtml("Shards")}`}
+        </button>
+      </div>
+    `);
+  }
+
+  if (fragments.length === 0) {
+    fragments.push(`
+      <div class="menu-unlock-item menu-trap-item">
+        <div>
+          <strong>No trap unlocks configured.</strong>
+          <span>Add trap IDs in MENU_TRAP_UNLOCK_TOWER_IDS.</span>
+        </div>
+        <button class="unlock-action" type="button" disabled>Unavailable</button>
+      </div>
+    `);
+  }
+
+  menuTrapShopEl.innerHTML = fragments.join("");
+
+  const unlockButtons = menuTrapShopEl.querySelectorAll("button[data-unlock-trap]");
+  for (const button of unlockButtons) {
+    button.addEventListener("click", () => {
+      const towerTypeId = button.dataset.unlockTrap;
+      const unlock = TOWER_UNLOCKS[towerTypeId];
+      if (!unlock || isTowerUnlocked(towerTypeId)) return;
+      if (game.shards < unlock.shardCost) {
+        setStatus("Not enough shards to unlock that trap.", true);
+        updateHud();
+        return;
+      }
+
+      game.shards -= unlock.shardCost;
+      game.unlockedTowers.add(towerTypeId);
+      const tower = getTowerType(towerTypeId);
+      setStatus(`${tower.name} unlocked in Trap Shop.`);
+      savePlayerProgress();
+      renderAccountMenu();
+      renderMenuShop();
+      renderTrapShop();
+      renderCreatureShop();
+      renderLoadoutMenu();
       renderShop();
       updateHud();
     });
@@ -9010,6 +9282,7 @@ function openMenuShop() {
   renderMapPreview();
   renderAccountMenu();
   renderMenuShop();
+  renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
   refreshMultiplayerPanel();
@@ -9040,6 +9313,13 @@ function openCreatureMenu() {
   setMenuView("creatures");
   renderCreatureShop();
   if (menuCreatureShopEl) menuCreatureShopEl.scrollTop = 0;
+}
+
+function openTrapMenu() {
+  openMenuShop();
+  setMenuView("traps");
+  renderTrapShop();
+  if (menuTrapShopEl) menuTrapShopEl.scrollTop = 0;
 }
 
 function openAccountMenu() {
@@ -9101,6 +9381,10 @@ function closeUnlocksMenu() {
 }
 
 function closeCreatureMenu() {
+  setMenuView("home");
+}
+
+function closeTrapMenu() {
   setMenuView("home");
 }
 
@@ -9335,6 +9619,7 @@ function updateHud() {
   if (openUnlockShopBtn) openUnlockShopBtn.disabled = lockMetaMenusDuringRun;
   if (openLoadoutBtn) openLoadoutBtn.disabled = lockMetaMenusDuringRun;
   if (openCreatureFromUnlockBtn) openCreatureFromUnlockBtn.disabled = lockMetaMenusDuringRun;
+  if (openTrapFromUnlockBtn) openTrapFromUnlockBtn.disabled = lockMetaMenusDuringRun;
   const speedLocked = !game.started || game.over || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
   if (speedDownBtn) speedDownBtn.disabled = speedLocked || game.speedStepIndex <= 0;
   if (speedUpBtn) speedUpBtn.disabled = speedLocked || game.speedStepIndex >= GAME_SPEED_STEPS.length - 1;
@@ -9425,9 +9710,14 @@ function editLaneAtCell(cellX, cellY) {
   const key = cellKey(cellX, cellY);
   const locked = isLaneEndpoint(cellX, cellY);
   const currentlyLane = pathCellSet.has(key);
+  const towerOnCell = getTowerAtCell(cellX, cellY);
 
-  if (!currentlyLane && getTowerAtCell(cellX, cellY)) {
+  if (!currentlyLane && towerOnCell) {
     setStatus("Sell the tower on that tile before turning it into a lane.", true);
+    return;
+  }
+  if (currentlyLane && towerOnCell && towerOnCell.isTrap) {
+    setStatus("Sell the trap on that lane tile before removing the lane.", true);
     return;
   }
 
@@ -9502,7 +9792,11 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
   }
 
   if (!canPlaceTower(targetCellX, targetCellY, towerTypeId)) {
-    setStatus("You can't build there.", true);
+    if (isTrapTowerId(towerTypeId) && !pathCellSet.has(cellKey(targetCellX, targetCellY))) {
+      setStatus("Traps must be placed on lane tiles.", true);
+    } else {
+      setStatus("You can't build there.", true);
+    }
     return false;
   }
 
@@ -9515,10 +9809,11 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
   game.money -= selectedTower.cost;
   game.towers.push(new Tower(targetCellX, targetCellY, towerTypeId));
   const updatedPlacement = getTowerPlacementStats(towerTypeId);
+  const placedLabel = isTrapTowerId(towerTypeId) ? "trap armed" : "tower deployed";
   if (placedByPeer) {
-    setStatus(`${selectedTower.name} deployed by ${placedByPeer}. (${updatedPlacement.placed}/${updatedPlacement.cap})`);
+    setStatus(`${selectedTower.name} ${placedLabel} by ${placedByPeer}. (${updatedPlacement.placed}/${updatedPlacement.cap})`);
   } else {
-    setStatus(`${selectedTower.name} tower deployed. (${updatedPlacement.placed}/${updatedPlacement.cap})`);
+    setStatus(`${selectedTower.name} ${placedLabel}. (${updatedPlacement.placed}/${updatedPlacement.cap})`);
   }
   updateHud();
   return true;
@@ -9526,13 +9821,33 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
 
 function canPlaceTower(cellX, cellY, towerTypeId = game.selectedTowerType) {
   if (cellX < 0 || cellY < 0 || cellX >= COLS || cellY >= ROWS) return false;
-  if (pathCellSet.has(cellKey(cellX, cellY))) return false;
+  const laneTile = pathCellSet.has(cellKey(cellX, cellY));
+  if (isTrapTowerId(towerTypeId)) {
+    if (!laneTile) return false;
+  } else if (laneTile) {
+    return false;
+  }
   if (game.towers.some((tower) => tower.cellX === cellX && tower.cellY === cellY)) return false;
   return !getTowerPlacementStats(towerTypeId).atCap;
 }
 
 function getTowerAtCell(cellX, cellY) {
   return game.towers.find((tower) => tower.cellX === cellX && tower.cellY === cellY) || null;
+}
+
+function purgeDestroyedTowers() {
+  let removed = 0;
+  const survivors = [];
+  for (const tower of game.towers) {
+    if (!tower || tower.destroyed) {
+      if (tower) tower.dispose();
+      removed += 1;
+      continue;
+    }
+    survivors.push(tower);
+  }
+  game.towers = survivors;
+  return removed;
 }
 
 function sellTowerAtCell(cellX, cellY) {
@@ -9614,6 +9929,7 @@ function endWaveIfDone() {
     savePlayerProgress();
     renderAccountMenu();
     renderMenuShop();
+    renderTrapShop();
     renderCreatureShop();
     updateHud();
   }
@@ -9709,6 +10025,8 @@ function toggleBuildMode() {
         `Build mode active: ${selectedTower.name}. Cap reached (${placement.placed}/${placement.cap}) until you sell one.`,
         true
       );
+    } else if (isTrapTowerId(game.selectedTowerType)) {
+      setStatus(`Build mode active: ${selectedTower.name} trap (${placement.placed}/${placement.cap}). Place on lane tiles.`);
     } else {
       setStatus(`Build mode active: ${selectedTower.name} (${placement.placed}/${placement.cap}).`);
     }
@@ -9744,9 +10062,11 @@ function updatePlacementPreview() {
   if (game.editingLane) {
     const key = cellKey(cellX, cellY);
     const removing = pathCellSet.has(key);
+    const tower = getTowerAtCell(cellX, cellY);
     let valid = true;
 
-    if (!removing && getTowerAtCell(cellX, cellY)) valid = false;
+    if (!removing && tower) valid = false;
+    if (removing && tower && tower.isTrap) valid = false;
     if (removing && isLaneEndpoint(cellX, cellY)) valid = false;
 
     if (valid) {
@@ -9918,10 +10238,15 @@ function update(dt) {
   updateAllyEnemyCollisions();
   for (const projectile of game.projectiles) projectile.update(dt);
 
+  let brokenTrapsThisTick = 0;
   for (const enemy of game.enemies) {
     if (enemy.reachedEnd) {
       enemy.reachedEnd = false;
       game.lives -= enemy.coreDamage;
+      for (const tower of game.towers) {
+        if (!tower || !tower.isTrap || tower.destroyed) continue;
+        if (tower.applyCoreDamage(enemy.coreDamage)) brokenTrapsThisTick += 1;
+      }
       if (game.lives <= 0 && !game.over) {
         audioSystem.stopBossMusic();
         audioSystem.stopFluteMusic(true);
@@ -9934,6 +10259,12 @@ function update(dt) {
         setStatus("Defeat! Your core was destroyed.", true);
         openDefeatPanel();
       }
+    }
+  }
+  if (brokenTrapsThisTick > 0) {
+    purgeDestroyedTowers();
+    if (!game.over) {
+      setStatus(`Core impact shattered ${brokenTrapsThisTick} trap${brokenTrapsThisTick === 1 ? "" : "s"}.`, true);
     }
   }
 
@@ -10030,11 +10361,13 @@ menuBtn.addEventListener("click", toggleMenuHome);
 if (openAccountBtn) openAccountBtn.addEventListener("click", openAccountMenu);
 if (openUnlockShopBtn) openUnlockShopBtn.addEventListener("click", openUnlocksMenu);
 if (openCreatureFromUnlockBtn) openCreatureFromUnlockBtn.addEventListener("click", openCreatureMenu);
+if (openTrapFromUnlockBtn) openTrapFromUnlockBtn.addEventListener("click", openTrapMenu);
 if (openLoadoutBtn) openLoadoutBtn.addEventListener("click", openLoadoutMenu);
 if (openMultiplayerBtn) openMultiplayerBtn.addEventListener("click", openMultiplayerMenu);
 if (closeAccountBtn) closeAccountBtn.addEventListener("click", closeAccountMenu);
 if (closeUnlockShopBtn) closeUnlockShopBtn.addEventListener("click", closeUnlocksMenu);
 if (closeCreatureShopBtn) closeCreatureShopBtn.addEventListener("click", closeCreatureMenu);
+if (closeTrapShopBtn) closeTrapShopBtn.addEventListener("click", closeTrapMenu);
 if (closeLoadoutBtn) closeLoadoutBtn.addEventListener("click", closeLoadoutMenu);
 if (closeMultiplayerBtn) closeMultiplayerBtn.addEventListener("click", closeMultiplayerMenu);
 if (confirmExitBtn) confirmExitBtn.addEventListener("click", confirmExitToMenu);
@@ -10381,6 +10714,7 @@ rebuildWorld();
 renderShop();
 renderAccountMenu();
 renderMenuShop();
+renderTrapShop();
 renderCreatureShop();
 renderLoadoutMenu();
 refreshMultiplayerPanel();

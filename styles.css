@@ -275,6 +275,7 @@ body:not(.menu-active) .menu-screen {
 #menuAccountPanel,
 #menuShopPanel,
 #menuCreaturePanel,
+#menuTrapPanel,
 #menuLoadoutPanel,
 #menuMultiplayerPanel {
   display: none;
@@ -295,6 +296,10 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-card[data-view="creatures"] #menuCreaturePanel {
+  display: grid !important;
+}
+
+.menu-card[data-view="traps"] #menuTrapPanel {
   display: grid !important;
 }
 
@@ -713,6 +718,10 @@ body:not(.menu-active) .menu-screen {
 }
 
 #menuShopPanel {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+#menuTrapPanel {
   grid-template-rows: auto minmax(0, 1fr) auto auto;
 }
 
@@ -1197,6 +1206,15 @@ body:not(.menu-active) .menu-screen {
   min-width: 102px;
 }
 
+.menu-trap-item {
+  border-color: rgba(255, 178, 116, 0.42);
+  background: linear-gradient(145deg, rgba(255, 182, 124, 0.14), rgba(123, 69, 44, 0.08));
+}
+
+.menu-trap-item .unlock-action {
+  min-width: 102px;
+}
+
 .menu-creature-progress {
   margin-top: 0.26rem;
   height: 0.36rem;
@@ -1253,6 +1271,11 @@ body:not(.menu-active) .menu-screen {
 .menu-loadout-item.spawner {
   border-color: rgba(126, 240, 196, 0.42);
   background: linear-gradient(145deg, rgba(101, 235, 178, 0.14), rgba(113, 191, 255, 0.06));
+}
+
+.menu-loadout-item.trap {
+  border-color: rgba(255, 177, 114, 0.48);
+  background: linear-gradient(145deg, rgba(255, 167, 112, 0.16), rgba(188, 114, 72, 0.08));
 }
 
 .menu-loadout-item strong {
@@ -1635,6 +1658,17 @@ body:not(.menu-active) .menu-screen {
 .shop .shop-item.capped {
   border-color: rgba(255, 180, 88, 0.58);
   background: linear-gradient(150deg, rgba(255, 190, 122, 0.16), rgba(255, 255, 255, 0.02));
+}
+
+.shop .shop-item.trap {
+  border-color: rgba(255, 180, 112, 0.52);
+  background: linear-gradient(150deg, rgba(255, 176, 118, 0.16), rgba(133, 74, 49, 0.12));
+}
+
+.shop .shop-item.trap.active {
+  border-color: rgba(255, 204, 134, 0.76);
+  background: linear-gradient(145deg, rgba(255, 200, 128, 0.24), rgba(188, 114, 72, 0.14));
+  box-shadow: 0 0 0 1px rgba(255, 191, 121, 0.36);
 }
 
 .shop .shop-item .shop-cap-line {
