@@ -2192,7 +2192,6 @@ function weightedChoice(weightEntries) {
 
 function getLevelDifficultyProfile(level = game.currentLevel) {
   if (level >= 2) {
-    const emberLevel = level >= 3;
     return {
       effectiveWaveOffset: 2,
       spawnMultiplier: 1.36,
@@ -2204,7 +2203,7 @@ function getLevelDifficultyProfile(level = game.currentLevel) {
       spawnStartDelay: 0.18,
       spawnIntervalScale: 0.9,
       minSpawnInterval: 0.15,
-      startingCredits: emberLevel ? 260 : 220,
+      startingCredits: 260,
       startingLives: 19,
     };
   }
