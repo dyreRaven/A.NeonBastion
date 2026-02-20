@@ -190,8 +190,11 @@ const SUPABASE_URL = "https://wfsywtfktmthxpgqoyoi.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK";
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
+const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
+const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
+const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-69";
+const BUILD_ID = "2026-02-20-70";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3925,6 +3928,12 @@ const mobilePerformance = {
 let startupAuthPendingAccountId = "";
 let soloHudRefreshTimer = 0;
 let loadoutSearchRenderTimer = null;
+let accountCreateRequestInFlight = false;
+let accountLoginRequestInFlight = false;
+let accountCreateCooldownUntil = 0;
+let accountLoginCooldownUntil = 0;
+let accountCreateCooldownTimer = 0;
+let accountLoginCooldownTimer = 0;
 
 function sanitizeRoomCode(rawCode) {
   return String(rawCode || "")
@@ -5734,6 +5743,7 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
       password,
     });
     if (error) {
+      if (isCloudRateLimitError(error)) startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
       setAccountStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
       return;
     }
@@ -9399,6 +9409,68 @@ function setAccountStatus(message, danger = false) {
   setAccountActionStatus(message, danger);
 }
 
+function getAccountCreateCooldownRemainingMs() {
+  return Math.max(0, accountCreateCooldownUntil - Date.now());
+}
+
+function getAccountLoginCooldownRemainingMs() {
+  return Math.max(0, accountLoginCooldownUntil - Date.now());
+}
+
+function refreshAccountAuthButtons() {
+  const createRemainingMs = getAccountCreateCooldownRemainingMs();
+  if (createAccountBtn) {
+    createAccountBtn.disabled = accountCreateRequestInFlight || createRemainingMs > 0;
+    if (accountCreateRequestInFlight) createAccountBtn.textContent = "Creating...";
+    else if (createRemainingMs > 0) createAccountBtn.textContent = `Create (${Math.ceil(createRemainingMs / 1000)}s)`;
+    else createAccountBtn.textContent = "Create";
+  }
+
+  const loginRemainingMs = getAccountLoginCooldownRemainingMs();
+  if (loginAccountBtn) {
+    loginAccountBtn.disabled = accountLoginRequestInFlight || loginRemainingMs > 0;
+    if (accountLoginRequestInFlight) loginAccountBtn.textContent = "Logging In...";
+    else if (loginRemainingMs > 0) loginAccountBtn.textContent = `Login (${Math.ceil(loginRemainingMs / 1000)}s)`;
+    else loginAccountBtn.textContent = "Login";
+  }
+}
+
+function startAccountCreateCooldown(durationMs) {
+  const duration = Math.max(0, Math.floor(Number(durationMs) || 0));
+  if (duration <= 0) return;
+  accountCreateCooldownUntil = Math.max(accountCreateCooldownUntil, Date.now() + duration);
+  if (accountCreateCooldownTimer) clearTimeout(accountCreateCooldownTimer);
+  const tick = () => {
+    refreshAccountAuthButtons();
+    if (getAccountCreateCooldownRemainingMs() > 0) {
+      accountCreateCooldownTimer = window.setTimeout(tick, 250);
+      return;
+    }
+    accountCreateCooldownTimer = 0;
+    refreshAccountAuthButtons();
+  };
+  accountCreateCooldownTimer = window.setTimeout(tick, 250);
+  refreshAccountAuthButtons();
+}
+
+function startAccountLoginCooldown(durationMs) {
+  const duration = Math.max(0, Math.floor(Number(durationMs) || 0));
+  if (duration <= 0) return;
+  accountLoginCooldownUntil = Math.max(accountLoginCooldownUntil, Date.now() + duration);
+  if (accountLoginCooldownTimer) clearTimeout(accountLoginCooldownTimer);
+  const tick = () => {
+    refreshAccountAuthButtons();
+    if (getAccountLoginCooldownRemainingMs() > 0) {
+      accountLoginCooldownTimer = window.setTimeout(tick, 250);
+      return;
+    }
+    accountLoginCooldownTimer = 0;
+    refreshAccountAuthButtons();
+  };
+  accountLoginCooldownTimer = window.setTimeout(tick, 250);
+  refreshAccountAuthButtons();
+}
+
 function getActiveBossEnemies() {
   return game.enemies.filter(
     (enemy) => enemy.alive && (enemy.typeId === "icosahedron" || enemy.typeId === "rhombus" || enemy.typeId === "star")
@@ -10837,6 +10909,17 @@ function switchToAccount(accountId, quiet = false) {
 }
 
 function createAccountFromInput() {
+  if (accountCreateRequestInFlight) {
+    setAccountStatus("Create already submitted. Please wait...", true);
+    return;
+  }
+  const createCooldownRemainingMs = getAccountCreateCooldownRemainingMs();
+  if (createCooldownRemainingMs > 0) {
+    setAccountStatus(`Create already submitted. Try again in ${Math.ceil(createCooldownRemainingMs / 1000)}s.`, true);
+    refreshAccountAuthButtons();
+    return;
+  }
+
   const rawUsername = accountCreateUsernameInputEl ? accountCreateUsernameInputEl.value : "";
   const username = sanitizeAccountUsername(rawUsername);
   const password = accountCreatePasswordInputEl ? accountCreatePasswordInputEl.value : "";
@@ -10862,10 +10945,33 @@ function createAccountFromInput() {
     setAccountStatus("Use a valid email address to create a cloud account.", true);
     return;
   }
-  void createCloudAccountFromInput(username, password, confirmPassword);
+
+  accountCreateRequestInFlight = true;
+  startAccountCreateCooldown(ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS);
+  refreshAccountAuthButtons();
+  setAccountActionStatus("Create submitted. Contacting cloud...");
+  void (async () => {
+    try {
+      await createCloudAccountFromInput(username, password, confirmPassword);
+    } finally {
+      accountCreateRequestInFlight = false;
+      refreshAccountAuthButtons();
+    }
+  })();
 }
 
 function loginAccountFromInput() {
+  if (accountLoginRequestInFlight) {
+    setAccountStatus("Login already submitted. Please wait...", true);
+    return;
+  }
+  const loginCooldownRemainingMs = getAccountLoginCooldownRemainingMs();
+  if (loginCooldownRemainingMs > 0) {
+    setAccountStatus(`Login already submitted. Try again in ${Math.ceil(loginCooldownRemainingMs / 1000)}s.`, true);
+    refreshAccountAuthButtons();
+    return;
+  }
+
   const rawUsername = accountLoginUsernameInputEl ? accountLoginUsernameInputEl.value : "";
   const username = sanitizeAccountUsername(rawUsername);
   const password = accountLoginPasswordInputEl ? accountLoginPasswordInputEl.value : "";
@@ -10882,7 +10988,19 @@ function loginAccountFromInput() {
     setAccountStatus("Use the email address for your cloud account.", true);
     return;
   }
-  void loginCloudAccountFromInput(username, password);
+
+  accountLoginRequestInFlight = true;
+  startAccountLoginCooldown(ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS);
+  refreshAccountAuthButtons();
+  setAccountActionStatus("Login submitted. Contacting cloud...");
+  void (async () => {
+    try {
+      await loginCloudAccountFromInput(username, password);
+    } finally {
+      accountLoginRequestInFlight = false;
+      refreshAccountAuthButtons();
+    }
+  })();
 }
 
 function resetAllProgressFromCommand() {
@@ -11172,6 +11290,7 @@ function openAccountMenu() {
   setMenuView("account");
   renderAccountMenu();
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
+  refreshAccountAuthButtons();
   clearAccountAuthInputs();
   setAccountActionStatus("Use your email + password. Cloud account is required for cross-device saves.");
   const preferredAuthEmail = getCloudSignedInEmail() || (isEmailAddress(game.accountName || "") ? game.accountName : "");
@@ -12856,6 +12975,7 @@ resetLaneToLevelDefaults(game.currentLevel);
 rebuildWorld();
 renderShop();
 renderAccountMenu();
+refreshAccountAuthButtons();
 renderMenuShop();
 renderTrapShop();
 renderCreatureShop();
