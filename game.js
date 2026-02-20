@@ -194,7 +194,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-71";
+const BUILD_ID = "2026-02-20-72";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5536,6 +5536,45 @@ function isCloudEmailNotConfirmedError(error) {
   return false;
 }
 
+function isCloudInvalidCredentialsError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  if (code.includes("invalid_credentials")) return true;
+  if (code.includes("invalid_grant")) return true;
+  if (message.includes("invalid login credentials")) return true;
+  return false;
+}
+
+function formatCloudErrorDebug(error) {
+  const parts = [];
+  const pushPart = (label, value) => {
+    if (value === null || value === undefined) return;
+    const text = String(value).replace(/\s+/g, " ").trim();
+    if (!text) return;
+    parts.push(`${label}=${text.slice(0, 120)}`);
+  };
+  pushPart("code", error?.code);
+  pushPart("status", error?.status ?? error?.statusCode);
+  pushPart("msg", error?.message);
+  pushPart("details", error?.details);
+  pushPart("hint", error?.hint);
+  pushPart("desc", error?.error_description);
+  return parts.join(" | ");
+}
+
+function appendCloudErrorDebugToMessage(message, error) {
+  const debug = formatCloudErrorDebug(error);
+  if (!debug) return message;
+  return `${message} [${debug}]`;
+}
+
+function logCloudError(context, error) {
+  if (!error) return;
+  const debug = formatCloudErrorDebug(error);
+  if (debug) console.error(`[CloudAuth:${context}] ${debug}`, error);
+  else console.error(`[CloudAuth:${context}]`, error);
+}
+
 function getAuthUserFromAuthResult(result) {
   const user = result?.data?.user || result?.data?.session?.user || null;
   return user && user.id ? user : null;
@@ -5777,7 +5816,12 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
         setAccountStatus(`Account exists for ${email}, but email is not confirmed yet. Check your inbox, then use Login.`, true);
         return;
       }
-    } catch (_) {}
+      if (existingLogin?.error && !isCloudInvalidCredentialsError(existingLogin.error)) {
+        logCloudError("create.pre_login", existingLogin.error);
+      }
+    } catch (error) {
+      logCloudError("create.pre_login_exception", error);
+    }
 
     const { data, error } = await cloudAuth.client.auth.signUp({
       email,
@@ -5811,10 +5855,16 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
             startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
             return;
           }
-        } catch (_) {}
+          if (retryLogin?.error && !isCloudInvalidCredentialsError(retryLogin.error)) {
+            logCloudError("create.rate_limited_retry_login", retryLogin.error);
+          }
+        } catch (retryError) {
+          logCloudError("create.rate_limited_retry_exception", retryError);
+        }
         startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
       }
-      setAccountStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
+      logCloudError("create.signup", error);
+      setAccountStatus(appendCloudErrorDebugToMessage(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, error), true);
       return;
     }
 
@@ -5845,8 +5895,9 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
     } else {
       setAccountStatus(`Cloud account created and logged in as ${email}.`);
     }
-  } catch (_) {
-    setAccountStatus("Cloud sign-up failed due to a network error.", true);
+  } catch (error) {
+    logCloudError("create.exception", error);
+    setAccountStatus(appendCloudErrorDebugToMessage("Cloud sign-up failed due to a network error.", error), true);
   }
 }
 
@@ -5864,7 +5915,8 @@ async function loginCloudAccountFromInput(username, password) {
       password,
     });
     if (error) {
-      setAccountStatus(`Cloud login failed: ${formatCloudErrorMessage(error)}`, true);
+      logCloudError("login.password", error);
+      setAccountStatus(appendCloudErrorDebugToMessage(`Cloud login failed: ${formatCloudErrorMessage(error)}`, error), true);
       return;
     }
 
@@ -5896,8 +5948,9 @@ async function loginCloudAccountFromInput(username, password) {
     } else {
       setAccountStatus(`Logged in as ${email} (cloud sync active).`);
     }
-  } catch (_) {
-    setAccountStatus("Cloud login failed due to a network error.", true);
+  } catch (error) {
+    logCloudError("login.exception", error);
+    setAccountStatus(appendCloudErrorDebugToMessage("Cloud login failed due to a network error.", error), true);
   }
 }
 
