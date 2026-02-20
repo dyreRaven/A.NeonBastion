@@ -1870,19 +1870,45 @@ button.active {
   gap: 0.5rem;
 }
 
+.settings-panel-title {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
 .settings-panel-head strong {
   font-family: "Syne", "Space Grotesk", sans-serif;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   letter-spacing: 0.04em;
   color: #d6f0ff;
 }
 
+#settingsPageHint {
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a9c7dd;
+}
+
+.settings-panel-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+#settingsPrevPageBtn,
+#settingsNextPageBtn,
 #settingsCloseBtn {
   min-width: 28px;
   min-height: 28px;
   border-radius: 8px;
   padding: 0;
   font-size: 0.72rem;
+}
+
+#settingsPrevPageBtn,
+#settingsNextPageBtn {
+  min-width: 26px;
 }
 
 .settings-grid {
@@ -1913,6 +1939,40 @@ button.active {
   border-radius: 8px;
   font-size: 0.78rem;
   padding: 0.22rem 0.48rem;
+}
+
+.settings-hotkeys {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.32rem;
+}
+
+.settings-hotkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid rgba(167, 218, 250, 0.2);
+  border-radius: 9px;
+  padding: 0.34rem 0.45rem;
+  background: linear-gradient(145deg, rgba(84, 147, 191, 0.13), rgba(29, 52, 77, 0.2));
+}
+
+.settings-hotkey-row span {
+  font-size: 0.8rem;
+  color: #d8ecfb;
+}
+
+.settings-hotkey-row strong {
+  min-width: 56px;
+  text-align: center;
+  border: 1px solid rgba(182, 224, 251, 0.36);
+  border-radius: 7px;
+  padding: 0.16rem 0.34rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: #e6f5ff;
+  background: rgba(78, 123, 158, 0.24);
 }
 
 .command-console {

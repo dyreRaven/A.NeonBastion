@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260220ad" />
+    <link rel="stylesheet" href="styles.css?v=20260220ae" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -258,12 +258,12 @@
 
           <div class="controls">
             <div class="controls-group">
-              <button id="buildBtn" type="button">Build Tower (B)</button>
-              <button id="sellBtn" type="button">Sell Tower (X)</button>
-              <button id="laneBtn" type="button">Edit Lanes (L)</button>
+              <button id="buildBtn" type="button">Build Tower</button>
+              <button id="sellBtn" type="button">Sell Tower</button>
+              <button id="laneBtn" type="button">Edit Lanes</button>
               <button id="startWaveBtn" type="button">Start Wave</button>
-              <button id="pauseBtn" type="button">Pause (P)</button>
-              <button id="menuBtn" type="button">Menu Shop (M)</button>
+              <button id="pauseBtn" type="button">Pause</button>
+              <button id="menuBtn" type="button">Menu Shop</button>
             </div>
           </div>
         </div>
@@ -306,12 +306,19 @@
     <button id="settingsToggleBtn" class="settings-toggle-btn" type="button" aria-label="Open settings">
       ⚙
     </button>
-    <section id="settingsPanel" class="settings-panel" aria-label="Audio settings" hidden>
+    <section id="settingsPanel" class="settings-panel" aria-label="Game settings" hidden>
       <div class="settings-panel-head">
-        <strong>Audio Settings</strong>
-        <button id="settingsCloseBtn" type="button" aria-label="Close settings">X</button>
+        <div class="settings-panel-title">
+          <strong id="settingsPanelTitle">Audio & Visual Settings</strong>
+          <span id="settingsPageHint">Page 1 / 2</span>
+        </div>
+        <div class="settings-panel-controls">
+          <button id="settingsPrevPageBtn" type="button" aria-label="Previous settings page">&lt;</button>
+          <button id="settingsNextPageBtn" type="button" aria-label="Next settings page">&gt;</button>
+          <button id="settingsCloseBtn" type="button" aria-label="Close settings">X</button>
+        </div>
       </div>
-      <div class="settings-grid">
+      <div id="settingsPageToggles" class="settings-grid">
         <div class="settings-row">
           <span>Music</span>
           <button id="settingMusicBtn" type="button">On</button>
@@ -328,6 +335,24 @@
           <span>Glass Shatter</span>
           <button id="settingShatterBtn" type="button">On</button>
         </div>
+        <div class="settings-row">
+          <span>Explosion Particles</span>
+          <button id="settingExplosionBtn" type="button">On</button>
+        </div>
+        <div class="settings-row">
+          <span>Enemy Rings</span>
+          <button id="settingEnemyRingsBtn" type="button">On</button>
+        </div>
+      </div>
+      <div id="settingsPageHotkeys" class="settings-hotkeys" hidden>
+        <div class="settings-hotkey-row"><span>Pause / Resume</span><strong>P</strong></div>
+        <div class="settings-hotkey-row"><span>Open Menu</span><strong>M</strong></div>
+        <div class="settings-hotkey-row"><span>Build Mode</span><strong>B</strong></div>
+        <div class="settings-hotkey-row"><span>Sell Mode</span><strong>X</strong></div>
+        <div class="settings-hotkey-row"><span>Edit Lanes</span><strong>L</strong></div>
+        <div class="settings-hotkey-row"><span>Start Wave</span><strong>Space</strong></div>
+        <div class="settings-hotkey-row"><span>Multiplayer Panel</span><strong>G</strong></div>
+        <div class="settings-hotkey-row"><span>Open Chat (Multiplayer)</span><strong>T / /</strong></div>
       </div>
     </section>
     <button id="commandToggleBtn" class="command-toggle-btn" type="button" aria-label="Open command console">
@@ -362,6 +387,6 @@
     </section>
 
     <script src="vendor/three.min.js"></script>
-    <script src="game.js?v=20260220ad"></script>
+    <script src="game.js?v=20260220ae"></script>
   </body>
 </html>

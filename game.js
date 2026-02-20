@@ -92,11 +92,19 @@ const chatInputEl = document.getElementById("chatInput");
 const chatSendBtn = document.getElementById("chatSendBtn");
 const settingsToggleBtn = document.getElementById("settingsToggleBtn");
 const settingsPanelEl = document.getElementById("settingsPanel");
+const settingsPanelTitleEl = document.getElementById("settingsPanelTitle");
+const settingsPageHintEl = document.getElementById("settingsPageHint");
+const settingsPrevPageBtn = document.getElementById("settingsPrevPageBtn");
+const settingsNextPageBtn = document.getElementById("settingsNextPageBtn");
+const settingsPageTogglesEl = document.getElementById("settingsPageToggles");
+const settingsPageHotkeysEl = document.getElementById("settingsPageHotkeys");
 const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 const settingMusicBtn = document.getElementById("settingMusicBtn");
 const settingSfxBtn = document.getElementById("settingSfxBtn");
 const settingShotBtn = document.getElementById("settingShotBtn");
 const settingShatterBtn = document.getElementById("settingShatterBtn");
+const settingExplosionBtn = document.getElementById("settingExplosionBtn");
+const settingEnemyRingsBtn = document.getElementById("settingEnemyRingsBtn");
 const speedControlEl = document.getElementById("speedControl");
 const speedDownBtn = document.getElementById("speedDownBtn");
 const speedValueEl = document.getElementById("speedValue");
@@ -126,7 +134,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-31";
+const BUILD_ID = "2026-02-20-32";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3005,6 +3013,9 @@ const game = {
   levelClearTitle: "Level Cleared",
   levelClearText: "Victory confirmed. New map access awarded.",
   settingsOpen: false,
+  settingsPage: 0,
+  explosionParticlesEnabled: true,
+  enemyRingsEnabled: true,
   money: 220,
   shards: 0,
   lives: 20,
@@ -4536,6 +4547,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
   }
 
   let spinNode = null;
+  let ringNode = null;
   let body = null;
   const isPrimarySphere = typeId === "crawler";
 
@@ -4785,6 +4797,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     ring.rotation.x = Math.PI / 2;
     ring.position.y = setup.ringY || 0;
     group.add(ring);
+    ringNode = ring;
     spinNode = ring;
   }
 
@@ -4808,6 +4821,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
   return {
     group,
     spinNode,
+    ringNode,
     minY: bounds.min.y,
     maxY: bounds.max.y,
   };
@@ -5481,6 +5495,8 @@ class Enemy {
     const enemyVisual = createEnemyMesh(stats.typeId, stats.colorA, stats.colorB);
     this.mesh = enemyVisual.group;
     this.spinNode = enemyVisual.spinNode;
+    this.ringNode = enemyVisual.ringNode || null;
+    if (this.ringNode) this.ringNode.visible = !!game.enemyRingsEnabled;
     this.visualMinY = Number.isFinite(enemyVisual.minY) ? enemyVisual.minY : -this.radius;
     this.visualMaxY = Number.isFinite(enemyVisual.maxY) ? enemyVisual.maxY : this.radius;
     this.bobAmplitude = 0.1;
@@ -5668,65 +5684,67 @@ class Enemy {
     const origin = this.mesh.position.clone();
     const colorA = new THREE.Color(this.colorA);
     const colorB = new THREE.Color(this.colorB);
-    const pieceCount = Math.min(30, Math.max(12, Math.round(this.radius * 14)));
+    if (game.explosionParticlesEnabled) {
+      const pieceCount = Math.min(30, Math.max(12, Math.round(this.radius * 14)));
 
-    for (let i = 0; i < pieceCount; i += 1) {
-      const size = THREE.MathUtils.lerp(this.radius * 0.11, this.radius * 0.24, Math.random());
-      let geometry = null;
-      if (i % 3 === 0) geometry = new THREE.TetrahedronGeometry(size, 0);
-      else if (i % 3 === 1) geometry = new THREE.BoxGeometry(size * 1.22, size * 0.72, size * 1.26);
-      else geometry = new THREE.OctahedronGeometry(size * 0.82, 0);
+      for (let i = 0; i < pieceCount; i += 1) {
+        const size = THREE.MathUtils.lerp(this.radius * 0.11, this.radius * 0.24, Math.random());
+        let geometry = null;
+        if (i % 3 === 0) geometry = new THREE.TetrahedronGeometry(size, 0);
+        else if (i % 3 === 1) geometry = new THREE.BoxGeometry(size * 1.22, size * 0.72, size * 1.26);
+        else geometry = new THREE.OctahedronGeometry(size * 0.82, 0);
 
-      const tint = colorA.clone().lerp(colorB, Math.random() * 0.82);
-      const material = new THREE.MeshPhysicalMaterial({
-        color: tint.clone().lerp(new THREE.Color("#ffffff"), 0.18),
-        emissive: tint.clone().multiplyScalar(0.34),
-        emissiveIntensity: 0.92,
-        roughness: 0.09,
-        metalness: 0.08,
-        transmission: 0.93,
-        ior: 1.42,
-        thickness: 0.36 + Math.random() * 0.66,
-        clearcoat: 1,
-        clearcoatRoughness: 0.05,
-        envMapIntensity: 1.28,
-        transparent: true,
-        opacity: 0.96,
-        depthWrite: false,
-      });
+        const tint = colorA.clone().lerp(colorB, Math.random() * 0.82);
+        const material = new THREE.MeshPhysicalMaterial({
+          color: tint.clone().lerp(new THREE.Color("#ffffff"), 0.18),
+          emissive: tint.clone().multiplyScalar(0.34),
+          emissiveIntensity: 0.92,
+          roughness: 0.09,
+          metalness: 0.08,
+          transmission: 0.93,
+          ior: 1.42,
+          thickness: 0.36 + Math.random() * 0.66,
+          clearcoat: 1,
+          clearcoatRoughness: 0.05,
+          envMapIntensity: 1.28,
+          transparent: true,
+          opacity: 0.96,
+          depthWrite: false,
+        });
 
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
 
-      const launchDir = new THREE.Vector3(
-        Math.random() * 2 - 1,
-        Math.random() * 1.45 + 0.12,
-        Math.random() * 2 - 1
-      ).normalize();
-      const speed = THREE.MathUtils.lerp(7.5, 17.5, Math.random()) * (0.76 + this.radius * 0.38);
-      mesh.position
-        .copy(origin)
-        .addScaledVector(launchDir, size * 0.8)
-        .add(new THREE.Vector3(0, 0.04, 0));
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      scene.add(mesh);
+        const launchDir = new THREE.Vector3(
+          Math.random() * 2 - 1,
+          Math.random() * 1.45 + 0.12,
+          Math.random() * 2 - 1
+        ).normalize();
+        const speed = THREE.MathUtils.lerp(7.5, 17.5, Math.random()) * (0.76 + this.radius * 0.38);
+        mesh.position
+          .copy(origin)
+          .addScaledVector(launchDir, size * 0.8)
+          .add(new THREE.Vector3(0, 0.04, 0));
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        scene.add(mesh);
 
-      game.debris.push(new EnemyDebrisPiece(mesh, launchDir.multiplyScalar(speed), size));
+        game.debris.push(new EnemyDebrisPiece(mesh, launchDir.multiplyScalar(speed), size));
+      }
+
+      const burst = new THREE.Mesh(
+        new THREE.SphereGeometry(this.radius * 0.9, 12, 12),
+        new THREE.MeshBasicMaterial({
+          color: colorA.clone().lerp(colorB, 0.5),
+          transparent: true,
+          opacity: 0.52,
+          depthWrite: false,
+        })
+      );
+      burst.position.copy(origin);
+      scene.add(burst);
+      game.debris.push(new EnemyDebrisPulse(burst, this.radius * 0.9));
     }
-
-    const burst = new THREE.Mesh(
-      new THREE.SphereGeometry(this.radius * 0.9, 12, 12),
-      new THREE.MeshBasicMaterial({
-        color: colorA.clone().lerp(colorB, 0.5),
-        transparent: true,
-        opacity: 0.52,
-        depthWrite: false,
-      })
-    );
-    burst.position.copy(origin);
-    scene.add(burst);
-    game.debris.push(new EnemyDebrisPulse(burst, this.radius * 0.9));
 
     this.disposeHealthBar();
     scene.remove(this.mesh);
@@ -5936,44 +5954,46 @@ class AllyMinion {
 
     const origin = this.mesh.position.clone();
     const color = new THREE.Color(ALLY_COLOR_A);
-    const pieceCount = Math.min(16, Math.max(6, Math.round(this.radius * 8)));
+    if (game.explosionParticlesEnabled) {
+      const pieceCount = Math.min(16, Math.max(6, Math.round(this.radius * 8)));
 
-    for (let i = 0; i < pieceCount; i += 1) {
-      const size = THREE.MathUtils.lerp(this.radius * 0.08, this.radius * 0.18, Math.random());
-      const geometry =
-        i % 2 === 0
-          ? new THREE.TetrahedronGeometry(size, 0)
-          : new THREE.BoxGeometry(size * 1.14, size * 0.68, size * 1.18);
-      const material = new THREE.MeshPhysicalMaterial({
-        color: color.clone().lerp(new THREE.Color("#d8ffe8"), 0.1),
-        emissive: color.clone().multiplyScalar(0.22),
-        emissiveIntensity: 0.74,
-        roughness: 0.08,
-        metalness: 0.05,
-        transmission: 0.9,
-        ior: 1.42,
-        thickness: 0.24 + Math.random() * 0.24,
-        clearcoat: 0.96,
-        clearcoatRoughness: 0.05,
-        envMapIntensity: 1.1,
-        transparent: true,
-        opacity: 0.9,
-        depthWrite: false,
-      });
+      for (let i = 0; i < pieceCount; i += 1) {
+        const size = THREE.MathUtils.lerp(this.radius * 0.08, this.radius * 0.18, Math.random());
+        const geometry =
+          i % 2 === 0
+            ? new THREE.TetrahedronGeometry(size, 0)
+            : new THREE.BoxGeometry(size * 1.14, size * 0.68, size * 1.18);
+        const material = new THREE.MeshPhysicalMaterial({
+          color: color.clone().lerp(new THREE.Color("#d8ffe8"), 0.1),
+          emissive: color.clone().multiplyScalar(0.22),
+          emissiveIntensity: 0.74,
+          roughness: 0.08,
+          metalness: 0.05,
+          transmission: 0.9,
+          ior: 1.42,
+          thickness: 0.24 + Math.random() * 0.24,
+          clearcoat: 0.96,
+          clearcoatRoughness: 0.05,
+          envMapIntensity: 1.1,
+          transparent: true,
+          opacity: 0.9,
+          depthWrite: false,
+        });
 
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      const launchDir = new THREE.Vector3(
-        Math.random() * 2 - 1,
-        Math.random() * 1.25 + 0.18,
-        Math.random() * 2 - 1
-      ).normalize();
-      const speed = THREE.MathUtils.lerp(5.2, 11.8, Math.random()) * (0.74 + this.radius * 0.26);
-      mesh.position.copy(origin).addScaledVector(launchDir, size * 0.65).add(new THREE.Vector3(0, 0.03, 0));
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      scene.add(mesh);
-      game.debris.push(new EnemyDebrisPiece(mesh, launchDir.multiplyScalar(speed), size));
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        const launchDir = new THREE.Vector3(
+          Math.random() * 2 - 1,
+          Math.random() * 1.25 + 0.18,
+          Math.random() * 2 - 1
+        ).normalize();
+        const speed = THREE.MathUtils.lerp(5.2, 11.8, Math.random()) * (0.74 + this.radius * 0.26);
+        mesh.position.copy(origin).addScaledVector(launchDir, size * 0.65).add(new THREE.Vector3(0, 0.03, 0));
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        scene.add(mesh);
+        game.debris.push(new EnemyDebrisPiece(mesh, launchDir.multiplyScalar(speed), size));
+      }
     }
 
     scene.remove(this.mesh);
@@ -7096,6 +7116,14 @@ function prepareLevel(level) {
   renderShop();
 }
 
+function applyEnemyRingVisibility() {
+  const enabled = !!game.enemyRingsEnabled;
+  for (const enemy of game.enemies) {
+    if (!enemy || !enemy.ringNode) continue;
+    enemy.ringNode.visible = enabled;
+  }
+}
+
 function refreshSettingsPanel() {
   const applyToggleVisual = (button, enabled) => {
     if (!button) return;
@@ -7107,15 +7135,37 @@ function refreshSettingsPanel() {
   applyToggleVisual(settingSfxBtn, audioSystem.sfxEnabled);
   applyToggleVisual(settingShotBtn, audioSystem.shotSfxEnabled);
   applyToggleVisual(settingShatterBtn, audioSystem.shatterSfxEnabled);
+  applyToggleVisual(settingExplosionBtn, game.explosionParticlesEnabled);
+  applyToggleVisual(settingEnemyRingsBtn, game.enemyRingsEnabled);
 
   if (settingShotBtn) settingShotBtn.disabled = !audioSystem.sfxEnabled;
   if (settingShatterBtn) settingShatterBtn.disabled = !audioSystem.sfxEnabled;
+
+  const totalPages = 2;
+  const page = Math.max(0, Math.min(totalPages - 1, Math.floor(game.settingsPage || 0)));
+  game.settingsPage = page;
+  if (settingsPanelTitleEl) settingsPanelTitleEl.textContent = page === 0 ? "Audio & Visual Settings" : "Hotkeys";
+  if (settingsPageHintEl) settingsPageHintEl.textContent = `Page ${page + 1} / ${totalPages}`;
+  if (settingsPageTogglesEl) settingsPageTogglesEl.hidden = page !== 0;
+  if (settingsPageHotkeysEl) settingsPageHotkeysEl.hidden = page !== 1;
+  if (settingsPrevPageBtn) settingsPrevPageBtn.disabled = totalPages <= 1;
+  if (settingsNextPageBtn) settingsNextPageBtn.disabled = totalPages <= 1;
+}
+
+function cycleSettingsPage(step) {
+  if (!settingsPanelEl || settingsPanelEl.hidden) return;
+  if (!Number.isFinite(step) || step === 0) return;
+  const dir = step > 0 ? 1 : -1;
+  const totalPages = 2;
+  game.settingsPage = (Math.floor(game.settingsPage || 0) + dir + totalPages) % totalPages;
+  refreshSettingsPanel();
 }
 
 function openSettingsPanel() {
   if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   if (!settingsPanelEl) return;
   closeCommandConsole();
+  game.settingsPage = 0;
   settingsPanelEl.hidden = false;
   game.settingsOpen = true;
   refreshSettingsPanel();
@@ -7164,6 +7214,21 @@ function toggleSettingShatter() {
   if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || !audioSystem.sfxEnabled) return;
   audioSystem.shatterSfxEnabled = !audioSystem.shatterSfxEnabled;
   setStatus(audioSystem.shatterSfxEnabled ? "Glass shatter SFX enabled." : "Glass shatter SFX muted.");
+  refreshSettingsPanel();
+}
+
+function toggleSettingExplosionParticles() {
+  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
+  game.explosionParticlesEnabled = !game.explosionParticlesEnabled;
+  setStatus(game.explosionParticlesEnabled ? "Explosion particles enabled." : "Explosion particles hidden.");
+  refreshSettingsPanel();
+}
+
+function toggleSettingEnemyRings() {
+  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
+  game.enemyRingsEnabled = !game.enemyRingsEnabled;
+  applyEnemyRingVisibility();
+  setStatus(game.enemyRingsEnabled ? "Enemy rings enabled." : "Enemy rings hidden.");
   refreshSettingsPanel();
 }
 
@@ -8492,14 +8557,14 @@ function updateHud() {
   if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
   livesEl.textContent = `Core HP: ${game.lives}`;
   waveEl.textContent = `Wave: ${game.wave}`;
-  buildBtn.textContent = `Build ${selectedTower.name} (${placement.placed}/${placement.cap}, +${selectedCapInfo.upgradeLevel}) (B) - ${selectedTower.cost}`;
-  sellBtn.textContent = "Sell (X) - 40%";
-  laneBtn.textContent = game.editingLane ? "Lane Edit (L): On" : "Lane Edit (L)";
-  if (loadoutBtn) loadoutBtn.textContent = `Loadout (O) ${game.activeLoadout.size}/${getCurrentLoadoutSlotLimit()}`;
-  if (unlockBtn) unlockBtn.textContent = "Unlock Shop (U)";
-  menuBtn.textContent = game.menuOpen ? "Menu (M): Open" : "Menu (M)";
+  buildBtn.textContent = `Build ${selectedTower.name} (${placement.placed}/${placement.cap}, +${selectedCapInfo.upgradeLevel}) - ${selectedTower.cost}`;
+  sellBtn.textContent = "Sell - 40%";
+  laneBtn.textContent = game.editingLane ? "Lane Edit: On" : "Lane Edit";
+  if (loadoutBtn) loadoutBtn.textContent = `Loadout ${game.activeLoadout.size}/${getCurrentLoadoutSlotLimit()}`;
+  if (unlockBtn) unlockBtn.textContent = "Unlock Shop";
+  menuBtn.textContent = game.menuOpen ? "Menu: Open" : "Menu";
   startWaveBtn.textContent = game.levelOneDefeated ? "Level One Complete" : "Start Wave";
-  if (pauseBtn) pauseBtn.textContent = game.paused ? "Resume (P)" : "Pause (P)";
+  if (pauseBtn) pauseBtn.textContent = game.paused ? "Resume" : "Pause";
   if (speedValueEl) speedValueEl.textContent = formatSpeedLabel(game.speedMultiplier);
   if (autoWaveBtn) {
     autoWaveBtn.textContent = game.autoWaveEnabled
@@ -9183,7 +9248,7 @@ function startGameFromMenu(preferredLevel = null) {
     game.started = true;
     prepareLevel(targetLevel);
     const levelLabel = getMapEntry(targetLevel)?.name || `Level ${targetLevel}`;
-    setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes (L), then start a wave.`);
+    setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes, then start a wave.`);
   }
   closeMenuShop();
   syncMusicState();
@@ -9236,10 +9301,30 @@ if (levelClearMenuBtn) levelClearMenuBtn.addEventListener("click", acknowledgeLe
 if (defeatMenuBtn) defeatMenuBtn.addEventListener("click", acknowledgeDefeatToMenu);
 if (settingsToggleBtn) settingsToggleBtn.addEventListener("click", toggleSettingsPanel);
 if (settingsCloseBtn) settingsCloseBtn.addEventListener("click", closeSettingsPanel);
+if (settingsPrevPageBtn) settingsPrevPageBtn.addEventListener("click", () => cycleSettingsPage(-1));
+if (settingsNextPageBtn) settingsNextPageBtn.addEventListener("click", () => cycleSettingsPage(1));
 if (settingMusicBtn) settingMusicBtn.addEventListener("click", toggleSettingMusic);
 if (settingSfxBtn) settingSfxBtn.addEventListener("click", toggleSettingSfx);
 if (settingShotBtn) settingShotBtn.addEventListener("click", toggleSettingShots);
 if (settingShatterBtn) settingShatterBtn.addEventListener("click", toggleSettingShatter);
+if (settingExplosionBtn) settingExplosionBtn.addEventListener("click", toggleSettingExplosionParticles);
+if (settingEnemyRingsBtn) settingEnemyRingsBtn.addEventListener("click", toggleSettingEnemyRings);
+if (settingsPanelEl) {
+  let settingsSwipeStartX = null;
+  settingsPanelEl.addEventListener("touchstart", (event) => {
+    const touch = event.touches && event.touches[0];
+    settingsSwipeStartX = touch ? touch.clientX : null;
+  }, { passive: true });
+  settingsPanelEl.addEventListener("touchend", (event) => {
+    if (!Number.isFinite(settingsSwipeStartX)) return;
+    const touch = event.changedTouches && event.changedTouches[0];
+    const endX = touch ? touch.clientX : settingsSwipeStartX;
+    const deltaX = endX - settingsSwipeStartX;
+    settingsSwipeStartX = null;
+    if (Math.abs(deltaX) < 42) return;
+    cycleSettingsPage(deltaX > 0 ? -1 : 1);
+  }, { passive: true });
+}
 if (commandToggleBtn) commandToggleBtn.addEventListener("click", toggleCommandConsole);
 if (commandCloseBtn) commandCloseBtn.addEventListener("click", closeCommandConsole);
 if (commandRunBtn) commandRunBtn.addEventListener("click", runConsoleCommandFromInput);
@@ -9442,6 +9527,12 @@ window.addEventListener("keydown", (event) => {
       event.preventDefault();
       closeSettingsPanel();
       updateHud();
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      cycleSettingsPage(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      cycleSettingsPage(1);
     }
     return;
   }
