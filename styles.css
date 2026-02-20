@@ -438,9 +438,29 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-map-preview[data-map-theme="neon"] {
+  border-color: rgba(124, 232, 255, 0.44);
   background:
-    linear-gradient(165deg, rgba(109, 170, 214, 0.14), rgba(14, 34, 52, 0.6)),
-    radial-gradient(circle at 82% 20%, rgba(255, 185, 122, 0.14), transparent 45%);
+    radial-gradient(circle at 16% 82%, rgba(89, 241, 210, 0.26), transparent 38%),
+    radial-gradient(circle at 84% 18%, rgba(255, 178, 112, 0.2), transparent 32%),
+    linear-gradient(164deg, rgba(35, 88, 132, 0.44), rgba(12, 29, 47, 0.76) 54%, rgba(8, 15, 28, 0.92));
+}
+
+.menu-map-preview[data-map-theme="neon"]::before {
+  background:
+    linear-gradient(128deg, rgba(212, 247, 255, 0.12), transparent 34%),
+    repeating-linear-gradient(90deg, rgba(111, 217, 255, 0.12) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(0deg, rgba(111, 217, 255, 0.08) 0 1px, transparent 1px 10px),
+    radial-gradient(circle at 79% 20%, rgba(255, 196, 136, 0.16), transparent 28%);
+  mix-blend-mode: screen;
+}
+
+.menu-map-preview[data-map-theme="neon"]::after {
+  background:
+    radial-gradient(circle at 12% 74%, rgba(89, 241, 210, 0.36) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 26% 68%, rgba(89, 241, 210, 0.28) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 40% 73%, rgba(89, 241, 210, 0.22) 0 1px, transparent 1.6px),
+    linear-gradient(180deg, rgba(80, 179, 236, 0.09), transparent 56%);
+  opacity: 0.78;
 }
 
 .menu-map-preview[data-map-theme="moon"] {
