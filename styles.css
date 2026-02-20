@@ -1873,11 +1873,14 @@ button.active {
   bottom: 5.8rem;
   z-index: 66;
   width: min(320px, calc(100vw - 1.2rem));
+  max-height: min(72vh, 520px);
   border: 1px solid rgba(166, 221, 255, 0.44);
   border-radius: 12px;
   padding: 0.58rem;
   background: linear-gradient(150deg, rgba(7, 18, 30, 0.95), rgba(10, 27, 43, 0.92));
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.34);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .settings-panel[hidden] {
@@ -1885,10 +1888,16 @@ button.active {
 }
 
 .settings-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  background: linear-gradient(150deg, rgba(9, 24, 38, 0.96), rgba(12, 30, 46, 0.94));
+  padding-bottom: 0.34rem;
+  margin-bottom: 0.14rem;
 }
 
 .settings-panel-title {
@@ -1938,6 +1947,11 @@ button.active {
   gap: 0.38rem;
 }
 
+#settingsPageToggles[hidden],
+#settingsPageHotkeys[hidden] {
+  display: none !important;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -1950,8 +1964,11 @@ button.active {
 }
 
 .settings-row span {
+  flex: 1;
+  min-width: 0;
   font-size: 0.82rem;
   color: #d8ecfb;
+  overflow-wrap: anywhere;
 }
 
 .settings-row button {
@@ -1980,8 +1997,11 @@ button.active {
 }
 
 .settings-hotkey-row span {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8rem;
   color: #d8ecfb;
+  overflow-wrap: anywhere;
 }
 
 .settings-hotkey-row strong {
@@ -2361,6 +2381,7 @@ canvas {
     right: 0.34rem;
     bottom: 4.1rem;
     width: min(300px, calc(100vw - 1rem));
+    max-height: min(66vh, 380px);
   }
 
   .command-console {
