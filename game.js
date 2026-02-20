@@ -152,7 +152,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-35";
+const BUILD_ID = "2026-02-20-36";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5518,6 +5518,10 @@ function getEnemySpinSpeed(typeId) {
   return 2.8;
 }
 
+function enemyKeepsUpright(typeId) {
+  return typeId === "pyramidion";
+}
+
 class Enemy {
   constructor(stats) {
     this.pathIndex = 0;
@@ -5625,7 +5629,10 @@ class Enemy {
     const movedX = this.x - prevX;
     const movedZ = this.z - prevZ;
     const movedDistance = Math.hypot(movedX, movedZ);
-    if (movedDistance > 1e-5) {
+    if (enemyKeepsUpright(this.typeId)) {
+      const yaw = Math.atan2(this.headingX, this.headingZ);
+      this.mesh.rotation.set(0, yaw, 0);
+    } else if (movedDistance > 1e-5) {
       const invMove = 1 / movedDistance;
       this.rollAxis.set(movedZ * invMove, 0, -movedX * invMove);
       this.rollQuat.setFromAxisAngle(this.rollAxis, movedDistance / this.rollRadius);
@@ -5974,7 +5981,10 @@ class AllyMinion {
     const movedX = this.x - prevX;
     const movedZ = this.z - prevZ;
     const movedDistance = Math.hypot(movedX, movedZ);
-    if (movedDistance > 1e-5) {
+    if (enemyKeepsUpright(this.typeId)) {
+      const yaw = Math.atan2(this.headingX, this.headingZ);
+      this.mesh.rotation.set(0, yaw, 0);
+    } else if (movedDistance > 1e-5) {
       const invMove = 1 / movedDistance;
       this.rollAxis.set(movedZ * invMove, 0, -movedX * invMove);
       this.rollQuat.setFromAxisAngle(this.rollAxis, movedDistance / this.rollRadius);
