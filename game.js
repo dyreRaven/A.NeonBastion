@@ -1799,6 +1799,9 @@ const ALLY_SPAWN_GAP_PADDING = 0.08;
 const ALLY_SPAWN_SLOT_MAX = 8;
 const ALLY_SURFACE_FOLLOW_RATE = 10;
 const SAME_TYPE_SPAWNER_SEQUENCE_DELAY = 1;
+const LEVEL_ONE_BOSS_MINION_SPAWN_INTERVAL = 1.35;
+const LEVEL_ONE_BOSS_MINION_INITIAL_DELAY = 1.35;
+const LEVEL_ONE_BOSS_MINION_MAX_BATCH_PER_TICK = 2;
 const BOSS_WAVE_DIFFICULTY_MULTIPLIER = 2;
 
 const CREATURE_SPAWNER_UNLOCKS = {
@@ -2260,7 +2263,7 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
 }
 
 function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
-  if (level === 1 && wave === 20) return ["icosahedron", ...Array(12).fill("minion")];
+  if (level === 1 && wave === 20) return ["icosahedron"];
   if (level >= 3 && wave === 40) return ["star"];
   if (level === 2 && wave === 30) {
     const betweenEscortBlock = Array(6).fill("rhombusMinus");
@@ -2339,14 +2342,16 @@ function createEnemyStats(typeId, wave, level = game.currentLevel, options = nul
   const baseReward = type.reward + type.rewardGrowth * waveFactor;
   const rewardScaled = (typeId === "crawler" ? baseReward : baseReward / 3) * profile.rewardMultiplier;
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
+  let scaledSpeed = type.speed * (1 + type.speedGrowth * waveFactor) * profile.speedMultiplier;
   let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 77508 : scaledHp;
   if (!forAlly && isBossWave(level, wave)) hp = Math.max(1, Math.round(hp * BOSS_WAVE_DIFFICULTY_MULTIPLIER));
+  if (!forAlly && typeId === "star") scaledSpeed *= 2;
 
   return {
     typeId,
     name: type.name,
     hp,
-    speed: type.speed * (1 + type.speedGrowth * waveFactor) * profile.speedMultiplier,
+    speed: scaledSpeed,
     reward: Math.max(1, Math.round(rewardScaled)),
     radius: type.radius,
     coreDamage: Math.max(1, Math.round(type.coreDamage * profile.coreDamageMultiplier)),
@@ -4155,6 +4160,7 @@ const game = {
   spawnLeft: 0,
   spawnTimer: 0,
   spawnQueue: [],
+  levelOneBossMinionTimer: 0,
   selectedTowerType: "pulse",
   unlockedTowers: new Set(BASE_UNLOCKED_TOWERS),
   towerCapUpgrades: {},
@@ -11094,6 +11100,7 @@ function completeCurrentLevel(nextLevel, shardReward, statusMessage, panelMessag
   game.spawnQueue = [];
   game.spawnLeft = 0;
   game.spawnTimer = 0;
+  game.levelOneBossMinionTimer = 0;
   game.bossEnemy = null;
 
   for (const enemy of game.enemies) {
@@ -11274,6 +11281,7 @@ function clearActiveCombatState() {
   game.spawnQueue = [];
   game.spawnLeft = 0;
   game.spawnTimer = 0;
+  game.levelOneBossMinionTimer = 0;
   game.bossEnemy = null;
   game.bombarderTargetingTower = null;
 }
@@ -13788,11 +13796,12 @@ function sellTowerAtCell(cellX, cellY) {
   updateHud();
 }
 
-function spawnEnemy() {
-  const typeId = game.spawnQueue.shift() || "crawler";
+function spawnEnemy(overrideTypeId = null) {
+  const fromQueue = typeof overrideTypeId !== "string" || overrideTypeId.length === 0;
+  const typeId = fromQueue ? game.spawnQueue.shift() || "crawler" : overrideTypeId;
   const stats = createEnemyStats(typeId, game.wave, game.currentLevel);
   const enemy = new Enemy(stats);
-  game.spawnLeft = game.spawnQueue.length;
+  if (fromQueue) game.spawnLeft = game.spawnQueue.length;
   game.enemies.push(enemy);
   if (typeId === "icosahedron" || typeId === "rhombus" || typeId === "star") game.bossEnemy = enemy;
   return typeId;
@@ -13830,6 +13839,8 @@ function startWave() {
   game.spawnQueue = buildWaveSpawnQueue(game.wave, spawnCount, game.currentLevel);
   game.spawnLeft = game.spawnQueue.length;
   game.spawnTimer = profile.spawnStartDelay;
+  game.levelOneBossMinionTimer =
+    game.currentLevel === 1 && game.wave === 20 ? LEVEL_ONE_BOSS_MINION_INITIAL_DELAY : 0;
   game.autoWaveCountdown = game.autoWaveInterval;
   syncMusicState();
   setStatus(`Wave ${game.wave} started. ${waveThreatLabel(game.wave, game.currentLevel)}`);
@@ -14292,6 +14303,22 @@ function update(dt) {
     }
   }
 
+  if (game.inWave && game.currentLevel === 1 && game.wave === 20) {
+    const bossAlive = game.enemies.some((enemy) => enemy.alive && enemy.typeId === "icosahedron");
+    if (bossAlive) {
+      game.levelOneBossMinionTimer -= dt;
+      let spawnedThisTick = 0;
+      while (game.levelOneBossMinionTimer <= 0 && spawnedThisTick < LEVEL_ONE_BOSS_MINION_MAX_BATCH_PER_TICK) {
+        spawnEnemy("minion");
+        game.levelOneBossMinionTimer += LEVEL_ONE_BOSS_MINION_SPAWN_INTERVAL;
+        spawnedThisTick += 1;
+      }
+      if (game.levelOneBossMinionTimer <= 0) {
+        game.levelOneBossMinionTimer = LEVEL_ONE_BOSS_MINION_SPAWN_INTERVAL;
+      }
+    }
+  }
+
   for (const tower of game.towers) tower.update(dt);
   for (const enemy of game.enemies) enemy.update(dt);
   stabilizeSolarShardSpacing();
@@ -14317,6 +14344,7 @@ function update(dt) {
         game.spawnQueue = [];
         game.spawnLeft = 0;
         game.spawnTimer = 0;
+        game.levelOneBossMinionTimer = 0;
         setStatus("Defeat! Your core was destroyed.", true);
         openDefeatPanel();
       }
