@@ -145,7 +145,10 @@ const CELL_SIZE = 4;
 const AUTO_WAVE_INTERVAL = 10;
 const SELL_REFUND_RATIO = 0.4;
 const PROGRESS_STORAGE_KEY = "tower-defense-progress-v2";
+const PROGRESS_BACKUP_STORAGE_KEY = "tower-defense-progress-v2-backup";
 const LEGACY_PROGRESS_STORAGE_KEY = "tower-defense-progress-v1";
+const ACCOUNT_DISPLAY_NAME_MAX_LENGTH = 24;
+const ACCOUNT_USERNAME_MAX_LENGTH = 64;
 const SHATTER_GRAVITY = -38;
 const SHATTER_AIR_DRAG = 1.75;
 const SHATTER_GROUND_DRAG = 8.5;
@@ -170,7 +173,7 @@ const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
 const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
 const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-55";
+const BUILD_ID = "2026-02-20-59";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4946,34 +4949,66 @@ function sendMultiplayerAction(action, payload = {}) {
   });
 }
 
+let progressStorageState = 0;
+let progressStorageRef = null;
+let progressStorageUnavailable = false;
+let progressRecoveredFromBackup = false;
+
 function getProgressStorage() {
+  if (progressStorageState === 1) return progressStorageRef;
+  if (progressStorageState === -1) return null;
   try {
-    return window.localStorage;
+    const storage = window.localStorage;
+    if (!storage) {
+      progressStorageState = -1;
+      return null;
+    }
+    const probeKey = "__neon_bastion_storage_probe__";
+    storage.setItem(probeKey, "1");
+    storage.removeItem(probeKey);
+    progressStorageRef = storage;
+    progressStorageState = 1;
+    return storage;
   } catch (_) {
+    progressStorageState = -1;
     return null;
   }
 }
 
-function sanitizeAccountName(name) {
+function sanitizeAccountName(name, maxLength = ACCOUNT_DISPLAY_NAME_MAX_LENGTH) {
   return String(name || "")
-    .replace(/[^\w\s-]/g, "")
+    .replace(/[^\w\s@.+-]/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 24);
+    .slice(0, Math.max(1, Math.floor(Number(maxLength) || ACCOUNT_DISPLAY_NAME_MAX_LENGTH)));
 }
 
 const MIN_ACCOUNT_PASSWORD_LENGTH = 4;
 
 function sanitizeAccountUsername(username) {
-  return sanitizeAccountName(username);
+  return sanitizeAccountName(username, ACCOUNT_USERNAME_MAX_LENGTH).replace(/\s+/g, "");
 }
 
-function getAccountUsernameKey(username) {
+function getLegacyAccountUsernameKey(username) {
   return sanitizeAccountUsername(username).toLowerCase();
 }
 
-function hashAccountPassword(username, password) {
-  const usernameKey = getAccountUsernameKey(username);
+function getAccountUsernameKey(username) {
+  const normalized = getLegacyAccountUsernameKey(username);
+  if (!normalized) return "";
+  const gmailMatch = normalized.match(/^([^@]+)@(gmail\.com|googlemail\.com)$/);
+  if (!gmailMatch) return normalized;
+  const dottedLocal = gmailMatch[1];
+  const localWithoutDots = dottedLocal.replace(/\./g, "");
+  const plusIndex = localWithoutDots.indexOf("+");
+  const baseLocal = plusIndex >= 0 ? localWithoutDots.slice(0, plusIndex) : localWithoutDots;
+  const canonicalLocal = baseLocal || localWithoutDots;
+  if (!canonicalLocal) return normalized;
+  return `${canonicalLocal}@gmail.com`;
+}
+
+function hashAccountPassword(username, password, legacyMode = false) {
+  const usernameKey = legacyMode ? getLegacyAccountUsernameKey(username) : getAccountUsernameKey(username);
   const source = `${usernameKey}::${String(password || "")}`;
   let hash = 2166136261;
   for (let i = 0; i < source.length; i += 1) {
@@ -4997,7 +5032,17 @@ function verifyAccountPassword(account, password) {
   if (!account) return false;
   const storedHash = normalizeStoredPasswordHash(account.passwordHash);
   if (!storedHash) return String(password || "").length === 0;
-  return storedHash === hashAccountPassword(account.name || "", password);
+  const normalizedUsername = account.name || "";
+  const canonicalHash = hashAccountPassword(normalizedUsername, password);
+  if (storedHash === canonicalHash) return true;
+
+  // Preserve compatibility with hashes saved before Gmail canonicalization.
+  const legacyHash = hashAccountPassword(normalizedUsername, password, true);
+  if (storedHash !== legacyHash) return false;
+
+  // Upgrade to canonical hash once the user authenticates successfully.
+  account.passwordHash = canonicalHash;
+  return true;
 }
 
 function findAccountByUsername(username) {
@@ -5309,7 +5354,19 @@ function persistProgressData() {
   const storage = getProgressStorage();
   if (!storage) return;
   try {
-    storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progressData));
+    const serialized = JSON.stringify(progressData);
+    try {
+      const previous = storage.getItem(PROGRESS_STORAGE_KEY);
+      if (previous && previous !== serialized) {
+        let previousValid = false;
+        try {
+          const parsedPrevious = JSON.parse(previous);
+          previousValid = !!parsedPrevious && typeof parsedPrevious === "object";
+        } catch (_) {}
+        if (previousValid) storage.setItem(PROGRESS_BACKUP_STORAGE_KEY, previous);
+      }
+    } catch (_) {}
+    storage.setItem(PROGRESS_STORAGE_KEY, serialized);
   } catch (_) {}
 }
 
@@ -5362,18 +5419,35 @@ function savePlayerProgress() {
 }
 
 function loadPlayerProgress() {
+  progressStorageUnavailable = false;
+  progressRecoveredFromBackup = false;
   const storage = getProgressStorage();
   if (!storage) {
+    progressStorageUnavailable = true;
     progressData = defaultProgressData();
     applyAccountToGame(getCurrentAccountRecord());
     return false;
   }
 
   let parsed = null;
+  let recoveredFromBackup = false;
+
   try {
-    parsed = JSON.parse(storage.getItem(PROGRESS_STORAGE_KEY) || "null");
+    const primaryRaw = storage.getItem(PROGRESS_STORAGE_KEY) || "null";
+    parsed = JSON.parse(primaryRaw);
   } catch (_) {
     parsed = null;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    try {
+      const backupRaw = storage.getItem(PROGRESS_BACKUP_STORAGE_KEY) || "null";
+      const backupParsed = JSON.parse(backupRaw);
+      if (backupParsed && typeof backupParsed === "object") {
+        parsed = backupParsed;
+        recoveredFromBackup = true;
+      }
+    } catch (_) {}
   }
 
   if (!parsed || typeof parsed !== "object") {
@@ -5396,6 +5470,10 @@ function loadPlayerProgress() {
   resolveStartupAuthenticationRequirement();
   syncAccountStartupPreferenceUi();
   applyAccountToGame(getCurrentAccountRecord());
+  if (recoveredFromBackup) {
+    progressRecoveredFromBackup = true;
+    persistProgressData();
+  }
   savePlayerProgress();
   return true;
 }
@@ -9540,6 +9618,9 @@ function renderAccountMenu() {
     const spawnerCount = Array.isArray(account.unlockedSpawnerTowers) ? account.unlockedSpawnerTowers.length : 0;
     const loadoutSlots = clampLoadoutSlotLimit(Number(account.maxLoadoutSlots));
     const authTag = accountHasPassword(account) ? "Password Set" : "No Password";
+    const switchAction = active
+      ? ""
+      : `<button type="button" data-account-action="switch" data-account-id="${account.id}">Use</button>`;
     fragments.push(`
       <div class="menu-account-item ${active ? "active" : ""}">
         <div>
@@ -9548,6 +9629,7 @@ function renderAccountMenu() {
         </div>
         <div class="menu-account-actions">
           <span class="menu-account-badge">${active ? "Signed In" : "Saved"}</span>
+          ${switchAction}
           <button type="button" data-account-action="delete" data-account-id="${account.id}">
             Delete
           </button>
@@ -9565,6 +9647,10 @@ function renderAccountMenu() {
     const accountId = button.dataset.accountId;
     const action = button.dataset.accountAction;
     if (!accountId || !action) return;
+    if (action === "switch") {
+      switchToAccount(accountId);
+      return;
+    }
     if (action === "delete") {
       deleteAccountById(accountId);
     }
@@ -9731,6 +9817,7 @@ function resetAllProgressFromCommand() {
   if (storage) {
     try {
       storage.removeItem(PROGRESS_STORAGE_KEY);
+      storage.removeItem(PROGRESS_BACKUP_STORAGE_KEY);
       storage.removeItem(LEGACY_PROGRESS_STORAGE_KEY);
     } catch (_) {}
   }
@@ -10014,6 +10101,11 @@ function openAccountMenu() {
     accountLoginUsernameInputEl.value = game.accountName || "";
     accountLoginUsernameInputEl.focus();
     accountLoginUsernameInputEl.select();
+  }
+  if (progressStorageUnavailable) {
+    setStatus("Local storage is blocked. Account changes will reset after closing the browser.", true);
+  } else if (progressRecoveredFromBackup) {
+    setStatus("Recovered account data from backup. Verify your accounts before continuing.");
   }
 }
 
@@ -11658,6 +11750,10 @@ if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
   const pendingName = pendingAccount?.name || "your account";
   setStatus(`Login required for ${pendingName} before starting.`, true);
+} else if (progressStorageUnavailable) {
+  setStatus("Local storage is blocked. Account progress will not persist on this device.", true);
+} else if (progressRecoveredFromBackup) {
+  setStatus("Recovered account data from backup. Check Account Setup to confirm everything looks right.");
 } else if (!rendererWebglAvailable) {
   setStatus("WebGL unavailable. Account and menu work, but gameplay rendering is disabled on this device.", true);
 } else {

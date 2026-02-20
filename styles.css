@@ -1124,6 +1124,8 @@ body:not(.menu-active) .menu-screen {
   justify-self: end;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.34rem;
 }
 
