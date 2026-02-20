@@ -121,7 +121,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-28";
+const BUILD_ID = "2026-02-20-29";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1428,6 +1428,7 @@ const ENEMY_TYPES = {
 };
 
 const SPAWNER_TOWER_PREFIX = "spawner_";
+const BOSS_ENEMY_IDS = new Set(["icosahedron", "rhombus", "star"]);
 const ALLY_COLOR_A = "#2cff72";
 const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
@@ -1477,6 +1478,15 @@ function enemyTypeFromSpawnerTowerId(towerTypeId) {
 
 function isSpawnerTowerId(towerTypeId) {
   return !!enemyTypeFromSpawnerTowerId(towerTypeId);
+}
+
+function isBossEnemyType(enemyTypeId) {
+  return BOSS_ENEMY_IDS.has(enemyTypeId);
+}
+
+function isBossSpawnerTowerId(towerTypeId) {
+  const enemyTypeId = enemyTypeFromSpawnerTowerId(towerTypeId);
+  return !!enemyTypeId && isBossEnemyType(enemyTypeId);
 }
 
 function getSpawnerTowerType(towerTypeId) {
@@ -1667,7 +1677,9 @@ function getTowerCapUpgradeCost(towerTypeId, nextLevel) {
   const baseCap = getTowerBasePlaceCap(towerTypeId);
   const level = Math.max(1, Math.floor(nextLevel || 1));
   const spawnerTax = isSpawnerTowerId(towerTypeId) ? 8 : 0;
-  return Math.max(8, Math.round(6 + baseCap * 4 + level * 10 + towerType.cost * 0.035 + spawnerTax));
+  const baseCost = 6 + baseCap * 4 + level * 10 + towerType.cost * 0.035 + spawnerTax;
+  const bossSpawnerMultiplier = isBossSpawnerTowerId(towerTypeId) ? 4 : 1;
+  return Math.max(8, Math.round(baseCost * bossSpawnerMultiplier));
 }
 
 function normalizeTowerCapUpgrades(rawUpgrades) {
@@ -2053,16 +2065,19 @@ const MAP_CATALOG = [
     level: 1,
     name: "Level 1 - Neon Bastion",
     description: "Classic defense route with balanced pressure.",
+    theme: "neon",
   },
   {
     level: 2,
     name: "Level 2 - Moonfall",
     description: "Harder lunar map with sharper early pressure and tighter survivability.",
+    theme: "moon",
   },
   {
     level: 3,
     name: "Level 3 - Ember Rift",
     description: "Lava-forged battleground with volatile lighting and high-contrast shadows.",
+    theme: "ember",
   },
 ];
 
@@ -6931,7 +6946,7 @@ function clearMapPreviewAnimation() {
 }
 
 function applyMapPreviewContent() {
-  if (!mapPreviewIndexEl || !mapPreviewNameEl || !mapPreviewDescEl || !mapPreviewLockEl) return;
+  if (!mapPreviewIndexEl || !mapPreviewNameEl || !mapPreviewDescEl || !mapPreviewLockEl || !mapPreviewEl) return;
   const selectedLevel = clampMenuSelectedLevel(game.menuSelectedLevel);
   const mapEntry = getMapEntry(selectedLevel);
   const unlocked = isLevelUnlocked(selectedLevel);
@@ -6941,6 +6956,7 @@ function applyMapPreviewContent() {
   mapPreviewLockEl.textContent = unlocked ? "Unlocked" : "Locked";
   mapPreviewLockEl.classList.toggle("unlocked", unlocked);
   mapPreviewLockEl.classList.toggle("locked", !unlocked);
+  mapPreviewEl.dataset.mapTheme = mapEntry.theme || (selectedLevel === 2 ? "moon" : selectedLevel >= 3 ? "ember" : "neon");
 }
 
 function renderMapPreview(direction = 0, animate = false) {
