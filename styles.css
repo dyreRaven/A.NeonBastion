@@ -719,12 +719,13 @@ body:not(.menu-active) .menu-screen {
 
 #menuAccountPanel {
   margin-top: -0.18rem;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto minmax(clamp(220px, 42vh, 520px), 1fr) auto auto;
   align-content: stretch;
-  height: min(80vh, 660px);
+  height: min(88vh, 760px);
 }
 
 .menu-card[data-view="account"] {
+  width: min(760px, 100%);
   max-height: min(95vh, 860px);
   padding-top: 1.18rem;
   padding-bottom: 1.02rem;
@@ -1118,6 +1119,7 @@ body:not(.menu-active) .menu-screen {
   min-height: 0;
   overflow-y: auto;
   align-content: start;
+  padding-right: 0.2rem;
 }
 
 #menuAccountNote {
@@ -2447,8 +2449,15 @@ canvas {
 
   .menu-card[data-view="account"] #menuAccountPanel {
     margin-top: -0.06rem;
-    height: min(82vh, 720px);
+    grid-template-rows: auto auto auto auto minmax(clamp(190px, 36vh, 320px), 1fr) auto auto;
+    height: min(88vh, 780px);
     max-height: none;
+  }
+
+  .menu-card[data-view="account"] .menu-account-auth {
+    max-height: min(34vh, 320px);
+    overflow-y: auto;
+    padding-right: 0.08rem;
   }
 
   .menu-account-auth {
