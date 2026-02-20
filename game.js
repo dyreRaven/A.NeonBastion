@@ -200,7 +200,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-77";
+const BUILD_ID = "2026-02-20-78";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5271,6 +5271,60 @@ function clearCloudAuthRuntimeSessionSnapshot() {
   } catch (_) {}
 }
 
+function normalizePersistedCloudAuthSession(rawSession) {
+  if (!rawSession || typeof rawSession !== "object") return null;
+  const accessToken = String(rawSession.accessToken || rawSession.access_token || "").trim();
+  const refreshToken = String(rawSession.refreshToken || rawSession.refresh_token || "").trim();
+  if (!accessToken || !refreshToken) return null;
+  const expiresAtRaw = Number(rawSession.expiresAt ?? rawSession.expires_at);
+  const savedAtRaw = Number(rawSession.savedAt ?? rawSession.saved_at);
+  const userId = String(rawSession.userId || rawSession.user_id || "").trim();
+  const email = sanitizeAccountUsername(rawSession.email || "");
+  return {
+    accessToken,
+    refreshToken,
+    expiresAt: Number.isFinite(expiresAtRaw) ? Math.max(0, Math.floor(expiresAtRaw)) : 0,
+    savedAt: Number.isFinite(savedAtRaw) ? Math.max(0, Math.floor(savedAtRaw)) : Date.now(),
+    userId,
+    email,
+  };
+}
+
+function capturePersistedCloudAuthSession(session) {
+  if (!session || typeof session !== "object") return null;
+  return normalizePersistedCloudAuthSession({
+    accessToken: session.access_token,
+    refreshToken: session.refresh_token,
+    expiresAt: session.expires_at,
+    savedAt: Date.now(),
+    userId: session.user?.id || "",
+    email: session.user?.email || "",
+  });
+}
+
+function persistCloudAuthSessionSnapshot(session) {
+  if (progressData.requirePasswordOnStartup) return;
+  const nextSnapshot = capturePersistedCloudAuthSession(session);
+  if (!nextSnapshot) return;
+  const currentSnapshot = normalizePersistedCloudAuthSession(progressData.cloudAuthSession);
+  const unchanged =
+    currentSnapshot &&
+    currentSnapshot.accessToken === nextSnapshot.accessToken &&
+    currentSnapshot.refreshToken === nextSnapshot.refreshToken &&
+    currentSnapshot.expiresAt === nextSnapshot.expiresAt &&
+    currentSnapshot.userId === nextSnapshot.userId &&
+    currentSnapshot.email === nextSnapshot.email;
+  if (unchanged) return;
+  progressData.cloudAuthSession = nextSnapshot;
+  persistProgressData();
+}
+
+function clearPersistedCloudAuthSession() {
+  if (!progressData.cloudAuthSession) return;
+  progressData.cloudAuthSession = null;
+  persistProgressData();
+}
+
 function createCloudAuthStorageAdapter() {
   return {
     getItem(key) {
@@ -6214,6 +6268,7 @@ async function signOutCloudAccount() {
       cloudAuth.syncTimer = null;
     }
     clearCloudAuthRuntimeSessionSnapshot();
+    clearPersistedCloudAuthSession();
     const storage = getProgressStorage();
     if (storage) {
       try {
@@ -6270,11 +6325,13 @@ async function initializeCloudAuth() {
         clearTimeout(cloudAuth.syncTimer);
         cloudAuth.syncTimer = null;
       }
+      clearPersistedCloudAuthSession();
       updateAccountCloudUi();
       return;
     }
     const sessionUser = session?.user || null;
     if (!sessionUser) return;
+    if (session) persistCloudAuthSessionSnapshot(session);
     const changedUser = !cloudAuth.user || cloudAuth.user.id !== sessionUser.id;
     cloudAuth.user = sessionUser;
     updateAccountCloudUi();
@@ -6289,7 +6346,23 @@ async function initializeCloudAuth() {
       updateAccountCloudUi();
       return;
     }
-    const sessionUser = data?.session?.user || null;
+    let activeSession = data?.session || null;
+    if (!activeSession && !progressData.requirePasswordOnStartup) {
+      const persistedSession = normalizePersistedCloudAuthSession(progressData.cloudAuthSession);
+      if (persistedSession) {
+        const restored = await cloudAuth.client.auth.setSession({
+          access_token: persistedSession.accessToken,
+          refresh_token: persistedSession.refreshToken,
+        });
+        if (!restored?.error && restored?.data?.session) {
+          activeSession = restored.data.session;
+          persistCloudAuthSessionSnapshot(restored.data.session);
+        } else {
+          clearPersistedCloudAuthSession();
+        }
+      }
+    }
+    const sessionUser = activeSession?.user || null;
     if (sessionUser) {
       const cloudReady = await syncCloudSessionUser(sessionUser, true);
       const signedInEmail = sanitizeAccountUsername(sessionUser.email || "");
@@ -6490,6 +6563,23 @@ function setRequirePasswordOnStartup(required, announce = false) {
   progressData.requirePasswordOnStartup = !!required;
   if (!progressData.requirePasswordOnStartup) {
     startupAuthPendingAccountId = "";
+  } else {
+    clearPersistedCloudAuthSession();
+    clearCloudAuthRuntimeSessionSnapshot();
+    const storage = getProgressStorage();
+    if (storage) {
+      try {
+        storage.removeItem(CLOUD_AUTH_STORAGE_KEY);
+      } catch (_) {}
+    }
+  }
+  if (!progressData.requirePasswordOnStartup && cloudAuth.client) {
+    void cloudAuth.client.auth.getSession()
+      .then(({ data }) => {
+        const session = data?.session || null;
+        if (session) persistCloudAuthSessionSnapshot(session);
+      })
+      .catch(() => {});
   }
   persistProgressData();
   syncAccountStartupPreferenceUi();
@@ -6670,6 +6760,7 @@ function defaultProgressData(seed = null) {
     currentAccountId: account.id,
     lastAuthenticatedAccountId: account.id,
     requirePasswordOnStartup: false,
+    cloudAuthSession: null,
     accounts: [account],
   };
 }
@@ -6711,11 +6802,13 @@ function normalizeProgressData(rawData) {
   let lastAuthenticatedAccountId = normalizeAccountId(rawData.lastAuthenticatedAccountId);
   if (!accounts.some((account) => account.id === lastAuthenticatedAccountId)) lastAuthenticatedAccountId = currentAccountId;
   const requirePasswordOnStartup = !!rawData.requirePasswordOnStartup;
+  const cloudAuthSession = normalizePersistedCloudAuthSession(rawData.cloudAuthSession);
 
   return {
     currentAccountId,
     lastAuthenticatedAccountId,
     requirePasswordOnStartup,
+    cloudAuthSession,
     accounts,
   };
 }
