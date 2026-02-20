@@ -200,7 +200,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-78";
+const BUILD_ID = "2026-02-20-79";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5290,6 +5290,22 @@ function normalizePersistedCloudAuthSession(rawSession) {
   };
 }
 
+function extractPersistedCloudAuthSessionFromStorageString(rawValue) {
+  if (typeof rawValue !== "string" || !rawValue.trim()) return null;
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!parsed || typeof parsed !== "object") return null;
+    const candidate =
+      parsed.currentSession ||
+      parsed.session ||
+      parsed.data?.session ||
+      parsed;
+    return normalizePersistedCloudAuthSession(candidate);
+  } catch (_) {
+    return null;
+  }
+}
+
 function capturePersistedCloudAuthSession(session) {
   if (!session || typeof session !== "object") return null;
   return normalizePersistedCloudAuthSession({
@@ -6325,7 +6341,6 @@ async function initializeCloudAuth() {
         clearTimeout(cloudAuth.syncTimer);
         cloudAuth.syncTimer = null;
       }
-      clearPersistedCloudAuthSession();
       updateAccountCloudUi();
       return;
     }
@@ -6348,7 +6363,20 @@ async function initializeCloudAuth() {
     }
     let activeSession = data?.session || null;
     if (!activeSession && !progressData.requirePasswordOnStartup) {
-      const persistedSession = normalizePersistedCloudAuthSession(progressData.cloudAuthSession);
+      let persistedSession = normalizePersistedCloudAuthSession(progressData.cloudAuthSession);
+      if (!persistedSession) {
+        persistedSession = extractPersistedCloudAuthSessionFromStorageString(readCloudAuthRuntimeSessionSnapshot());
+      }
+      if (!persistedSession) {
+        const storage = getProgressStorage();
+        if (storage) {
+          try {
+            persistedSession = extractPersistedCloudAuthSessionFromStorageString(
+              storage.getItem(CLOUD_AUTH_STORAGE_KEY) || ""
+            );
+          } catch (_) {}
+        }
+      }
       if (persistedSession) {
         const restored = await cloudAuth.client.auth.setSession({
           access_token: persistedSession.accessToken,
@@ -6359,6 +6387,13 @@ async function initializeCloudAuth() {
           persistCloudAuthSessionSnapshot(restored.data.session);
         } else {
           clearPersistedCloudAuthSession();
+          clearCloudAuthRuntimeSessionSnapshot();
+          const storage = getProgressStorage();
+          if (storage) {
+            try {
+              storage.removeItem(CLOUD_AUTH_STORAGE_KEY);
+            } catch (_) {}
+          }
         }
       }
     }
