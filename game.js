@@ -8705,6 +8705,8 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     miniStar.group.position.y = -miniStar.minY * miniScale + 0.02;
     symbolObject = miniStar.group;
     symbolY = 0.42;
+  } else if (enemyTypeId === "leviathan") {
+    symbolGeometry = new THREE.SphereGeometry(0.58, 22, 22);
   } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus" || enemyTypeId === "diamondarchon") {
     symbolGeometry = new THREE.OctahedronGeometry(0.58, 0);
   } else {
