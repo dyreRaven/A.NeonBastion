@@ -1795,6 +1795,8 @@ const SOLAR_SHARD_COUNT = 2;
 const ALLY_COLOR_A = "#2cff72";
 const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
+const ALLY_SPAWN_GAP_PADDING = 0.08;
+const ALLY_SPAWN_SLOT_MAX = 8;
 
 const CREATURE_SPAWNER_UNLOCKS = {
   crawler: { killRequirement: 200, towerCost: 260, spawnInterval: 2.3 },
@@ -6719,12 +6721,6 @@ function getAccountDisplayName(account, fallback = "Commander") {
   return sanitizeAccountName(rawName || fallback) || "Commander";
 }
 
-function getAccountAuthIdentity(account) {
-  const email = getAccountEmail(account);
-  if (email) return email;
-  return sanitizeAccountUsername(account?.name || "") || "commander";
-}
-
 function getLegacyAccountUsernameKey(username) {
   return sanitizeAccountUsername(username).toLowerCase();
 }
@@ -6762,23 +6758,6 @@ function normalizeStoredPasswordHash(rawHash) {
 
 function accountHasPassword(account) {
   return !!normalizeStoredPasswordHash(account?.passwordHash);
-}
-
-function verifyAccountPassword(account, password) {
-  if (!account) return false;
-  const storedHash = normalizeStoredPasswordHash(account.passwordHash);
-  if (!storedHash) return String(password || "").length === 0;
-  const normalizedUsername = getAccountAuthIdentity(account);
-  const canonicalHash = hashAccountPassword(normalizedUsername, password);
-  if (storedHash === canonicalHash) return true;
-
-  // Preserve compatibility with hashes saved before Gmail canonicalization.
-  const legacyHash = hashAccountPassword(normalizedUsername, password, true);
-  if (storedHash !== legacyHash) return false;
-
-  // Upgrade to canonical hash once the user authenticates successfully.
-  account.passwordHash = canonicalHash;
-  return true;
 }
 
 function findAccountByUsername(email) {
@@ -8678,7 +8657,14 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     symbolGeometry.center();
     symbolY = 0.69;
   } else if (enemyTypeId === "icosahedron") {
-    symbolGeometry = new THREE.IcosahedronGeometry(0.56, 0);
+    const miniIcosa = createEnemyMesh("icosahedron", bodyColor, coreColor, { hideRings: true });
+    const miniHeight = Math.max(0.001, miniIcosa.maxY - miniIcosa.minY);
+    const targetHeight = 1.08;
+    const miniScale = targetHeight / miniHeight;
+    miniIcosa.group.scale.setScalar(miniScale);
+    miniIcosa.group.position.y = -miniIcosa.minY * miniScale + 0.02;
+    symbolObject = miniIcosa.group;
+    symbolY = 0.42;
   } else if (enemyTypeId === "star") {
     const miniStar = createEnemyMesh("star", bodyColor, coreColor, { hideRings: true });
     const miniHeight = Math.max(0.001, miniStar.maxY - miniStar.minY);
@@ -9145,8 +9131,8 @@ class AllyMinion {
     this.pathIndex = Math.max(0, pathPoints.length - 1);
 
     const spawnPoint = pathPoints[this.pathIndex] || new THREE.Vector3(0, 0, 0);
-    this.x = spawnPoint.x;
-    this.z = spawnPoint.z;
+    this.x = Number.isFinite(stats.spawnX) ? stats.spawnX : spawnPoint.x;
+    this.z = Number.isFinite(stats.spawnZ) ? stats.spawnZ : spawnPoint.z;
 
     const allyVisual = createEnemyMesh(this.typeId, ALLY_COLOR_A, ALLY_COLOR_B, { hideRings: true });
     this.mesh = allyVisual.group;
@@ -11631,12 +11617,83 @@ function createAllyStatsForType(enemyTypeId) {
   };
 }
 
+function resolveAllySpawnPosition(radius) {
+  const pathIndex = Math.max(0, pathPoints.length - 1);
+  const spawnPoint = pathPoints[pathIndex] || new THREE.Vector3(0, 0, 0);
+  if (!Number.isFinite(radius) || radius <= 0) {
+    return { x: spawnPoint.x, z: spawnPoint.z };
+  }
+
+  const targetPoint = pathPoints[Math.max(0, pathIndex - 1)] || spawnPoint;
+  let headingX = targetPoint.x - spawnPoint.x;
+  let headingZ = targetPoint.z - spawnPoint.z;
+  let headingLength = Math.hypot(headingX, headingZ);
+  if (headingLength < 1e-4) {
+    headingX = -1;
+    headingZ = 0;
+    headingLength = 1;
+  }
+  headingX /= headingLength;
+  headingZ /= headingLength;
+
+  const lateralX = -headingZ;
+  const lateralZ = headingX;
+  const slotSpacing = Math.max(0.24, radius * 1.1);
+  const laneBackStep = Math.max(0.02, radius * 0.08);
+  const minSpawnX = (-HALF_COLS - 0.5) * CELL_SIZE;
+  const maxSpawnX = (HALF_COLS + 0.5) * CELL_SIZE;
+  const minSpawnZ = (-HALF_ROWS - 0.5) * CELL_SIZE;
+  const maxSpawnZ = (HALF_ROWS + 0.5) * CELL_SIZE;
+  const slotOrder = [0];
+  for (let slot = 1; slot <= ALLY_SPAWN_SLOT_MAX; slot += 1) {
+    slotOrder.push(slot, -slot);
+  }
+
+  let bestCandidate = { x: spawnPoint.x, z: spawnPoint.z, clearance: -Infinity };
+  for (const slot of slotOrder) {
+    const absSlot = Math.abs(slot);
+    const candidateX = Math.min(
+      maxSpawnX,
+      Math.max(minSpawnX, spawnPoint.x + lateralX * slotSpacing * slot - headingX * laneBackStep * absSlot)
+    );
+    const candidateZ = Math.min(
+      maxSpawnZ,
+      Math.max(minSpawnZ, spawnPoint.z + lateralZ * slotSpacing * slot - headingZ * laneBackStep * absSlot)
+    );
+
+    let minClearanceRatio = Infinity;
+    for (const ally of game.allies) {
+      if (!ally || !ally.alive) continue;
+      const gap = radius + ally.radius + ALLY_SPAWN_GAP_PADDING;
+      const dx = candidateX - ally.x;
+      const dz = candidateZ - ally.z;
+      const ratio = (dx * dx + dz * dz) / (gap * gap);
+      if (ratio < minClearanceRatio) minClearanceRatio = ratio;
+    }
+
+    if (!Number.isFinite(minClearanceRatio)) {
+      return { x: candidateX, z: candidateZ };
+    }
+    if (minClearanceRatio > 1) {
+      return { x: candidateX, z: candidateZ };
+    }
+    if (minClearanceRatio > bestCandidate.clearance) {
+      bestCandidate = { x: candidateX, z: candidateZ, clearance: minClearanceRatio };
+    }
+  }
+
+  return { x: bestCandidate.x, z: bestCandidate.z };
+}
+
 function spawnAllyFromTower(enemyTypeId) {
   if (!enemyTypeId || !ENEMY_TYPES[enemyTypeId]) return false;
   if (game.allies.length >= ALLY_UNIT_CAP) return false;
   if (pathPoints.length < 2) return false;
   const allyStats = createAllyStatsForType(enemyTypeId);
   if (!allyStats) return false;
+  const spawnPos = resolveAllySpawnPosition(allyStats.radius);
+  allyStats.spawnX = spawnPos.x;
+  allyStats.spawnZ = spawnPos.z;
   game.allies.push(new AllyMinion(allyStats));
   return true;
 }
