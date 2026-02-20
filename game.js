@@ -187,7 +187,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-65";
+const BUILD_ID = "2026-02-20-66";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4968,7 +4968,7 @@ let progressRecoveredFromBackup = false;
 let progressRecoveredFromIndexedDb = false;
 let progressRecoveredFromRuntimeFile = false;
 const ACCOUNT_NOTE_BASE_TEXT =
-  "Progress is saved per account. Gmail-style usernames are supported (including aliases). Create/login with username + password, then use the account list to switch quickly.";
+  "Use an email + password for cloud accounts. Progress syncs per account across devices.";
 const cloudAuth = {
   enabled: false,
   initialized: false,
@@ -5437,10 +5437,6 @@ function isEmailAddress(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
-function canUseCloudEmailAuth(username) {
-  return !!(cloudAuth.enabled && cloudAuth.client && isEmailAddress(username));
-}
-
 function getCloudSignedInEmail() {
   return sanitizeAccountUsername(cloudAuth.user?.email || "");
 }
@@ -5463,7 +5459,7 @@ function updateAccountCloudUi() {
   if (signedInEmail) {
     menuAccountNoteEl.textContent = `${ACCOUNT_NOTE_BASE_TEXT} Cloud sync active for ${signedInEmail}.`;
   } else {
-    menuAccountNoteEl.textContent = `${ACCOUNT_NOTE_BASE_TEXT} Use a Gmail login to sync account progress across devices.`;
+    menuAccountNoteEl.textContent = `${ACCOUNT_NOTE_BASE_TEXT} Use your account email to login and sync progress across devices.`;
   }
 }
 
@@ -5682,41 +5678,12 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
       password,
     });
     if (error) {
-      const account = ensureLocalAccountRecord(email, password, {
-        setPasswordOnExisting: false,
-      });
-      if (account) {
-        progressData.currentAccountId = account.id;
-        progressData.lastAuthenticatedAccountId = account.id;
-        clearStartupAuthenticationRequirement();
-        applyAccountToGame(account);
-        savePlayerProgress();
-        refreshAccountAndMenuUi();
-        clearAccountAuthInputs();
-        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
-        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
-        setStatus(`Cloud sign-up failed (${formatCloudErrorMessage(error)}). Created local account instead.`, true);
-        return;
-      }
       setStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
       return;
     }
 
     const sessionUser = data?.session?.user || null;
     if (!sessionUser) {
-      const account = ensureLocalAccountRecord(email, password, {
-        setPasswordOnExisting: false,
-      });
-      if (account) {
-        progressData.currentAccountId = account.id;
-        progressData.lastAuthenticatedAccountId = account.id;
-        clearStartupAuthenticationRequirement();
-        applyAccountToGame(account);
-        savePlayerProgress();
-        refreshAccountAndMenuUi();
-        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
-        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
-      }
       setStatus(`Account created for ${email}. Confirm your email, then login for cloud sync.`);
       return;
     }
@@ -5761,16 +5728,6 @@ async function loginCloudAccountFromInput(username, password) {
       password,
     });
     if (error) {
-      const localAccount = findAccountByUsername(email);
-      if (localAccount && verifyAccountPassword(localAccount, password)) {
-        switchToAccount(localAccount.id, true);
-        clearStartupAuthenticationRequirement();
-        clearAccountAuthInputs();
-        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = localAccount.name;
-        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = localAccount.name;
-        setStatus(`Cloud login failed (${formatCloudErrorMessage(error)}). Signed in locally as ${localAccount.name}.`, true);
-        return;
-      }
       setStatus(`Cloud login failed: ${formatCloudErrorMessage(error)}`, true);
       return;
     }
@@ -10757,42 +10714,15 @@ function createAccountFromInput() {
     setStatus("Passwords do not match.", true);
     return;
   }
-  if (canUseCloudEmailAuth(username)) {
-    void createCloudAccountFromInput(username, password, confirmPassword);
+  if (!cloudAuth.enabled || !cloudAuth.client) {
+    setStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
     return;
   }
-
-  const existing = findAccountByUsername(username);
-  if (existing) {
-    setStatus("Username already exists. Use Login instead.", true);
-    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = existing.name;
-    if (accountLoginPasswordInputEl) {
-      accountLoginPasswordInputEl.focus();
-      accountLoginPasswordInputEl.select();
-    }
+  if (!isEmailAddress(username)) {
+    setStatus("Use a valid email address to create a cloud account.", true);
     return;
   }
-
-  const account = createAccountRecord(username, {
-    passwordHash: hashAccountPassword(username, password),
-  });
-  progressData.accounts.push(account);
-  progressData.currentAccountId = account.id;
-  progressData.lastAuthenticatedAccountId = account.id;
-  clearStartupAuthenticationRequirement();
-  applyAccountToGame(account);
-  savePlayerProgress();
-  renderAccountMenu();
-  renderMenuShop();
-  renderTrapShop();
-  renderCreatureShop();
-  renderLoadoutMenu();
-  renderShop();
-  updateHud();
-  clearAccountAuthInputs();
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name;
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name;
-  setStatus(`Account ${account.name} created. Logged in.`);
+  void createCloudAccountFromInput(username, password, confirmPassword);
 }
 
 function loginAccountFromInput() {
@@ -10804,28 +10734,15 @@ function loginAccountFromInput() {
     setStatus("Enter your username.", true);
     return;
   }
-  if (canUseCloudEmailAuth(username)) {
-    void loginCloudAccountFromInput(username, password);
+  if (!cloudAuth.enabled || !cloudAuth.client) {
+    setStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
     return;
   }
-
-  const account = findAccountByUsername(username);
-  if (!account) {
-    setStatus("Username not found.", true);
+  if (!isEmailAddress(username)) {
+    setStatus("Use the email address for your cloud account.", true);
     return;
   }
-
-  if (!verifyAccountPassword(account, password)) {
-    setStatus("Incorrect password.", true);
-    return;
-  }
-
-  switchToAccount(account.id, true);
-  clearStartupAuthenticationRequirement();
-  clearAccountAuthInputs();
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name;
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name;
-  setStatus(`Logged in as ${account.name}.`);
+  void loginCloudAccountFromInput(username, password);
 }
 
 function resetAllProgressFromCommand() {
