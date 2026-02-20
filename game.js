@@ -7545,7 +7545,15 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     },
     monolith: { shape: "cube", sizeX: 2.35, sizeY: 2.35, sizeZ: 2.35, ringRadius: 0, coreRadius: 0.3, coreY: 0.3 },
     pyramidion: { shape: "pyramid", baseRadius: 1.06, height: 2.12, sides: 8, ringRadius: 0, coreRadius: 0.24, coreY: 0.22 },
-    diamondarchon: { shape: "rhombus", radius: 2.32, ringRadius: 0, coreRadius: 0.28, coreY: 0.18 },
+    diamondarchon: {
+      shape: "diamondSigil",
+      width: 2.82,
+      height: 3.02,
+      depth: 1.18,
+      ringRadius: 0,
+      coreRadius: 0.28,
+      coreY: 0.22,
+    },
     icosahedron: {
       shape: "icosa",
       radius: 1.95,
@@ -7805,6 +7813,49 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     }
     coreGeometry.dispose();
     faceGeometry.dispose();
+  } else if (setup.shape === "diamondSigil") {
+    const halfWidth = Math.max(0.5, (setup.width || 2.6) * 0.5);
+    const halfHeight = Math.max(0.7, (setup.height || 2.8) * 0.5);
+    const depth = Math.max(0.35, setup.depth || 1.08);
+    const diamondShape = new THREE.Shape();
+    diamondShape.moveTo(0, halfHeight);
+    diamondShape.lineTo(halfWidth, 0);
+    diamondShape.lineTo(0, -halfHeight);
+    diamondShape.lineTo(-halfWidth, 0);
+    diamondShape.closePath();
+
+    const bevelSize = Math.min(0.18, Math.max(0.03, depth * 0.08));
+    const outerGeometry = new THREE.ExtrudeGeometry(diamondShape, {
+      depth,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: bevelSize,
+      bevelSize,
+      bevelSegments: 2,
+      curveSegments: 1,
+    });
+    outerGeometry.center();
+    body = cast(new THREE.Mesh(outerGeometry, bodyMat));
+    body.rotation.x = Math.PI / 2;
+    body.rotation.y = Math.PI / 4;
+    group.add(body);
+
+    const innerGeometry = new THREE.ExtrudeGeometry(diamondShape, {
+      depth: depth * 0.42,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: bevelSize * 0.62,
+      bevelSize: bevelSize * 0.52,
+      bevelSegments: 1,
+      curveSegments: 1,
+    });
+    innerGeometry.center();
+    const innerFacet = cast(new THREE.Mesh(innerGeometry, darkMat));
+    innerFacet.rotation.x = Math.PI / 2;
+    innerFacet.rotation.y = Math.PI / 4;
+    innerFacet.scale.set(0.62, 0.62, 0.62);
+    innerFacet.position.y = depth * 0.16;
+    group.add(innerFacet);
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
     body.rotation.y = Math.PI / 4;
@@ -8716,7 +8767,27 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     symbolY = 0.42;
   } else if (enemyTypeId === "leviathan") {
     symbolGeometry = new THREE.SphereGeometry(0.58, 22, 22);
-  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus" || enemyTypeId === "diamondarchon") {
+  } else if (enemyTypeId === "diamondarchon") {
+    const diamondShape = new THREE.Shape();
+    const halfWidth = 0.44;
+    const halfHeight = 0.56;
+    diamondShape.moveTo(0, halfHeight);
+    diamondShape.lineTo(halfWidth, 0);
+    diamondShape.lineTo(0, -halfHeight);
+    diamondShape.lineTo(-halfWidth, 0);
+    diamondShape.closePath();
+    symbolGeometry = new THREE.ExtrudeGeometry(diamondShape, {
+      depth: 0.26,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: 0.04,
+      bevelSize: 0.038,
+      bevelSegments: 1,
+      curveSegments: 1,
+    });
+    symbolGeometry.center();
+    symbolY = 0.68;
+  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
     symbolGeometry = new THREE.OctahedronGeometry(0.58, 0);
   } else {
     symbolGeometry = new THREE.SphereGeometry(0.5, 20, 20);
@@ -8741,7 +8812,10 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   } else if (enemyTypeId === "cross") {
     symbol.rotation.x = Math.PI / 2;
     symbol.rotation.z = Math.PI / 10;
-  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus" || enemyTypeId === "diamondarchon") {
+  } else if (enemyTypeId === "diamondarchon") {
+    symbol.rotation.x = Math.PI / 2;
+    symbol.rotation.y = Math.PI / 4;
+  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "icosahedron") {
     symbol.rotation.y = Math.PI / 10;
