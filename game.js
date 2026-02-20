@@ -73,6 +73,7 @@ const closeMultiplayerBtn = $id("closeMultiplayerBtn");
 // Account menu.
 const menuAccountEl = $id("menuAccountList");
 const menuAccountCurrentEl = $id("menuAccountCurrent");
+const accountCreateDisplayNameInputEl = $id("accountCreateDisplayNameInput");
 const accountCreateUsernameInputEl = $id("accountCreateUsernameInput");
 const accountCreatePasswordInputEl = $id("accountCreatePasswordInput");
 const accountCreatePasswordConfirmInputEl = $id("accountCreatePasswordConfirmInput");
@@ -189,12 +190,14 @@ const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const SUPABASE_URL = "https://wfsywtfktmthxpgqoyoi.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK";
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
+const CLOUD_AUTH_STORAGE_KEY = "sb-wfsywtfktmthxpgqoyoi-auth-token";
+const CLOUD_AUTH_RUNTIME_FILENAME = "supabase-auth-session-v1.json";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-72";
+const BUILD_ID = "2026-02-20-75";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5011,7 +5014,7 @@ let progressRecoveredFromBackup = false;
 let progressRecoveredFromIndexedDb = false;
 let progressRecoveredFromRuntimeFile = false;
 const ACCOUNT_NOTE_BASE_TEXT =
-  "Use an email + password for cloud accounts. Progress syncs per account across devices.";
+  "Use a username + email + password for cloud accounts. Progress syncs per account across devices.";
 const cloudAuth = {
   enabled: false,
   initialized: false,
@@ -5090,6 +5093,7 @@ function getRuntimeProgressBridge() {
     const directoryPath = pathApi.join(basePath, PROGRESS_RUNTIME_DIR_NAME);
     progressRuntimeBridge = {
       fsApi,
+      pathApi,
       directoryPath,
       primaryPath: pathApi.join(directoryPath, PROGRESS_RUNTIME_PRIMARY_FILENAME),
       backupPath: pathApi.join(directoryPath, PROGRESS_RUNTIME_BACKUP_FILENAME),
@@ -5192,6 +5196,95 @@ function clearRuntimeProgressFiles() {
   progressRuntimeFileWriteHealthy = false;
 }
 
+function getRuntimeCloudAuthSessionPath() {
+  const bridge = getRuntimeProgressBridge();
+  if (!bridge || !bridge.pathApi || !bridge.directoryPath) return "";
+  try {
+    return bridge.pathApi.join(bridge.directoryPath, CLOUD_AUTH_RUNTIME_FILENAME);
+  } catch (_) {
+    return "";
+  }
+}
+
+function readCloudAuthRuntimeSessionSnapshot() {
+  const sessionPath = getRuntimeCloudAuthSessionPath();
+  if (!sessionPath) return "";
+  return readRuntimeProgressRawFile(sessionPath);
+}
+
+function writeCloudAuthRuntimeSessionSnapshot(rawValue) {
+  const serialized = typeof rawValue === "string" ? rawValue : "";
+  if (!serialized) return false;
+  const bridge = getRuntimeProgressBridge();
+  const sessionPath = getRuntimeCloudAuthSessionPath();
+  if (!bridge || !sessionPath) return false;
+  try {
+    bridge.fsApi.mkdirSync(bridge.directoryPath, { recursive: true });
+  } catch (_) {
+    return false;
+  }
+  return writeRuntimeProgressRawFile(sessionPath, serialized);
+}
+
+function clearCloudAuthRuntimeSessionSnapshot() {
+  const bridge = getRuntimeProgressBridge();
+  const sessionPath = getRuntimeCloudAuthSessionPath();
+  if (!bridge || !sessionPath) return;
+  try {
+    if (bridge.fsApi.existsSync(sessionPath)) bridge.fsApi.unlinkSync(sessionPath);
+  } catch (_) {}
+}
+
+function createCloudAuthStorageAdapter() {
+  return {
+    getItem(key) {
+      const safeKey = String(key || "");
+      const storage = getProgressStorage();
+      if (storage) {
+        try {
+          const value = storage.getItem(safeKey);
+          if (typeof value === "string") {
+            if (safeKey === CLOUD_AUTH_STORAGE_KEY && value) writeCloudAuthRuntimeSessionSnapshot(value);
+            return value;
+          }
+        } catch (_) {}
+      }
+      if (safeKey !== CLOUD_AUTH_STORAGE_KEY) return null;
+      const runtimeValue = readCloudAuthRuntimeSessionSnapshot();
+      if (!runtimeValue) return null;
+      if (storage) {
+        try {
+          storage.setItem(safeKey, runtimeValue);
+        } catch (_) {}
+      }
+      return runtimeValue;
+    },
+    setItem(key, value) {
+      const safeKey = String(key || "");
+      const serialized = typeof value === "string" ? value : String(value ?? "");
+      const storage = getProgressStorage();
+      if (storage) {
+        try {
+          storage.setItem(safeKey, serialized);
+        } catch (_) {}
+      }
+      if (safeKey !== CLOUD_AUTH_STORAGE_KEY) return;
+      if (serialized) writeCloudAuthRuntimeSessionSnapshot(serialized);
+      else clearCloudAuthRuntimeSessionSnapshot();
+    },
+    removeItem(key) {
+      const safeKey = String(key || "");
+      const storage = getProgressStorage();
+      if (storage) {
+        try {
+          storage.removeItem(safeKey);
+        } catch (_) {}
+      }
+      if (safeKey === CLOUD_AUTH_STORAGE_KEY) clearCloudAuthRuntimeSessionSnapshot();
+    },
+  };
+}
+
 function supportsProgressIndexedDb() {
   try {
     return typeof window !== "undefined" && !!window.indexedDB;
@@ -5216,10 +5309,9 @@ function isLikelyFreshDefaultProgress(data) {
   if (data.accounts.length !== 1) return false;
   const account = data.accounts[0];
   if (!account || typeof account !== "object") return false;
-  const name = sanitizeAccountUsername(account.name || "");
   const shards = Number(account.shards);
   const level = Number(account.maxLevelUnlocked);
-  return (!name || name === "Commander") && (!Number.isFinite(shards) || Math.floor(shards) <= 0) && (!Number.isFinite(level) || Math.floor(level) <= 1);
+  return (!Number.isFinite(shards) || Math.floor(shards) <= 0) && (!Number.isFinite(level) || Math.floor(level) <= 1);
 }
 
 function shouldRestoreProgressFromFallbackSnapshot(snapshot) {
@@ -5604,21 +5696,77 @@ function serializeProgressSnapshotForCloud() {
   }
 }
 
-function ensureLocalAccountRecord(username, password = "", options = null) {
-  const normalizedName = sanitizeAccountUsername(username);
-  if (!normalizedName) return null;
+function captureGameProgressSeedForAccountMigration() {
+  const maxLoadoutSlots = getCurrentLoadoutSlotLimit();
+  const unlockedTowers = new Set(game.unlockedTowers);
+  const unlockedSpawnerTowers = new Set(game.unlockedSpawnerTowers);
+  let activeLoadout = Array.from(game.activeLoadout)
+    .filter((towerTypeId) => {
+      if (unlockedTowers.has(towerTypeId)) return true;
+      const enemyTypeId = enemyTypeFromSpawnerTowerId(towerTypeId);
+      return !!enemyTypeId && unlockedSpawnerTowers.has(enemyTypeId);
+    })
+    .slice(0, maxLoadoutSlots);
+  if (activeLoadout.length === 0) {
+    const fallbackLoadout = new Set();
+    addDefaultLoadoutEntries(fallbackLoadout, unlockedTowers, unlockedSpawnerTowers, maxLoadoutSlots);
+    activeLoadout = Array.from(fallbackLoadout);
+  }
+  return {
+    shards: Math.max(0, Math.floor(game.shards || 0)),
+    maxLevelUnlocked: Math.max(1, Math.floor(game.maxLevelUnlocked || 1)),
+    maxLoadoutSlots,
+    unlockedTowers: Array.from(unlockedTowers),
+    activeLoadout,
+    enemyKillCounts: normalizeEnemyKillCounts(game.enemyKillCounts),
+    unlockedSpawnerTowers: Array.from(unlockedSpawnerTowers).filter((enemyTypeId) =>
+      Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
+    ),
+    towerCapUpgrades: normalizeTowerCapUpgrades(game.towerCapUpgrades),
+    towerDamageUpgrades: normalizeTowerDamageUpgrades(game.towerDamageUpgrades),
+    towerAttackSpeedUpgrades: normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades),
+    towerRangeUpgrades: normalizeTowerRangeUpgrades(game.towerRangeUpgrades),
+    spawnerCooldownUpgrades: normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades),
+  };
+}
+
+function ensureLocalAccountRecord(email, password = "", options = null) {
+  const normalizedEmail = sanitizeAccountUsername(email);
+  if (!isEmailAddress(normalizedEmail)) return null;
   const setPasswordOnExisting = !!options?.setPasswordOnExisting;
   const setPasswordOnCreate = options?.setPasswordOnCreate !== false;
-  const passwordHash = password && setPasswordOnCreate ? hashAccountPassword(normalizedName, password) : "";
+  const setDisplayNameOnExisting = !!options?.setDisplayNameOnExisting;
+  const requestedDisplayName = sanitizeAccountName(options?.displayName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  const displayNameOnCreate =
+    requestedDisplayName || deriveAccountDisplayNameFromEmail(normalizedEmail) || "Commander";
+  const seedOnCreate =
+    options?.seedOnCreate && typeof options.seedOnCreate === "object"
+      ? options.seedOnCreate
+      : null;
+  const passwordHash = password && setPasswordOnCreate ? hashAccountPassword(normalizedEmail, password) : "";
 
-  let account = findAccountByUsername(normalizedName);
+  let account = findAccountByUsername(normalizedEmail);
   if (!account) {
-    account = createAccountRecord(normalizedName, {
+    account = createAccountRecord(displayNameOnCreate, {
+      ...(seedOnCreate || {}),
+      email: normalizedEmail,
+      name: displayNameOnCreate,
       passwordHash,
     });
     progressData.accounts.push(account);
-  } else if (password && setPasswordOnExisting) {
-    account.passwordHash = hashAccountPassword(normalizedName, password);
+  } else {
+    account.email = normalizedEmail;
+    if (password && setPasswordOnExisting) {
+      account.passwordHash = hashAccountPassword(normalizedEmail, password);
+    }
+    if (setDisplayNameOnExisting && requestedDisplayName) {
+      account.name = requestedDisplayName;
+    } else if (
+      !sanitizeAccountName(account.name || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH) ||
+      isEmailAddress(account.name || "")
+    ) {
+      account.name = displayNameOnCreate;
+    }
   }
 
   return account;
@@ -5657,7 +5805,7 @@ async function syncCloudProgressNow(forceStatus = false) {
     const payload = {
       id: cloudAuth.user.id,
       email: cloudAuth.user.email || null,
-      profile_name: sanitizeAccountUsername(game.accountName || cloudAuth.user.email || "Commander"),
+      profile_name: sanitizeAccountName(game.accountName || deriveAccountDisplayNameFromEmail(cloudAuth.user.email) || "Commander"),
       progress: serializeProgressSnapshotForCloud(),
       updated_at: new Date().toISOString(),
     };
@@ -5694,7 +5842,7 @@ async function loadCloudProgressForUser(user, quiet = false) {
   try {
     const { data, error } = await cloudAuth.client
       .from(SUPABASE_PROGRESS_TABLE)
-      .select("progress, updated_at")
+      .select("progress, updated_at, profile_name, email")
       .eq("id", user.id)
       .maybeSingle();
     if (error) {
@@ -5709,15 +5857,39 @@ async function loadCloudProgressForUser(user, quiet = false) {
     cloudAuth.profileTableMissing = false;
     const remoteProgress = data?.progress;
     if (!isLikelyValidProgressPayload(remoteProgress)) return false;
-    progressData = normalizeProgressData(remoteProgress);
+    const normalizedRemoteProgress = normalizeProgressData(remoteProgress);
+    const remoteLooksFresh = isLikelyFreshDefaultProgress(normalizedRemoteProgress);
+    const localLooksFresh = isLikelyFreshDefaultProgress(progressData);
+    if (remoteLooksFresh && !localLooksFresh) return false;
+    progressData = normalizedRemoteProgress;
+    const signedInEmail = sanitizeAccountUsername(user.email || data?.email || "");
+    const cloudProfileName = sanitizeAccountName(data?.profile_name || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+    if (signedInEmail) {
+      const signedInAccount =
+        findAccountByUsername(signedInEmail) ||
+        ensureLocalAccountRecord(signedInEmail, "", {
+          displayName: cloudProfileName,
+          setDisplayNameOnExisting: !!cloudProfileName,
+        });
+      if (signedInAccount) {
+        signedInAccount.email = signedInEmail;
+        if (cloudProfileName) {
+          signedInAccount.name = cloudProfileName;
+        } else if (!sanitizeAccountName(signedInAccount.name || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH)) {
+          signedInAccount.name = deriveAccountDisplayNameFromEmail(signedInEmail) || "Commander";
+        }
+        progressData.currentAccountId = signedInAccount.id;
+        progressData.lastAuthenticatedAccountId = signedInAccount.id;
+      }
+    }
     resolveStartupAuthenticationRequirement();
     syncAccountStartupPreferenceUi();
     applyAccountToGame(getCurrentAccountRecord());
     savePlayerProgress();
     refreshAccountAndMenuUi();
-    const signedInEmail = sanitizeAccountUsername(user.email || "");
     if (signedInEmail && accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = signedInEmail;
     if (signedInEmail && accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = signedInEmail;
+    if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
     if (!quiet) setStatus(`Cloud progress loaded for ${signedInEmail || "your account"}.`);
     return true;
   } catch (_) {
@@ -5734,6 +5906,8 @@ async function syncCloudSessionUser(user, quiet = false) {
   cloudAuth.user = user;
   updateAccountCloudUi();
   const signedInEmail = sanitizeAccountUsername(user.email || "");
+  const preferredDisplayName = sanitizeAccountName(game.accountName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  const migrationSeed = captureGameProgressSeedForAccountMigration();
 
   const loadedRemote = await loadCloudProgressForUser(user, true);
   if (loadedRemote) {
@@ -5750,7 +5924,11 @@ async function syncCloudSessionUser(user, quiet = false) {
     return true;
   }
 
-  const account = ensureLocalAccountRecord(signedInEmail || game.accountName || "Commander");
+  const account = ensureLocalAccountRecord(signedInEmail, "", {
+    seedOnCreate: migrationSeed,
+    displayName: preferredDisplayName,
+    setDisplayNameOnExisting: !!preferredDisplayName && !isEmailAddress(preferredDisplayName),
+  });
   if (account) {
     progressData.currentAccountId = account.id;
     progressData.lastAuthenticatedAccountId = account.id;
@@ -5773,7 +5951,7 @@ async function syncCloudSessionUser(user, quiet = false) {
   return synced;
 }
 
-async function createCloudAccountFromInput(username, password, confirmPassword) {
+async function createCloudAccountFromInput(emailInput, displayNameInput, password, confirmPassword) {
   if (!cloudAuth.enabled || !cloudAuth.client) {
     setAccountStatus("Cloud auth is unavailable right now.", true);
     return;
@@ -5787,8 +5965,17 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
     return;
   }
 
-  const email = sanitizeAccountUsername(username);
-  setAccountStatus(`Creating cloud account for ${email}...`);
+  const email = sanitizeAccountUsername(emailInput);
+  const displayName =
+    sanitizeAccountName(displayNameInput || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
+    || deriveAccountDisplayNameFromEmail(email)
+    || "Commander";
+  if (!isEmailAddress(email)) {
+    setAccountStatus("Use a valid email address to create a cloud account.", true);
+    return;
+  }
+  const migrationSeed = captureGameProgressSeedForAccountMigration();
+  setAccountStatus(`Creating cloud account "${displayName}" for ${email}...`);
   try {
     // Prevent redundant signup emails: if this account already exists and password is correct,
     // sign in directly without triggering another email send.
@@ -5803,6 +5990,7 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
         clearAccountAuthInputs();
         if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
         if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+        if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || displayName;
         if (cloudAuth.profileTableMissing) {
           setAccountStatus(`Account exists for ${email}, logged in, but table setup is missing. Run supabase_setup.sql.`, true);
         } else if (!cloudReady) {
@@ -5841,6 +6029,7 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
             clearAccountAuthInputs();
             if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
             if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+            if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || displayName;
             if (cloudAuth.profileTableMissing) {
               setAccountStatus(`Signup throttled, but account login succeeded for ${email}. Run supabase_setup.sql.`, true);
             } else if (!cloudReady) {
@@ -5876,6 +6065,9 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
 
     const account = ensureLocalAccountRecord(email, password, {
       setPasswordOnExisting: true,
+      seedOnCreate: migrationSeed,
+      displayName,
+      setDisplayNameOnExisting: true,
     });
     if (account) {
       progressData.currentAccountId = account.id;
@@ -5888,6 +6080,7 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
     clearAccountAuthInputs();
     if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
     if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+    if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = displayName;
     if (cloudAuth.profileTableMissing) {
       setAccountStatus(`Cloud login is active for ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
@@ -5901,13 +6094,19 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
   }
 }
 
-async function loginCloudAccountFromInput(username, password) {
+async function loginCloudAccountFromInput(emailInput, password) {
   if (!cloudAuth.enabled || !cloudAuth.client) {
     setAccountStatus("Cloud auth is unavailable right now.", true);
     return;
   }
 
-  const email = sanitizeAccountUsername(username);
+  const email = sanitizeAccountUsername(emailInput);
+  const preferredDisplayName = sanitizeAccountName(game.accountName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  if (!isEmailAddress(email)) {
+    setAccountStatus("Use the email address for your cloud account.", true);
+    return;
+  }
+  const migrationSeed = captureGameProgressSeedForAccountMigration();
   setAccountStatus(`Signing into cloud account ${email}...`);
   try {
     const { data, error } = await cloudAuth.client.auth.signInWithPassword({
@@ -5928,6 +6127,8 @@ async function loginCloudAccountFromInput(username, password) {
 
     const account = ensureLocalAccountRecord(email, password, {
       setPasswordOnExisting: true,
+      seedOnCreate: migrationSeed,
+      displayName: preferredDisplayName,
     });
     if (account) {
       progressData.currentAccountId = account.id;
@@ -5941,6 +6142,7 @@ async function loginCloudAccountFromInput(username, password) {
     clearAccountAuthInputs();
     if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
     if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+    if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
     if (cloudAuth.profileTableMissing) {
       setAccountStatus(`Logged in as ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
@@ -5975,6 +6177,13 @@ async function signOutCloudAccount() {
       clearTimeout(cloudAuth.syncTimer);
       cloudAuth.syncTimer = null;
     }
+    clearCloudAuthRuntimeSessionSnapshot();
+    const storage = getProgressStorage();
+    if (storage) {
+      try {
+        storage.removeItem(CLOUD_AUTH_STORAGE_KEY);
+      } catch (_) {}
+    }
     updateAccountCloudUi();
     setStatus(`Signed out of ${currentEmail}.`);
   } catch (_) {
@@ -5999,11 +6208,14 @@ async function initializeCloudAuth() {
   }
 
   try {
+    const authStorage = createCloudAuthStorageAdapter();
     cloudAuth.client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        storage: authStorage,
+        storageKey: CLOUD_AUTH_STORAGE_KEY,
       },
     });
     cloudAuth.enabled = true;
@@ -6077,6 +6289,38 @@ function sanitizeAccountUsername(username) {
   return sanitizeAccountName(username, ACCOUNT_USERNAME_MAX_LENGTH).replace(/\s+/g, "");
 }
 
+function deriveAccountDisplayNameFromEmail(email) {
+  const normalizedEmail = sanitizeAccountUsername(email);
+  if (!isEmailAddress(normalizedEmail)) return "";
+  const localPart = normalizedEmail.split("@")[0] || "";
+  const prettyLocal = localPart.replace(/[._+-]+/g, " ");
+  return sanitizeAccountName(prettyLocal, ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+}
+
+function getAccountEmail(account) {
+  if (!account || typeof account !== "object") return "";
+  const explicit = sanitizeAccountUsername(account.email || "");
+  if (isEmailAddress(explicit)) return explicit;
+  const legacy = sanitizeAccountUsername(account.name || "");
+  if (isEmailAddress(legacy)) return legacy;
+  return "";
+}
+
+function getAccountDisplayName(account, fallback = "Commander") {
+  if (!account || typeof account !== "object") return sanitizeAccountName(fallback) || "Commander";
+  const rawName = sanitizeAccountName(account.name || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  if (rawName && !isEmailAddress(rawName)) return rawName;
+  const derived = deriveAccountDisplayNameFromEmail(getAccountEmail(account));
+  if (derived) return derived;
+  return sanitizeAccountName(rawName || fallback) || "Commander";
+}
+
+function getAccountAuthIdentity(account) {
+  const email = getAccountEmail(account);
+  if (email) return email;
+  return sanitizeAccountUsername(account?.name || "") || "commander";
+}
+
 function getLegacyAccountUsernameKey(username) {
   return sanitizeAccountUsername(username).toLowerCase();
 }
@@ -6120,7 +6364,7 @@ function verifyAccountPassword(account, password) {
   if (!account) return false;
   const storedHash = normalizeStoredPasswordHash(account.passwordHash);
   if (!storedHash) return String(password || "").length === 0;
-  const normalizedUsername = account.name || "";
+  const normalizedUsername = getAccountAuthIdentity(account);
   const canonicalHash = hashAccountPassword(normalizedUsername, password);
   if (storedHash === canonicalHash) return true;
 
@@ -6133,12 +6377,10 @@ function verifyAccountPassword(account, password) {
   return true;
 }
 
-function findAccountByUsername(username) {
-  const usernameKey = getAccountUsernameKey(username);
+function findAccountByUsername(email) {
+  const usernameKey = getAccountUsernameKey(email);
   if (!usernameKey) return null;
-  return (
-    progressData.accounts.find((account) => getAccountUsernameKey(account.name || "") === usernameKey) || null
-  );
+  return progressData.accounts.find((account) => getAccountUsernameKey(getAccountEmail(account)) === usernameKey) || null;
 }
 
 function getAccountById(accountId) {
@@ -6148,7 +6390,7 @@ function getAccountById(accountId) {
 
 function isCloudBackedAccount(account) {
   if (!account || typeof account !== "object") return false;
-  return isEmailAddress(account.name || "");
+  return !!getAccountEmail(account);
 }
 
 function getVisibleCloudAccounts() {
@@ -6157,7 +6399,7 @@ function getVisibleCloudAccounts() {
 
 function pruneLegacyLocalAccountsForCloudUser(preferredEmail = "") {
   const normalizedPreferredEmail = sanitizeAccountUsername(preferredEmail || getCloudSignedInEmail());
-  if (!normalizedPreferredEmail) return false;
+  if (!isEmailAddress(normalizedPreferredEmail)) return false;
 
   let cloudAccounts = getVisibleCloudAccounts();
   let changed = cloudAccounts.length !== progressData.accounts.length;
@@ -6172,7 +6414,7 @@ function pruneLegacyLocalAccountsForCloudUser(preferredEmail = "") {
   progressData.accounts = cloudAccounts;
   const preferredKey = getAccountUsernameKey(normalizedPreferredEmail);
   const preferredAccount =
-    cloudAccounts.find((account) => getAccountUsernameKey(account.name || "") === preferredKey) || cloudAccounts[0];
+    cloudAccounts.find((account) => getAccountUsernameKey(getAccountEmail(account)) === preferredKey) || cloudAccounts[0];
   if (!preferredAccount) return changed;
 
   if (!cloudAccounts.some((account) => account.id === progressData.currentAccountId)) {
@@ -6189,7 +6431,7 @@ function pruneLegacyLocalAccountsForCloudUser(preferredEmail = "") {
 
 function syncAccountStartupPreferenceUi() {
   if (!accountRequirePasswordOnStartupToggleEl) return;
-  accountRequirePasswordOnStartupToggleEl.checked = !!progressData.requirePasswordOnStartup;
+  accountRequirePasswordOnStartupToggleEl.checked = !progressData.requirePasswordOnStartup;
 }
 
 function clearStartupAuthenticationRequirement(accountId = "") {
@@ -6218,15 +6460,17 @@ function setRequirePasswordOnStartup(required, announce = false) {
   if (announce) {
     setStatus(
       progressData.requirePasswordOnStartup
-        ? "Startup login set: password required each launch."
-        : "Startup login set: remember account."
+        ? "Stay signed in disabled: password required each launch."
+        : "Stay signed in enabled on this device."
     );
   }
 }
 
 function clearAccountAuthInputs(options = {}) {
+  const keepCreateDisplayName = !!options.keepCreateDisplayName;
   const keepCreateUsername = !!options.keepCreateUsername;
   const keepLoginUsername = !!options.keepLoginUsername;
+  if (accountCreateDisplayNameInputEl && !keepCreateDisplayName) accountCreateDisplayNameInputEl.value = "";
   if (accountCreateUsernameInputEl && !keepCreateUsername) accountCreateUsernameInputEl.value = "";
   if (accountCreatePasswordInputEl) accountCreatePasswordInputEl.value = "";
   if (accountCreatePasswordConfirmInputEl) accountCreatePasswordConfirmInputEl.value = "";
@@ -6355,10 +6599,19 @@ function createAccountRecord(name = "Commander", seed = null) {
   const shardValue = Number(seed?.shards);
   const levelValue = Number(seed?.maxLevelUnlocked);
   const safeId = normalizeAccountId(seed?.id);
+  const explicitEmail = sanitizeAccountUsername(seed?.email || "");
+  const legacyEmail = sanitizeAccountUsername(seed?.name || "");
+  const normalizedEmail = isEmailAddress(explicitEmail) ? explicitEmail : isEmailAddress(legacyEmail) ? legacyEmail : "";
+  const rawDisplayName = sanitizeAccountName(seed?.displayName ?? seed?.name ?? name, ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  const displayName =
+    (!rawDisplayName || isEmailAddress(rawDisplayName)
+      ? deriveAccountDisplayNameFromEmail(normalizedEmail) || sanitizeAccountName(name, ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
+      : rawDisplayName) || "Commander";
   const passwordHash = normalizeStoredPasswordHash(seed?.passwordHash);
   return {
     id: safeId || createAccountId(),
-    name: sanitizeAccountUsername(seed?.name ?? name) || "Commander",
+    name: displayName,
+    email: normalizedEmail,
     passwordHash,
     shards: Number.isFinite(shardValue) ? Math.max(0, Math.floor(shardValue)) : 0,
     maxLevelUnlocked: Number.isFinite(levelValue) ? Math.max(1, Math.floor(levelValue)) : 1,
@@ -6441,7 +6694,7 @@ function getCurrentAccountRecord() {
 function applyAccountToGame(account) {
   if (!account) return;
   game.accountId = account.id;
-  game.accountName = sanitizeAccountUsername(account.name) || "Commander";
+  game.accountName = getAccountDisplayName(account);
   game.shards = Math.max(0, Math.floor(account.shards || 0));
   game.maxLevelUnlocked = Math.max(1, Math.floor(account.maxLevelUnlocked || 1));
   game.maxLoadoutSlots = clampLoadoutSlotLimit(Number(account.maxLoadoutSlots));
@@ -6528,7 +6781,11 @@ function savePlayerProgress() {
     progressData.currentAccountId = current.id;
   }
 
-  current.name = sanitizeAccountUsername(game.accountName) || "Commander";
+  const currentEmail = getAccountEmail(current) || sanitizeAccountUsername(getCloudSignedInEmail());
+  if (currentEmail) current.email = currentEmail;
+  current.name = sanitizeAccountName(game.accountName, ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
+    || deriveAccountDisplayNameFromEmail(currentEmail)
+    || "Commander";
   current.shards = Math.max(0, Math.floor(game.shards || 0));
   current.maxLevelUnlocked = Math.max(1, Math.floor(game.maxLevelUnlocked || 1));
   current.maxLoadoutSlots = getCurrentLoadoutSlotLimit();
@@ -10890,9 +11147,11 @@ function renderAccountMenu() {
 
   const fragments = [];
   const visibleAccounts = getVisibleCloudAccounts();
-  const startupModeTag = progressData.requirePasswordOnStartup ? "Startup: Password" : "Startup: Remember";
+  const startupModeTag = progressData.requirePasswordOnStartup ? "Stay Signed In: Off" : "Stay Signed In: On";
   for (const account of visibleAccounts) {
     const active = account.id === game.accountId;
+    const displayName = getAccountDisplayName(account);
+    const email = getAccountEmail(account);
     const spawnerCount = Array.isArray(account.unlockedSpawnerTowers) ? account.unlockedSpawnerTowers.length : 0;
     const loadoutSlots = clampLoadoutSlotLimit(Number(account.maxLoadoutSlots));
     const authTag = accountHasPassword(account) ? "Password Set" : "No Password";
@@ -10902,8 +11161,8 @@ function renderAccountMenu() {
     fragments.push(`
       <div class="menu-account-item ${active ? "active" : ""}">
         <div>
-          <strong>${escapeHtml(account.name)}</strong>
-          <span>${authTag} | ${startupModeTag} | ${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
+          <strong>${escapeHtml(displayName)}</strong>
+          <span>${escapeHtml(email || "no-email")} | ${authTag} | ${startupModeTag} | ${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
         </div>
         <div class="menu-account-actions">
           <span class="menu-account-badge">${active ? "Signed In" : "Saved"}</span>
@@ -10921,7 +11180,7 @@ function renderAccountMenu() {
       <div class="menu-account-item">
         <div>
           <strong>No cloud account profile yet.</strong>
-          <span>Create or login with your email to sync this account across devices.</span>
+          <span>Create with username + email, or login with email, to sync this account across devices.</span>
         </div>
       </div>
     `);
@@ -10961,7 +11220,7 @@ function deleteAccountById(accountId) {
   }
 
   const confirmed = typeof window.confirm === "function"
-    ? window.confirm(`Delete account "${account.name}"? This cannot be undone.`)
+    ? window.confirm(`Delete account "${getAccountDisplayName(account)}"? This cannot be undone.`)
     : true;
   if (!confirmed) return;
 
@@ -10974,8 +11233,10 @@ function deleteAccountById(accountId) {
 
   const remainingVisibleAccounts = getVisibleCloudAccounts();
   if (remainingVisibleAccounts.length === 0) {
-    const signedInEmail = getCloudSignedInEmail();
-    const fallback = ensureLocalAccountRecord(signedInEmail || "Commander");
+    const signedInEmail = sanitizeAccountUsername(getCloudSignedInEmail() || getAccountEmail(removed));
+    const fallback = ensureLocalAccountRecord(signedInEmail, "", {
+      displayName: game.accountName || getAccountDisplayName(removed),
+    });
     if (fallback) {
       progressData.currentAccountId = fallback.id;
       progressData.lastAuthenticatedAccountId = fallback.id;
@@ -11001,8 +11262,11 @@ function deleteAccountById(accountId) {
   renderShop();
   updateHud();
   clearAccountAuthInputs();
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = game.accountName || "";
-  setStatus(`Deleted account ${removed.name}.`);
+  const currentEmail = getAccountEmail(getCurrentAccountRecord()) || getCloudSignedInEmail();
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = currentEmail || "";
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = currentEmail || "";
+  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
+  setStatus(`Deleted account ${getAccountDisplayName(removed)}.`);
 }
 
 function switchToAccount(accountId, quiet = false) {
@@ -11026,9 +11290,11 @@ function switchToAccount(accountId, quiet = false) {
   renderShop();
   updateHud();
   clearAccountAuthInputs();
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name || "";
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name || "";
-  if (!quiet) setStatus(`Switched to account ${account.name}.`);
+  const accountEmail = getAccountEmail(account);
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = accountEmail || "";
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = accountEmail || "";
+  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = getAccountDisplayName(account);
+  if (!quiet) setStatus(`Switched to account ${getAccountDisplayName(account)}.`);
 }
 
 function createAccountFromInput() {
@@ -11043,12 +11309,18 @@ function createAccountFromInput() {
     return;
   }
 
-  const rawUsername = accountCreateUsernameInputEl ? accountCreateUsernameInputEl.value : "";
-  const username = sanitizeAccountUsername(rawUsername);
+  const rawDisplayName = accountCreateDisplayNameInputEl ? accountCreateDisplayNameInputEl.value : "";
+  const displayName = sanitizeAccountName(rawDisplayName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  const rawEmail = accountCreateUsernameInputEl ? accountCreateUsernameInputEl.value : "";
+  const email = sanitizeAccountUsername(rawEmail);
   const password = accountCreatePasswordInputEl ? accountCreatePasswordInputEl.value : "";
   const confirmPassword = accountCreatePasswordConfirmInputEl ? accountCreatePasswordConfirmInputEl.value : "";
 
-  if (!username) {
+  if (!displayName) {
+    setAccountStatus("Enter a username first.", true);
+    return;
+  }
+  if (!email) {
     setAccountStatus("Enter your email first.", true);
     return;
   }
@@ -11064,7 +11336,7 @@ function createAccountFromInput() {
     setAccountStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
     return;
   }
-  if (!isEmailAddress(username)) {
+  if (!isEmailAddress(email)) {
     setAccountStatus("Use a valid email address to create a cloud account.", true);
     return;
   }
@@ -11075,7 +11347,7 @@ function createAccountFromInput() {
   setAccountActionStatus("Create submitted. Contacting cloud...");
   void (async () => {
     try {
-      await createCloudAccountFromInput(username, password, confirmPassword);
+      await createCloudAccountFromInput(email, displayName, password, confirmPassword);
     } finally {
       accountCreateRequestInFlight = false;
       refreshAccountAuthButtons();
@@ -11095,11 +11367,11 @@ function loginAccountFromInput() {
     return;
   }
 
-  const rawUsername = accountLoginUsernameInputEl ? accountLoginUsernameInputEl.value : "";
-  const username = sanitizeAccountUsername(rawUsername);
+  const rawEmail = accountLoginUsernameInputEl ? accountLoginUsernameInputEl.value : "";
+  const email = sanitizeAccountUsername(rawEmail);
   const password = accountLoginPasswordInputEl ? accountLoginPasswordInputEl.value : "";
 
-  if (!username) {
+  if (!email) {
     setAccountStatus("Enter your email.", true);
     return;
   }
@@ -11107,7 +11379,7 @@ function loginAccountFromInput() {
     setAccountStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
     return;
   }
-  if (!isEmailAddress(username)) {
+  if (!isEmailAddress(email)) {
     setAccountStatus("Use the email address for your cloud account.", true);
     return;
   }
@@ -11118,7 +11390,7 @@ function loginAccountFromInput() {
   setAccountActionStatus("Login submitted. Contacting cloud...");
   void (async () => {
     try {
-      await loginCloudAccountFromInput(username, password);
+      await loginCloudAccountFromInput(email, password);
     } finally {
       accountLoginRequestInFlight = false;
       refreshAccountAuthButtons();
@@ -11415,8 +11687,11 @@ function openAccountMenu() {
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
   refreshAccountAuthButtons();
   clearAccountAuthInputs();
-  setAccountActionStatus("Use your email + password. Cloud account is required for cross-device saves.");
-  const preferredAuthEmail = getCloudSignedInEmail() || (isEmailAddress(game.accountName || "") ? game.accountName : "");
+  setAccountActionStatus("Create uses username + email. Login uses email + password. Enable Stay Signed In to avoid relogging on this device.");
+  const currentAccount = getCurrentAccountRecord();
+  const preferredAuthEmail = getCloudSignedInEmail() || getAccountEmail(currentAccount);
+  const preferredDisplayName = sanitizeAccountName(game.accountName || getAccountDisplayName(currentAccount), ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = preferredDisplayName || "";
   if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail;
   if (accountLoginUsernameInputEl) {
     accountLoginUsernameInputEl.value = preferredAuthEmail;
@@ -12621,9 +12896,9 @@ function startGameFromMenu(preferredLevel = null) {
   }
   if (startupAuthPendingAccountId) {
     const pendingAccount = getAccountById(startupAuthPendingAccountId);
-    const pendingName = pendingAccount?.name || "your account";
+    const pendingName = getAccountDisplayName(pendingAccount, "your account");
     openAccountMenu();
-    if (accountLoginUsernameInputEl && pendingAccount?.name) accountLoginUsernameInputEl.value = pendingAccount.name;
+    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = getAccountEmail(pendingAccount);
     if (accountLoginPasswordInputEl) {
       accountLoginPasswordInputEl.focus();
       accountLoginPasswordInputEl.select();
@@ -12762,7 +13037,7 @@ if (accountCloudSignOutBtn) {
 }
 if (accountRequirePasswordOnStartupToggleEl) {
   accountRequirePasswordOnStartupToggleEl.addEventListener("change", () => {
-    setRequirePasswordOnStartup(accountRequirePasswordOnStartupToggleEl.checked, true);
+    setRequirePasswordOnStartup(!accountRequirePasswordOnStartupToggleEl.checked, true);
     renderAccountMenu();
   });
 }
@@ -12791,7 +13066,7 @@ if (chatInputEl) {
     }
   });
 }
-for (const inputEl of [accountCreateUsernameInputEl, accountCreatePasswordInputEl, accountCreatePasswordConfirmInputEl]) {
+for (const inputEl of [accountCreateDisplayNameInputEl, accountCreateUsernameInputEl, accountCreatePasswordInputEl, accountCreatePasswordConfirmInputEl]) {
   if (!inputEl) continue;
   inputEl.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -12916,6 +13191,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (
+    (accountCreateDisplayNameInputEl && document.activeElement === accountCreateDisplayNameInputEl) ||
     (accountCreateUsernameInputEl && document.activeElement === accountCreateUsernameInputEl) ||
     (accountCreatePasswordInputEl && document.activeElement === accountCreatePasswordInputEl) ||
     (accountCreatePasswordConfirmInputEl && document.activeElement === accountCreatePasswordConfirmInputEl) ||
@@ -13111,7 +13387,7 @@ if (menuScreenEl) menuScreenEl.hidden = false;
 if (playBtn) playBtn.addEventListener("click", () => startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel()));
 if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
-  const pendingName = pendingAccount?.name || "your account";
+  const pendingName = getAccountDisplayName(pendingAccount, "your account");
   setStatus(`Login required for ${pendingName} before starting.`, true);
 } else if (progressRecoveredFromRuntimeFile) {
   setStatus("Recovered account data from EXE file storage.");

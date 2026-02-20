@@ -48,9 +48,17 @@
             <section class="menu-account-form" aria-label="Create account">
               <h3>Create Account</h3>
               <input
+                id="accountCreateDisplayNameInput"
+                type="text"
+                autocomplete="nickname"
+                spellcheck="false"
+                maxlength="24"
+                placeholder="Username"
+              />
+              <input
                 id="accountCreateUsernameInput"
                 type="text"
-                autocomplete="username"
+                autocomplete="email"
                 spellcheck="false"
                 maxlength="64"
                 placeholder="Email"
@@ -78,7 +86,7 @@
               <input
                 id="accountLoginUsernameInput"
                 type="text"
-                autocomplete="username"
+                autocomplete="email"
                 spellcheck="false"
                 maxlength="64"
                 placeholder="Email"
@@ -98,11 +106,11 @@
           <div class="menu-account-startup-auth">
             <label for="accountRequirePasswordOnStartupToggle">
               <input id="accountRequirePasswordOnStartupToggle" type="checkbox" />
-              Require password each launch (turn off to remember login)
+              Stay signed in on this device
             </label>
           </div>
           <div id="menuAccountList" class="menu-shop-list"></div>
-          <p id="menuAccountNote" class="menu-shop-note">Use an email + password for cloud accounts. Progress syncs per account across devices.</p>
+          <p id="menuAccountNote" class="menu-shop-note">Use a username + email + password for cloud accounts. Progress syncs per account across devices.</p>
           <div class="menu-shop-actions">
             <button id="accountCloudSignOutBtn" type="button" hidden>Cloud Sign Out</button>
             <button id="closeAccountBtn" class="menu-play-btn" type="button">Menu Page</button>
@@ -411,6 +419,6 @@
 
     <script src="vendor/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="game.js?v=20260220ag"></script>
+    <script src="game.js?v=20260220aj"></script>
   </body>
 </html>
