@@ -6,11 +6,17 @@ import { WebSocketServer } from "ws";
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
-const SERVER_BUILD_ID = "2026-02-20-41a";
+const SERVER_BUILD_ID = "2026-02-20-42a";
 const ROOM_CODE_LIMIT = 16;
 const PEER_ID_LIMIT = 48;
 const DISPLAY_NAME_LIMIT = 24;
 const HEARTBEAT_MS = 25000;
+const RELAY_CHAT_LIMIT = 140;
+const RELAY_CHAT_MIN_INTERVAL_MS = 450;
+const RELAY_CHAT_BURST_WINDOW_MS = 6000;
+const RELAY_CHAT_BURST_LIMIT = 5;
+const RELAY_CHAT_DUPLICATE_WINDOW_MS = 4500;
+const RELAY_CHAT_COOLDOWN_MS = 9000;
 const STATIC_ROOT = resolve(process.cwd(), "..");
 const STATIC_DENY_PREFIXES = ["server/", ".git/"];
 const STATIC_MIME_TYPES = {
@@ -53,6 +59,64 @@ function sanitizeDisplayName(raw) {
 
 function normalizeRole(raw) {
   return raw === "host" ? "host" : "client";
+}
+
+function sanitizeRelayChatText(raw) {
+  return String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, RELAY_CHAT_LIMIT);
+}
+
+function createRelayChatRateState() {
+  return {
+    timestamps: [],
+    cooldownUntil: 0,
+    lastAcceptedAt: 0,
+    lastText: "",
+    lastTextAt: 0,
+  };
+}
+
+function pruneRelayChatTimestamps(timestamps, now, windowMs = RELAY_CHAT_BURST_WINDOW_MS) {
+  if (!Array.isArray(timestamps) || timestamps.length === 0) return;
+  while (timestamps.length > 0 && now - timestamps[0] > windowMs) timestamps.shift();
+}
+
+function validateRelayChatPayload(meta, payload) {
+  const text = sanitizeRelayChatText(payload?.text || "");
+  if (!text) {
+    return { ok: false, message: "Chat message is empty.", text: "" };
+  }
+
+  if (!meta.chatRateState) meta.chatRateState = createRelayChatRateState();
+  const state = meta.chatRateState;
+  const now = Date.now();
+
+  if (state.cooldownUntil > now) {
+    return { ok: false, message: "Chat is temporarily rate-limited. Wait a moment.", text };
+  }
+
+  if (now - state.lastAcceptedAt < RELAY_CHAT_MIN_INTERVAL_MS) {
+    return { ok: false, message: "Chat cooldown active. Slow down.", text };
+  }
+
+  pruneRelayChatTimestamps(state.timestamps, now);
+  if (state.timestamps.length >= RELAY_CHAT_BURST_LIMIT) {
+    state.timestamps.length = 0;
+    state.cooldownUntil = now + RELAY_CHAT_COOLDOWN_MS;
+    return { ok: false, message: "Too many messages. Wait a few seconds.", text };
+  }
+
+  if (state.lastText && text === state.lastText && now - state.lastTextAt < RELAY_CHAT_DUPLICATE_WINDOW_MS) {
+    return { ok: false, message: "Duplicate chat message blocked.", text };
+  }
+
+  state.timestamps.push(now);
+  state.lastAcceptedAt = now;
+  state.lastText = text;
+  state.lastTextAt = now;
+  return { ok: true, message: "", text };
 }
 
 const rooms = new Map();
@@ -317,6 +381,7 @@ wss.on("connection", (socket) => {
         peerId,
         role,
         displayName,
+        chatRateState: createRelayChatRateState(),
       });
 
       const players = getRoomPlayers(room);
@@ -364,7 +429,7 @@ wss.on("connection", (socket) => {
         return;
       }
 
-      const payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
+      let payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
       const roomCode = sanitizeRoomCode(packet.roomCode || meta.roomCode || payload.roomCode);
       if (!roomCode || roomCode !== meta.roomCode) {
         sendPacket(socket, {
@@ -372,6 +437,24 @@ wss.on("connection", (socket) => {
           message: "Room mismatch.",
         });
         return;
+      }
+
+      if (payload.type === "chat") {
+        const validation = validateRelayChatPayload(meta, payload);
+        if (!validation.ok) {
+          sendPacket(socket, {
+            type: "relayWarning",
+            message: validation.message,
+          });
+          return;
+        }
+
+        payload = {
+          ...payload,
+          type: "chat",
+          name: sanitizeDisplayName(payload.name || meta.displayName || "Commander"),
+          text: validation.text,
+        };
       }
 
       const normalizedPayload = {

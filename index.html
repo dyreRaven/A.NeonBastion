@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Neon Bastion - Tower Defense</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260220g" />
+    <link rel="stylesheet" href="styles.css?v=20260220j" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -93,6 +93,12 @@
               />
               <button id="loginAccountBtn" type="button">Login</button>
             </section>
+          </div>
+          <div class="menu-account-startup-auth">
+            <label for="accountRequirePasswordOnStartupToggle">
+              <input id="accountRequirePasswordOnStartupToggle" type="checkbox" />
+              Require password each launch (turn off to remember login)
+            </label>
           </div>
           <div id="menuAccountList" class="menu-shop-list"></div>
           <p class="menu-shop-note">Progress is saved per account. Create with username + password, then login with the same credentials.</p>
@@ -402,6 +408,6 @@
     </section>
 
     <script src="vendor/three.min.js"></script>
-    <script src="game.js?v=20260220k"></script>
+    <script src="game.js?v=20260220n"></script>
   </body>
 </html>

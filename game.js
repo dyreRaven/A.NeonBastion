@@ -78,6 +78,7 @@ const accountCreatePasswordInputEl = $id("accountCreatePasswordInput");
 const accountCreatePasswordConfirmInputEl = $id("accountCreatePasswordConfirmInput");
 const accountLoginUsernameInputEl = $id("accountLoginUsernameInput");
 const accountLoginPasswordInputEl = $id("accountLoginPasswordInput");
+const accountRequirePasswordOnStartupToggleEl = $id("accountRequirePasswordOnStartupToggle");
 const createAccountBtn = $id("createAccountBtn");
 const loginAccountBtn = $id("loginAccountBtn");
 
@@ -164,8 +165,12 @@ const MULTIPLAYER_CHAT_BURST_WINDOW_MS = 6000;
 const MULTIPLAYER_CHAT_BURST_LIMIT = 5;
 const MULTIPLAYER_CHAT_DUPLICATE_WINDOW_MS = 4500;
 const MULTIPLAYER_CHAT_REMOTE_COOLDOWN_MS = 9000;
+const STATUS_HOLD_EXPAND_DELAY_MS = 320;
+const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
+const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
+const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-49";
+const BUILD_ID = "2026-02-20-52";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3824,6 +3829,22 @@ const multiplayer = {
   peerChatRateState: new Map(),
 };
 
+const statusUi = {
+  holdTimer: 0,
+  pinnedExpanded: false,
+  holdExpanded: false,
+  suppressNextClick: false,
+};
+
+const mobilePerformance = {
+  sampleFrames: 0,
+  sampleTime: 0,
+  lowWindowStreak: 0,
+  autoReduced: false,
+};
+
+let startupAuthPendingAccountId = "";
+
 function sanitizeRoomCode(rawCode) {
   return String(rawCode || "")
     .toUpperCase()
@@ -4655,6 +4676,14 @@ function openMultiplayerConnection(roomCode, role, serverUrl) {
         return;
       }
 
+      if (packet.type === "relayWarning") {
+        const message = typeof packet.message === "string" ? packet.message : "Multiplayer warning.";
+        appendMultiplayerLog(message);
+        setStatus(message, true);
+        refreshMultiplayerPanel();
+        return;
+      }
+
       if (packet.type === "relay") {
         onMultiplayerMessage(packet.payload);
         return;
@@ -4921,6 +4950,48 @@ function findAccountByUsername(username) {
   );
 }
 
+function getAccountById(accountId) {
+  if (!accountId) return null;
+  return progressData.accounts.find((account) => account.id === accountId) || null;
+}
+
+function syncAccountStartupPreferenceUi() {
+  if (!accountRequirePasswordOnStartupToggleEl) return;
+  accountRequirePasswordOnStartupToggleEl.checked = !!progressData.requirePasswordOnStartup;
+}
+
+function clearStartupAuthenticationRequirement(accountId = "") {
+  if (!startupAuthPendingAccountId) return;
+  if (!accountId || startupAuthPendingAccountId === accountId) {
+    startupAuthPendingAccountId = "";
+  }
+}
+
+function resolveStartupAuthenticationRequirement() {
+  startupAuthPendingAccountId = "";
+  if (!progressData.requirePasswordOnStartup) return;
+  const account = getAccountById(progressData.lastAuthenticatedAccountId);
+  if (!account) return;
+  if (!accountHasPassword(account)) return;
+  startupAuthPendingAccountId = account.id;
+}
+
+function setRequirePasswordOnStartup(required, announce = false) {
+  progressData.requirePasswordOnStartup = !!required;
+  if (!progressData.requirePasswordOnStartup) {
+    startupAuthPendingAccountId = "";
+  }
+  persistProgressData();
+  syncAccountStartupPreferenceUi();
+  if (announce) {
+    setStatus(
+      progressData.requirePasswordOnStartup
+        ? "Startup login set: password required each launch."
+        : "Startup login set: remember account."
+    );
+  }
+}
+
 function clearAccountAuthInputs(options = {}) {
   const keepCreateUsername = !!options.keepCreateUsername;
   const keepLoginUsername = !!options.keepLoginUsername;
@@ -5077,6 +5148,7 @@ function defaultProgressData(seed = null) {
   return {
     currentAccountId: account.id,
     lastAuthenticatedAccountId: account.id,
+    requirePasswordOnStartup: false,
     accounts: [account],
   };
 }
@@ -5117,10 +5189,12 @@ function normalizeProgressData(rawData) {
   if (!accounts.some((account) => account.id === currentAccountId)) currentAccountId = accounts[0].id;
   let lastAuthenticatedAccountId = normalizeAccountId(rawData.lastAuthenticatedAccountId);
   if (!accounts.some((account) => account.id === lastAuthenticatedAccountId)) lastAuthenticatedAccountId = currentAccountId;
+  const requirePasswordOnStartup = !!rawData.requirePasswordOnStartup;
 
   return {
     currentAccountId,
     lastAuthenticatedAccountId,
+    requirePasswordOnStartup,
     accounts,
   };
 }
@@ -5261,6 +5335,8 @@ function loadPlayerProgress() {
     progressData.currentAccountId = progressData.lastAuthenticatedAccountId;
   }
 
+  resolveStartupAuthenticationRequirement();
+  syncAccountStartupPreferenceUi();
   applyAccountToGame(getCurrentAccountRecord());
   savePlayerProgress();
   return true;
@@ -8059,9 +8135,58 @@ function updateMultiplayerNetwork(dt) {
   }
 }
 
+function clearStatusHoldTimer() {
+  if (!statusUi.holdTimer) return;
+  window.clearTimeout(statusUi.holdTimer);
+  statusUi.holdTimer = 0;
+}
+
+function applyStatusExpansionState() {
+  if (!statusEl) return;
+  const compact = isCompactRoundHudMode();
+  if (!compact) {
+    clearStatusHoldTimer();
+    statusUi.holdExpanded = false;
+    statusUi.pinnedExpanded = false;
+    statusUi.suppressNextClick = false;
+  }
+  statusEl.classList.toggle("status-collapsible", compact);
+  statusEl.classList.toggle("status-expanded", compact && (statusUi.holdExpanded || statusUi.pinnedExpanded));
+}
+
+function onStatusPointerDown() {
+  if (!statusEl || !isCompactRoundHudMode()) return;
+  clearStatusHoldTimer();
+  statusUi.suppressNextClick = false;
+  statusUi.holdTimer = window.setTimeout(() => {
+    statusUi.holdTimer = 0;
+    statusUi.holdExpanded = true;
+    statusUi.suppressNextClick = true;
+    applyStatusExpansionState();
+  }, STATUS_HOLD_EXPAND_DELAY_MS);
+}
+
+function onStatusPointerEnd() {
+  clearStatusHoldTimer();
+  if (!statusUi.holdExpanded) return;
+  statusUi.holdExpanded = false;
+  applyStatusExpansionState();
+}
+
+function onStatusClick() {
+  if (!statusEl || !isCompactRoundHudMode()) return;
+  if (statusUi.suppressNextClick) {
+    statusUi.suppressNextClick = false;
+    return;
+  }
+  statusUi.pinnedExpanded = !statusUi.pinnedExpanded;
+  applyStatusExpansionState();
+}
+
 function setStatus(message, danger = false) {
   statusEl.innerHTML = decorateShardWordsForHtml(message);
   statusEl.style.color = danger ? "#ff8f8f" : "#bfd6e8";
+  applyStatusExpansionState();
 }
 
 function getActiveBossEnemies() {
@@ -8412,6 +8537,7 @@ function resetTowersForNewLevel() {
 function prepareLevel(level) {
   const targetLevel = Math.max(1, Math.min(getHighestUnlockedLevel(), Math.floor(level || 1)));
   const profile = getLevelDifficultyProfile(targetLevel);
+  resetMobilePerformanceSampling();
   clearActiveCombatState();
   resetTowersForNewLevel();
   game.currentLevel = targetLevel;
@@ -8539,6 +8665,10 @@ function toggleSettingShatter() {
 function toggleSettingExplosionParticles() {
   if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   game.explosionParticlesEnabled = !game.explosionParticlesEnabled;
+  if (game.explosionParticlesEnabled || game.enemyRingsEnabled) {
+    mobilePerformance.autoReduced = false;
+    resetMobilePerformanceSampling();
+  }
   setStatus(game.explosionParticlesEnabled ? "Explosion particles enabled." : "Explosion particles hidden.");
   refreshSettingsPanel();
 }
@@ -8546,6 +8676,10 @@ function toggleSettingExplosionParticles() {
 function toggleSettingEnemyRings() {
   if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   game.enemyRingsEnabled = !game.enemyRingsEnabled;
+  if (game.explosionParticlesEnabled || game.enemyRingsEnabled) {
+    mobilePerformance.autoReduced = false;
+    resetMobilePerformanceSampling();
+  }
   applyEnemyRingVisibility();
   setStatus(game.enemyRingsEnabled ? "Enemy rings enabled." : "Enemy rings hidden.");
   refreshSettingsPanel();
@@ -9338,9 +9472,11 @@ function formatShardWordHtml(word = "Shards") {
 
 function renderAccountMenu() {
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
+  syncAccountStartupPreferenceUi();
   if (!menuAccountEl) return;
 
   const fragments = [];
+  const startupModeTag = progressData.requirePasswordOnStartup ? "Startup: Password" : "Startup: Remember";
   for (const account of progressData.accounts) {
     const active = account.id === game.accountId;
     const spawnerCount = Array.isArray(account.unlockedSpawnerTowers) ? account.unlockedSpawnerTowers.length : 0;
@@ -9350,7 +9486,7 @@ function renderAccountMenu() {
       <div class="menu-account-item ${active ? "active" : ""}">
         <div>
           <strong>${escapeHtml(account.name)}</strong>
-          <span>${authTag} | ${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
+          <span>${authTag} | ${startupModeTag} | ${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
         </div>
         <div class="menu-account-actions">
           <span class="menu-account-badge">${active ? "Signed In" : "Saved"}</span>
@@ -9396,6 +9532,7 @@ function deleteAccountById(accountId) {
   const removed = progressData.accounts[index];
   const deletingActive = removed.id === progressData.currentAccountId;
   progressData.accounts.splice(index, 1);
+  clearStartupAuthenticationRequirement(removed.id);
 
   if (progressData.accounts.length === 0) {
     const fallback = createAccountRecord("Commander");
@@ -9484,6 +9621,7 @@ function createAccountFromInput() {
   progressData.accounts.push(account);
   progressData.currentAccountId = account.id;
   progressData.lastAuthenticatedAccountId = account.id;
+  clearStartupAuthenticationRequirement();
   applyAccountToGame(account);
   savePlayerProgress();
   renderAccountMenu();
@@ -9521,6 +9659,7 @@ function loginAccountFromInput() {
   }
 
   switchToAccount(account.id, true);
+  clearStartupAuthenticationRequirement();
   clearAccountAuthInputs();
   if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name;
   if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name;
@@ -10077,11 +10216,71 @@ function stepGameSpeed(delta) {
   applyGameSpeedStep(game.speedStepIndex + dir, true);
 }
 
-function isCompactRoundHudMode() {
-  if (!game.started || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return false;
+function isRoundHudMobileLayout() {
   const narrowViewport = window.innerWidth <= 980;
   const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
   return narrowViewport || (coarsePointer && window.innerWidth <= 1280);
+}
+
+function isCompactRoundHudMode() {
+  if (!game.started || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return false;
+  return isRoundHudMobileLayout();
+}
+
+function resetMobilePerformanceSampling() {
+  mobilePerformance.sampleFrames = 0;
+  mobilePerformance.sampleTime = 0;
+  mobilePerformance.lowWindowStreak = 0;
+}
+
+function canSampleMobilePerformance() {
+  if (!game.started || game.menuOpen || game.over || game.paused) return false;
+  if (game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return false;
+  return isRoundHudMobileLayout();
+}
+
+function applyLowEndMobilePerformancePreset() {
+  let changed = false;
+  if (game.explosionParticlesEnabled) {
+    game.explosionParticlesEnabled = false;
+    changed = true;
+  }
+  if (game.enemyRingsEnabled) {
+    game.enemyRingsEnabled = false;
+    applyEnemyRingVisibility();
+    changed = true;
+  }
+  mobilePerformance.autoReduced = true;
+  resetMobilePerformanceSampling();
+  if (!changed) return;
+  refreshSettingsPanel();
+  setStatus("Low-FPS mobile mode enabled. Heavy visual effects reduced.");
+}
+
+function monitorMobilePerformance(dt) {
+  if (!canSampleMobilePerformance()) {
+    resetMobilePerformanceSampling();
+    return;
+  }
+  if (mobilePerformance.autoReduced) return;
+  if (!Number.isFinite(dt) || dt <= 0) return;
+
+  mobilePerformance.sampleFrames += 1;
+  mobilePerformance.sampleTime += dt;
+  if (mobilePerformance.sampleTime < MOBILE_PERF_SAMPLE_WINDOW_SEC) return;
+
+  const avgFps = mobilePerformance.sampleFrames / Math.max(mobilePerformance.sampleTime, 0.001);
+  if (avgFps < MOBILE_PERF_LOW_FPS_THRESHOLD) {
+    mobilePerformance.lowWindowStreak += 1;
+  } else {
+    mobilePerformance.lowWindowStreak = 0;
+  }
+  mobilePerformance.sampleFrames = 0;
+  mobilePerformance.sampleTime = 0;
+
+  if (mobilePerformance.lowWindowStreak >= MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED) {
+    applyLowEndMobilePerformancePreset();
+  }
 }
 
 function updateHud() {
@@ -10089,6 +10288,15 @@ function updateHud() {
   const placement = getTowerPlacementStats(game.selectedTowerType);
   const selectedCapInfo = getTowerCapBreakdown(game.selectedTowerType);
   const compactRoundHud = isCompactRoundHudMode();
+  const mobileRoundLayoutActive =
+    compactRoundHud &&
+    game.started &&
+    !game.menuOpen &&
+    !game.exitConfirmOpen &&
+    !game.levelClearOpen &&
+    !game.defeatOpen;
+  document.body.classList.toggle("mobile-round-layout", mobileRoundLayoutActive);
+  document.body.classList.toggle("mobile-shop-open", mobileRoundLayoutActive && game.placing);
   moneyEl.textContent = compactRoundHud ? `C: ${game.money}` : `Credits: ${game.money}`;
   if (shardsEl) shardsEl.innerHTML = compactRoundHud ? `S: ${game.shards}` : `${formatShardWordHtml("Shards")}: ${game.shards}`;
   if (menuShardsEl) menuShardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
@@ -10110,6 +10318,14 @@ function updateHud() {
   menuBtn.textContent = compactRoundHud ? "Menu" : game.menuOpen ? "Menu: Open" : "Menu";
   startWaveBtn.textContent = compactRoundHud ? (game.levelOneDefeated ? "Done" : "Wave") : game.levelOneDefeated ? "Level One Complete" : "Start Wave";
   if (pauseBtn) pauseBtn.textContent = compactRoundHud ? (game.paused ? "Play" : "Pause") : game.paused ? "Resume" : "Pause";
+  if (mobileRoundLayoutActive) {
+    buildBtn.textContent = `B ${selectedTower.cost}`;
+    sellBtn.textContent = "Sell";
+    laneBtn.textContent = game.editingLane ? "Lane*" : "Lane";
+    menuBtn.textContent = "Menu";
+    startWaveBtn.textContent = game.levelOneDefeated ? "Done" : "Wave";
+    if (pauseBtn) pauseBtn.textContent = game.paused ? "Play" : "Pause";
+  }
   if (speedValueEl) speedValueEl.textContent = formatSpeedLabel(game.speedMultiplier);
   if (autoWaveBtn) {
     autoWaveBtn.textContent = compactRoundHud
@@ -10119,8 +10335,21 @@ function updateHud() {
       : game.autoWaveEnabled
         ? `Auto: On (${game.inWave ? "Wave" : `${Math.max(0, Math.ceil(game.autoWaveCountdown))}s`})`
         : "Auto: Off";
+    if (mobileRoundLayoutActive) {
+      autoWaveBtn.textContent = game.autoWaveEnabled
+        ? game.inWave
+          ? "Auto W"
+          : `Auto ${Math.max(0, Math.ceil(game.autoWaveCountdown))}`
+        : "Auto";
+    }
     autoWaveBtn.classList.toggle("active", game.autoWaveEnabled);
   }
+  buildBtn.title = `Build ${selectedTower.name} (${placement.placed}/${placement.cap})`;
+  sellBtn.title = "Sell tower (40% refund)";
+  laneBtn.title = game.editingLane ? "Lane edit mode on" : "Lane edit mode";
+  startWaveBtn.title = game.levelOneDefeated ? "Level complete" : "Start wave";
+  menuBtn.title = "Open menu";
+  if (pauseBtn) pauseBtn.title = game.paused ? "Resume" : "Pause";
   if (pauseBtn) pauseBtn.classList.toggle("active", game.paused);
   if (settingsToggleBtn) settingsToggleBtn.classList.toggle("active", game.settingsOpen);
   buildBtn.classList.toggle("active", game.placing);
@@ -10141,6 +10370,7 @@ function updateHud() {
       if (multiplayer.chatOpen) renderMultiplayerChat();
     }
   }
+  applyStatusExpansionState();
   const lockMetaMenusDuringRun = game.started && !game.over;
   if (openUnlockShopBtn) openUnlockShopBtn.disabled = lockMetaMenusDuringRun;
   if (openLoadoutBtn) openLoadoutBtn.disabled = lockMetaMenusDuringRun;
@@ -10899,6 +11129,18 @@ function startGameFromMenu(preferredLevel = null) {
     setStatus("Only the host can start the multiplayer match from menu.", true);
     return;
   }
+  if (startupAuthPendingAccountId) {
+    const pendingAccount = getAccountById(startupAuthPendingAccountId);
+    const pendingName = pendingAccount?.name || "your account";
+    openAccountMenu();
+    if (accountLoginUsernameInputEl && pendingAccount?.name) accountLoginUsernameInputEl.value = pendingAccount.name;
+    if (accountLoginPasswordInputEl) {
+      accountLoginPasswordInputEl.focus();
+      accountLoginPasswordInputEl.select();
+    }
+    setStatus(`Login required for ${pendingName} before starting.`, true);
+    return;
+  }
   audioSystem.unlock();
   closeDefeatPanel();
   clearPendingLevelClearPanel();
@@ -10942,6 +11184,7 @@ function loop(now) {
   const simDt = dt * game.speedMultiplier;
   const effectDt = game.paused ? 0 : simDt;
 
+  monitorMobilePerformance(dt);
   update(simDt);
   updatePlacementPreview();
   updateMapEffects(effectDt);
@@ -11012,8 +11255,21 @@ if (chatMessagesEl) {
     { passive: true }
   );
 }
+if (statusEl) {
+  statusEl.addEventListener("pointerdown", onStatusPointerDown, { passive: true });
+  statusEl.addEventListener("pointerup", onStatusPointerEnd, { passive: true });
+  statusEl.addEventListener("pointercancel", onStatusPointerEnd, { passive: true });
+  statusEl.addEventListener("pointerleave", onStatusPointerEnd, { passive: true });
+  statusEl.addEventListener("click", onStatusClick);
+}
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
 if (loginAccountBtn) loginAccountBtn.addEventListener("click", loginAccountFromInput);
+if (accountRequirePasswordOnStartupToggleEl) {
+  accountRequirePasswordOnStartupToggleEl.addEventListener("change", () => {
+    setRequirePasswordOnStartup(accountRequirePasswordOnStartupToggleEl.checked, true);
+    renderAccountMenu();
+  });
+}
 if (mapPrevBtn) mapPrevBtn.addEventListener("click", () => cycleMenuLevel(-1));
 if (mapNextBtn) mapNextBtn.addEventListener("click", () => cycleMenuLevel(1));
 if (commandInputEl) {
@@ -11328,6 +11584,12 @@ onResize();
 openMenuShop();
 if (menuScreenEl) menuScreenEl.hidden = false;
 if (playBtn) playBtn.addEventListener("click", () => startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel()));
-setStatus(`Press ${getMenuPlayButtonLabel()} to begin.`);
+if (startupAuthPendingAccountId) {
+  const pendingAccount = getAccountById(startupAuthPendingAccountId);
+  const pendingName = pendingAccount?.name || "your account";
+  setStatus(`Login required for ${pendingName} before starting.`, true);
+} else {
+  setStatus(`Press ${getMenuPlayButtonLabel()} to begin.`);
+}
 updateHud();
 requestAnimationFrame(loop);
