@@ -152,7 +152,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-38";
+const BUILD_ID = "2026-02-20-39";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -2522,6 +2522,11 @@ const mapState = {
   starField: null,
   mapLights: [],
   cellTopY: Array.from({ length: ROWS }, () => Array(COLS).fill(0)),
+  meteorEffects: [],
+  meteorStorm: {
+    active: false,
+    spawnTimer: 0,
+  },
 };
 
 function getCellTopY(cellX, cellY) {
@@ -2555,11 +2560,15 @@ function rebuildWorld() {
 
   for (const geometry of geometries) geometry.dispose();
   for (const material of materials) material.dispose();
+  for (const meteor of mapState.meteorEffects) meteor.dispose();
 
   mapState.pulseOrbs = [];
   mapState.starField = null;
   mapState.mapLights = [];
   mapState.cellTopY = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  mapState.meteorEffects = [];
+  mapState.meteorStorm.active = false;
+  mapState.meteorStorm.spawnTimer = 0;
   applyLevelLightingTheme(game.currentLevel);
   buildMap();
 
@@ -2943,6 +2952,527 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
     lamp.position.set(x, 2.15, z);
     worldGroup.add(lamp);
   }
+}
+
+const EMBER_METEOR_UP_AXIS = new THREE.Vector3(0, 1, 0);
+const emberMeteorTargetScratch = new THREE.Vector3();
+
+function disposeSceneObject(root) {
+  if (!root) return;
+  if (root.parent) root.parent.remove(root);
+  root.traverse((node) => {
+    if (node.geometry) node.geometry.dispose();
+    if (!node.material) return;
+    if (Array.isArray(node.material)) {
+      for (const material of node.material) material.dispose();
+    } else {
+      node.material.dispose();
+    }
+  });
+}
+
+class EmberMeteorDecorEffect {
+  constructor(targetX, targetY, targetZ) {
+    this.phase = "falling";
+    this.age = 0;
+    this.fallDuration = 0.48 + Math.random() * 0.4;
+    this.impactDuration = 1.35 + Math.random() * 0.45;
+    this.trailSpawnTimer = 0;
+
+    this.target = new THREE.Vector3(targetX, targetY + 0.06, targetZ);
+    const arcAngle = Math.random() * Math.PI * 2;
+    const arcRadius = 8 + Math.random() * 11;
+    this.start = new THREE.Vector3(
+      targetX + Math.cos(arcAngle) * arcRadius,
+      targetY + 17 + Math.random() * 9,
+      targetZ + Math.sin(arcAngle) * arcRadius
+    );
+    this.position = this.start.clone();
+    this.prevPosition = this.start.clone();
+    this.fallDir = this.target.clone().sub(this.start).normalize();
+    this.tempVec = new THREE.Vector3();
+
+    this.root = new THREE.Group();
+    this.root.position.copy(this.start);
+    worldGroup.add(this.root);
+
+    const coreRadius = 0.3 + Math.random() * 0.16;
+    this.core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(coreRadius, 0),
+      new THREE.MeshStandardMaterial({
+        color: "#ffb48c",
+        emissive: "#ff5d2f",
+        emissiveIntensity: 1.08,
+        roughness: 0.14,
+        metalness: 0.28,
+      })
+    );
+    this.core.castShadow = true;
+    this.core.receiveShadow = true;
+    this.root.add(this.core);
+
+    this.shell = new THREE.Mesh(
+      new THREE.SphereGeometry(coreRadius * 1.42, 14, 14),
+      new THREE.MeshBasicMaterial({
+        color: "#ff8a48",
+        transparent: true,
+        opacity: 0.56,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.root.add(this.shell);
+
+    this.tail = new THREE.Mesh(
+      new THREE.ConeGeometry(coreRadius * 0.62, 1.9, 10, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: "#ff6c39",
+        transparent: true,
+        opacity: 0.68,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.tail.position.y = -1.05;
+    this.tail.rotation.x = Math.PI;
+    this.root.add(this.tail);
+
+    this.light = new THREE.PointLight(0xff8844, 1.35, 23, 2);
+    this.light.position.set(0, 0, 0);
+    this.root.add(this.light);
+
+    this.impactRoot = null;
+    this.impactRings = [];
+    this.sparks = [];
+    this.smoke = [];
+    this.trail = [];
+  }
+
+  spawnTrailParticle() {
+    const size = 0.08 + Math.random() * 0.1;
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(size, 8, 8),
+      new THREE.MeshBasicMaterial({
+        color: Math.random() < 0.55 ? "#ff934b" : "#ffd18f",
+        transparent: true,
+        opacity: 0.76,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    mesh.position.copy(this.root.position);
+    mesh.position.x += (Math.random() * 2 - 1) * 0.35;
+    mesh.position.y += (Math.random() * 2 - 1) * 0.2;
+    mesh.position.z += (Math.random() * 2 - 1) * 0.35;
+    worldGroup.add(mesh);
+
+    const velocity = this.fallDir.clone().multiplyScalar(-2.8 - Math.random() * 2.8);
+    velocity.x += (Math.random() * 2 - 1) * 1.2;
+    velocity.y += (Math.random() * 2 - 1) * 0.9;
+    velocity.z += (Math.random() * 2 - 1) * 1.2;
+
+    this.trail.push({
+      mesh,
+      velocity,
+      age: 0,
+      life: 0.2 + Math.random() * 0.24,
+      baseScale: 1 + Math.random() * 0.6,
+    });
+  }
+
+  updateTrailParticles(dt) {
+    if (this.trail.length === 0) return;
+    const alive = [];
+    for (const particle of this.trail) {
+      particle.age += dt;
+      particle.mesh.position.addScaledVector(particle.velocity, dt);
+      particle.velocity.y += 2.2 * dt;
+
+      const lifeT = Math.min(1, particle.age / particle.life);
+      const opacity = (1 - lifeT) * 0.76;
+      particle.mesh.material.opacity = Math.max(0, opacity);
+      const scale = Math.max(0.05, particle.baseScale * (0.6 + lifeT * 1.5));
+      particle.mesh.scale.setScalar(scale);
+
+      if (particle.age < particle.life) {
+        alive.push(particle);
+      } else {
+        disposeSceneObject(particle.mesh);
+      }
+    }
+    this.trail = alive;
+  }
+
+  beginImpact() {
+    this.phase = "impact";
+    this.age = 0;
+
+    disposeSceneObject(this.root);
+    this.root = null;
+    this.core = null;
+    this.shell = null;
+    this.tail = null;
+    this.light = null;
+
+    this.impactRoot = new THREE.Group();
+    this.impactRoot.position.copy(this.target);
+    worldGroup.add(this.impactRoot);
+
+    const flash = new THREE.Mesh(
+      new THREE.CircleGeometry(0.64, 24),
+      new THREE.MeshBasicMaterial({
+        color: "#ffe4b4",
+        transparent: true,
+        opacity: 0.94,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    flash.rotation.x = -Math.PI / 2;
+    flash.position.y = 0.04;
+    this.impactRoot.add(flash);
+
+    const fireDisk = new THREE.Mesh(
+      new THREE.CircleGeometry(0.9, 28),
+      new THREE.MeshBasicMaterial({
+        color: "#ff7a3f",
+        transparent: true,
+        opacity: 0.64,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    fireDisk.rotation.x = -Math.PI / 2;
+    fireDisk.position.y = 0.05;
+    this.impactRoot.add(fireDisk);
+
+    const ringA = new THREE.Mesh(
+      new THREE.RingGeometry(0.26, 0.42, 28),
+      new THREE.MeshBasicMaterial({
+        color: "#ffb067",
+        transparent: true,
+        opacity: 0.78,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    ringA.rotation.x = -Math.PI / 2;
+    ringA.position.y = 0.08;
+    this.impactRoot.add(ringA);
+
+    const ringB = new THREE.Mesh(
+      new THREE.RingGeometry(0.2, 0.3, 24),
+      new THREE.MeshBasicMaterial({
+        color: "#ff6f3e",
+        transparent: true,
+        opacity: 0.68,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    ringB.rotation.x = -Math.PI / 2;
+    ringB.position.y = 0.09;
+    this.impactRoot.add(ringB);
+
+    const plume = new THREE.Mesh(
+      new THREE.ConeGeometry(0.52, 2.45, 12, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: "#ff7a40",
+        transparent: true,
+        opacity: 0.72,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      })
+    );
+    plume.position.y = 1.18;
+    this.impactRoot.add(plume);
+
+    const plumeCore = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 12, 12),
+      new THREE.MeshBasicMaterial({
+        color: "#ffd7a5",
+        transparent: true,
+        opacity: 0.78,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    plumeCore.position.y = 0.66;
+    this.impactRoot.add(plumeCore);
+
+    const impactLight = new THREE.PointLight(0xff8a44, 2.4, 28, 2);
+    impactLight.position.set(0, 1.2, 0);
+    this.impactRoot.add(impactLight);
+
+    this.impactRings = [
+      { mesh: flash, grow: 9.8, fade: 2.9 },
+      { mesh: fireDisk, grow: 5.4, fade: 1.8 },
+      { mesh: ringA, grow: 11.5, fade: 2.1 },
+      { mesh: ringB, grow: 8.6, fade: 2.35 },
+    ];
+    this.impactPlume = plume;
+    this.impactPlumeCore = plumeCore;
+    this.impactLight = impactLight;
+
+    const sparkCount = 18 + Math.floor(Math.random() * 8);
+    for (let i = 0; i < sparkCount; i += 1) {
+      const size = 0.06 + Math.random() * 0.12;
+      const mesh = new THREE.Mesh(
+        i % 2 === 0 ? new THREE.TetrahedronGeometry(size, 0) : new THREE.BoxGeometry(size * 1.2, size * 0.75, size * 1.25),
+        new THREE.MeshBasicMaterial({
+          color: Math.random() < 0.72 ? "#ff9b52" : "#ffe1a4",
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      mesh.position.copy(this.target);
+      mesh.position.y += 0.1 + Math.random() * 0.26;
+      worldGroup.add(mesh);
+
+      const velocity = new THREE.Vector3(
+        (Math.random() * 2 - 1) * 6.8,
+        4.8 + Math.random() * 8.4,
+        (Math.random() * 2 - 1) * 6.8
+      );
+      const spin = new THREE.Vector3(
+        (Math.random() * 2 - 1) * 11,
+        (Math.random() * 2 - 1) * 11,
+        (Math.random() * 2 - 1) * 11
+      );
+      this.sparks.push({ mesh, velocity, spin, age: 0, life: 0.45 + Math.random() * 0.7 });
+    }
+
+    const smokeCount = 8 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < smokeCount; i += 1) {
+      const size = 0.22 + Math.random() * 0.24;
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(size, 10, 10),
+        new THREE.MeshBasicMaterial({
+          color: i % 3 === 0 ? "#ff9363" : "#3c2630",
+          transparent: true,
+          opacity: 0.46,
+          depthWrite: false,
+        })
+      );
+      mesh.position.copy(this.target);
+      mesh.position.x += (Math.random() * 2 - 1) * 0.7;
+      mesh.position.y += 0.15 + Math.random() * 0.35;
+      mesh.position.z += (Math.random() * 2 - 1) * 0.7;
+      worldGroup.add(mesh);
+
+      this.smoke.push({
+        mesh,
+        velocity: new THREE.Vector3((Math.random() * 2 - 1) * 0.9, 0.9 + Math.random() * 1.8, (Math.random() * 2 - 1) * 0.9),
+        age: 0,
+        life: 0.8 + Math.random() * 0.9,
+        scaleDrift: 0.8 + Math.random() * 0.9,
+      });
+    }
+  }
+
+  updateFalling(dt) {
+    this.age += dt;
+    const t = THREE.MathUtils.clamp(this.age / this.fallDuration, 0, 1);
+    const eased = 1 - Math.pow(1 - t, 2.45);
+    this.position.lerpVectors(this.start, this.target, eased);
+
+    this.tempVec.copy(this.position).sub(this.prevPosition);
+    if (this.tempVec.lengthSq() > 1e-6) {
+      this.fallDir.copy(this.tempVec).normalize();
+      this.root.quaternion.setFromUnitVectors(EMBER_METEOR_UP_AXIS, this.fallDir);
+    }
+    this.root.position.copy(this.position);
+    this.prevPosition.copy(this.position);
+
+    this.core.rotation.y += dt * 10;
+    this.core.rotation.z += dt * 7.2;
+    const flicker = 0.86 + Math.sin(game.time * 20 + this.target.x * 0.06 + this.target.z * 0.08) * 0.16;
+    this.shell.scale.setScalar(flicker);
+    this.tail.scale.set(1, 0.9 + Math.sin(game.time * 18 + this.target.z * 0.04) * 0.22, 1);
+    this.light.intensity = 1.15 + Math.sin(game.time * 24 + this.target.x * 0.05) * 0.28;
+
+    this.trailSpawnTimer -= dt;
+    while (this.trailSpawnTimer <= 0) {
+      this.spawnTrailParticle();
+      this.trailSpawnTimer += 0.025 + Math.random() * 0.02;
+    }
+    this.updateTrailParticles(dt);
+
+    if (t >= 1) this.beginImpact();
+    return true;
+  }
+
+  updateImpact(dt) {
+    this.age += dt;
+    const impactT = THREE.MathUtils.clamp(this.age / this.impactDuration, 0, 1);
+
+    for (const ring of this.impactRings) {
+      const scale = 1 + impactT * ring.grow;
+      ring.mesh.scale.set(scale, scale, scale);
+      ring.mesh.material.opacity = Math.max(0, ring.mesh.material.opacity - dt * ring.fade);
+    }
+
+    if (this.impactPlume) {
+      const plumeScale = 1 + impactT * 0.85;
+      this.impactPlume.scale.set(plumeScale, 1 + impactT * 1.1, plumeScale);
+      this.impactPlume.material.opacity = Math.max(0, 0.72 * (1 - impactT * 1.08));
+    }
+    if (this.impactPlumeCore) {
+      const coreScale = 1 + impactT * 1.8;
+      this.impactPlumeCore.scale.setScalar(coreScale);
+      this.impactPlumeCore.material.opacity = Math.max(0, 0.78 * (1 - impactT * 1.15));
+    }
+    if (this.impactLight) {
+      const fade = Math.max(0, 1 - impactT);
+      this.impactLight.intensity = 2.4 * fade * fade;
+    }
+
+    const aliveSparks = [];
+    for (const spark of this.sparks) {
+      spark.age += dt;
+      spark.velocity.y += -17 * dt;
+      spark.mesh.position.addScaledVector(spark.velocity, dt);
+      spark.mesh.rotation.x += spark.spin.x * dt;
+      spark.mesh.rotation.y += spark.spin.y * dt;
+      spark.mesh.rotation.z += spark.spin.z * dt;
+
+      const floorY = getLaneSurfaceY(spark.mesh.position.x, spark.mesh.position.z) + 0.02;
+      if (spark.mesh.position.y <= floorY && spark.velocity.y < 0) {
+        spark.mesh.position.y = floorY;
+        spark.velocity.y *= -0.26;
+        spark.velocity.x *= 0.66;
+        spark.velocity.z *= 0.66;
+      }
+
+      const sparkT = Math.min(1, spark.age / spark.life);
+      spark.mesh.material.opacity = Math.max(0, 0.92 * (1 - sparkT));
+      spark.mesh.scale.setScalar(Math.max(0.05, 1 - sparkT * 0.42));
+
+      if (spark.age < spark.life) {
+        aliveSparks.push(spark);
+      } else {
+        disposeSceneObject(spark.mesh);
+      }
+    }
+    this.sparks = aliveSparks;
+
+    const aliveSmoke = [];
+    for (const puff of this.smoke) {
+      puff.age += dt;
+      puff.mesh.position.addScaledVector(puff.velocity, dt);
+      puff.velocity.multiplyScalar(Math.exp(-1.8 * dt));
+      puff.velocity.y += 0.4 * dt;
+
+      const smokeT = Math.min(1, puff.age / puff.life);
+      puff.mesh.material.opacity = Math.max(0, 0.46 * (1 - smokeT));
+      const smokeScale = 1 + smokeT * puff.scaleDrift;
+      puff.mesh.scale.setScalar(smokeScale);
+
+      if (puff.age < puff.life) {
+        aliveSmoke.push(puff);
+      } else {
+        disposeSceneObject(puff.mesh);
+      }
+    }
+    this.smoke = aliveSmoke;
+
+    this.updateTrailParticles(dt);
+    return impactT < 1 || this.trail.length > 0 || this.sparks.length > 0 || this.smoke.length > 0;
+  }
+
+  update(dt) {
+    if (this.phase === "falling") return this.updateFalling(dt);
+    return this.updateImpact(dt);
+  }
+
+  dispose() {
+    disposeSceneObject(this.root);
+    this.root = null;
+
+    disposeSceneObject(this.impactRoot);
+    this.impactRoot = null;
+
+    for (const trail of this.trail) disposeSceneObject(trail.mesh);
+    for (const spark of this.sparks) disposeSceneObject(spark.mesh);
+    for (const smoke of this.smoke) disposeSceneObject(smoke.mesh);
+    this.trail = [];
+    this.sparks = [];
+    this.smoke = [];
+    this.impactRings = [];
+    this.impactPlume = null;
+    this.impactPlumeCore = null;
+    this.impactLight = null;
+  }
+}
+
+function isEmberWave40BossFightActive() {
+  if (!game.started || game.over || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return false;
+  if (game.currentLevel < 3 || game.wave !== 40 || !game.inWave) return false;
+  return game.enemies.some((enemy) => enemy.alive && enemy.typeId === "star");
+}
+
+function randomMeteorStrikeTarget(out = emberMeteorTargetScratch) {
+  const halfBoardWidth = (COLS * CELL_SIZE) * 0.5 - CELL_SIZE * 0.35;
+  const halfBoardHeight = (ROWS * CELL_SIZE) * 0.5 - CELL_SIZE * 0.35;
+  let x = 0;
+  let z = 0;
+
+  if (totalPathLength > 0 && Math.random() < 0.72) {
+    const lanePoint = pointOnPath(Math.random() * totalPathLength);
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 1.3 + Math.random() * 5.4;
+    x = lanePoint.x + Math.cos(angle) * dist;
+    z = lanePoint.z + Math.sin(angle) * dist;
+  } else {
+    x = (Math.random() * 2 - 1) * halfBoardWidth;
+    z = (Math.random() * 2 - 1) * halfBoardHeight;
+  }
+
+  x = THREE.MathUtils.clamp(x, -halfBoardWidth, halfBoardWidth);
+  z = THREE.MathUtils.clamp(z, -halfBoardHeight, halfBoardHeight);
+  const y = getLaneSurfaceY(x, z);
+  return out.set(x, y, z);
+}
+
+function spawnEmberMeteorDecor() {
+  const strikeTarget = randomMeteorStrikeTarget();
+  mapState.meteorEffects.push(new EmberMeteorDecorEffect(strikeTarget.x, strikeTarget.y, strikeTarget.z));
+}
+
+function updateEmberWave40MeteorStorm(dt) {
+  const storm = mapState.meteorStorm;
+  const active = isEmberWave40BossFightActive();
+
+  if (active) {
+    if (!storm.active) {
+      storm.active = true;
+      storm.spawnTimer = 0.12;
+    }
+
+    storm.spawnTimer -= dt;
+    while (storm.spawnTimer <= 0) {
+      const burstCount = Math.random() < 0.34 ? 2 : 1;
+      for (let i = 0; i < burstCount; i += 1) spawnEmberMeteorDecor();
+      storm.spawnTimer += 0.26 + Math.random() * 0.44;
+    }
+  } else {
+    storm.active = false;
+    storm.spawnTimer = 0;
+  }
+
+  if (mapState.meteorEffects.length === 0) return;
+  const aliveEffects = [];
+  for (const meteor of mapState.meteorEffects) {
+    if (meteor.update(dt)) aliveEffects.push(meteor);
+    else meteor.dispose();
+  }
+  mapState.meteorEffects = aliveEffects;
 }
 
 const previewBaseMat = new THREE.MeshStandardMaterial({
@@ -9232,6 +9762,8 @@ function updateMapEffects(dt) {
       mapState.mapLights[2].intensity = 0.24 + Math.sin(game.time * 1.45 + 2.2) * 0.07;
     }
   }
+
+  updateEmberWave40MeteorStorm(dt);
 }
 
 function updateDebris(dt) {
