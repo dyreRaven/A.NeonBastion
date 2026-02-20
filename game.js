@@ -187,7 +187,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-66";
+const BUILD_ID = "2026-02-20-67";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5623,23 +5623,30 @@ async function syncCloudSessionUser(user, quiet = false) {
   if (!user?.id) return false;
   cloudAuth.user = user;
   updateAccountCloudUi();
+  const signedInEmail = sanitizeAccountUsername(user.email || "");
 
   const loadedRemote = await loadCloudProgressForUser(user, true);
   if (loadedRemote) {
+    if (pruneLegacyLocalAccountsForCloudUser(signedInEmail)) {
+      resolveStartupAuthenticationRequirement();
+      syncAccountStartupPreferenceUi();
+      applyAccountToGame(getCurrentAccountRecord());
+      savePlayerProgress();
+      refreshAccountAndMenuUi();
+    }
     if (!quiet) {
-      const signedInEmail = sanitizeAccountUsername(user.email || "");
       setStatus(`Cloud login active for ${signedInEmail || "your account"}.`);
     }
     return true;
   }
 
-  const signedInEmail = sanitizeAccountUsername(user.email || "");
   const account = ensureLocalAccountRecord(signedInEmail || game.accountName || "Commander");
   if (account) {
     progressData.currentAccountId = account.id;
     progressData.lastAuthenticatedAccountId = account.id;
     clearStartupAuthenticationRequirement();
     applyAccountToGame(account);
+    pruneLegacyLocalAccountsForCloudUser(signedInEmail);
     savePlayerProgress();
     refreshAccountAndMenuUi();
   }
@@ -5955,6 +5962,47 @@ function findAccountByUsername(username) {
 function getAccountById(accountId) {
   if (!accountId) return null;
   return progressData.accounts.find((account) => account.id === accountId) || null;
+}
+
+function isCloudBackedAccount(account) {
+  if (!account || typeof account !== "object") return false;
+  return isEmailAddress(account.name || "");
+}
+
+function getVisibleCloudAccounts() {
+  return progressData.accounts.filter((account) => isCloudBackedAccount(account));
+}
+
+function pruneLegacyLocalAccountsForCloudUser(preferredEmail = "") {
+  const normalizedPreferredEmail = sanitizeAccountUsername(preferredEmail || getCloudSignedInEmail());
+  if (!normalizedPreferredEmail) return false;
+
+  let cloudAccounts = getVisibleCloudAccounts();
+  let changed = cloudAccounts.length !== progressData.accounts.length;
+  if (cloudAccounts.length === 0) {
+    const fallback = ensureLocalAccountRecord(normalizedPreferredEmail);
+    if (!fallback) return changed;
+    cloudAccounts = getVisibleCloudAccounts();
+    changed = true;
+  }
+  if (!changed) return false;
+
+  progressData.accounts = cloudAccounts;
+  const preferredKey = getAccountUsernameKey(normalizedPreferredEmail);
+  const preferredAccount =
+    cloudAccounts.find((account) => getAccountUsernameKey(account.name || "") === preferredKey) || cloudAccounts[0];
+  if (!preferredAccount) return changed;
+
+  if (!cloudAccounts.some((account) => account.id === progressData.currentAccountId)) {
+    progressData.currentAccountId = preferredAccount.id;
+    changed = true;
+  }
+  if (!cloudAccounts.some((account) => account.id === progressData.lastAuthenticatedAccountId)) {
+    progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
+    changed = true;
+  }
+
+  return changed;
 }
 
 function syncAccountStartupPreferenceUi() {
@@ -10573,14 +10621,21 @@ function formatShardWordHtml(word = "Shards") {
 }
 
 function renderAccountMenu() {
+  if (cloudAuth.user?.email && pruneLegacyLocalAccountsForCloudUser(cloudAuth.user.email)) {
+    resolveStartupAuthenticationRequirement();
+    syncAccountStartupPreferenceUi();
+    applyAccountToGame(getCurrentAccountRecord());
+    savePlayerProgress();
+  }
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
   syncAccountStartupPreferenceUi();
   updateAccountCloudUi();
   if (!menuAccountEl) return;
 
   const fragments = [];
+  const visibleAccounts = getVisibleCloudAccounts();
   const startupModeTag = progressData.requirePasswordOnStartup ? "Startup: Password" : "Startup: Remember";
-  for (const account of progressData.accounts) {
+  for (const account of visibleAccounts) {
     const active = account.id === game.accountId;
     const spawnerCount = Array.isArray(account.unlockedSpawnerTowers) ? account.unlockedSpawnerTowers.length : 0;
     const loadoutSlots = clampLoadoutSlotLimit(Number(account.maxLoadoutSlots));
@@ -10600,6 +10655,17 @@ function renderAccountMenu() {
           <button type="button" data-account-action="delete" data-account-id="${account.id}">
             Delete
           </button>
+        </div>
+      </div>
+    `);
+  }
+
+  if (visibleAccounts.length === 0) {
+    fragments.push(`
+      <div class="menu-account-item">
+        <div>
+          <strong>No cloud account profile yet.</strong>
+          <span>Create or login with your email to sync this account across devices.</span>
         </div>
       </div>
     `);
@@ -10627,8 +10693,13 @@ function renderAccountMenu() {
 function deleteAccountById(accountId) {
   const account = progressData.accounts.find((entry) => entry.id === accountId);
   if (!account) return;
+  if (!isCloudBackedAccount(account)) {
+    setStatus("Legacy local account hidden. Use cloud email accounts only.", true);
+    return;
+  }
 
-  if (progressData.accounts.length <= 1) {
+  const visibleAccounts = getVisibleCloudAccounts();
+  if (visibleAccounts.length <= 1) {
     setStatus("Cannot delete the only account.", true);
     return;
   }
@@ -10645,13 +10716,17 @@ function deleteAccountById(accountId) {
   progressData.accounts.splice(index, 1);
   clearStartupAuthenticationRequirement(removed.id);
 
-  if (progressData.accounts.length === 0) {
-    const fallback = createAccountRecord("Commander");
-    progressData.accounts = [fallback];
-    progressData.currentAccountId = fallback.id;
-    progressData.lastAuthenticatedAccountId = fallback.id;
+  const remainingVisibleAccounts = getVisibleCloudAccounts();
+  if (remainingVisibleAccounts.length === 0) {
+    const signedInEmail = getCloudSignedInEmail();
+    const fallback = ensureLocalAccountRecord(signedInEmail || "Commander");
+    if (fallback) {
+      progressData.currentAccountId = fallback.id;
+      progressData.lastAuthenticatedAccountId = fallback.id;
+      applyAccountToGame(fallback);
+    }
   } else if (deletingActive) {
-    progressData.currentAccountId = progressData.accounts[0].id;
+    progressData.currentAccountId = remainingVisibleAccounts[0].id;
     progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
   } else if (removed.id === progressData.lastAuthenticatedAccountId) {
     progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
@@ -10677,6 +10752,10 @@ function deleteAccountById(accountId) {
 function switchToAccount(accountId, quiet = false) {
   const account = progressData.accounts.find((entry) => entry.id === accountId);
   if (!account) return;
+  if (!isCloudBackedAccount(account)) {
+    setStatus("Legacy local account hidden. Login with your email account.", true);
+    return;
+  }
 
   progressData.currentAccountId = account.id;
   progressData.lastAuthenticatedAccountId = account.id;
@@ -11033,9 +11112,10 @@ function openAccountMenu() {
   renderAccountMenu();
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
   clearAccountAuthInputs();
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = game.accountName || "";
+  const preferredAuthEmail = getCloudSignedInEmail() || (isEmailAddress(game.accountName || "") ? game.accountName : "");
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail;
   if (accountLoginUsernameInputEl) {
-    accountLoginUsernameInputEl.value = game.accountName || "";
+    accountLoginUsernameInputEl.value = preferredAuthEmail;
     accountLoginUsernameInputEl.focus();
     accountLoginUsernameInputEl.select();
   }
