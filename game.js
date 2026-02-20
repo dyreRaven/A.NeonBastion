@@ -134,7 +134,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-32";
+const BUILD_ID = "2026-02-20-33";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -6809,6 +6809,14 @@ function handleIncomingMultiplayerAction(action, payload = {}, fromPeer = "") {
     return;
   }
 
+  if (action === "upgradeTowerPlacementCap") {
+    const towerTypeId = typeof payload.towerTypeId === "string" ? payload.towerTypeId : "";
+    if (!isTowerSelectable(towerTypeId)) return;
+    tryPurchaseLoadoutUpgrade(towerTypeId, "placementCap");
+    sendMultiplayerSnapshot(true);
+    return;
+  }
+
   if (action === "placeTower") {
     const cellX = Math.floor(payload.cellX);
     const cellY = Math.floor(payload.cellY);
@@ -7454,6 +7462,28 @@ function updateShopButtons() {
     if (capLine) {
       capLine.textContent = formatPlacementCapLine(typeId, placement);
     }
+
+    const capUpgradeButton = button.querySelector(".shop-cap-upgrade-btn");
+    if (capUpgradeButton) {
+      const capLevel = getTowerCapUpgradeLevel(typeId);
+      const capMax = getTowerCapUpgradeMaxLevel(typeId);
+      const capAtMax = capLevel >= capMax;
+      if (!placement.atCap) {
+        capUpgradeButton.hidden = true;
+        capUpgradeButton.disabled = false;
+      } else if (capAtMax) {
+        capUpgradeButton.hidden = false;
+        capUpgradeButton.disabled = true;
+        capUpgradeButton.textContent = "Cap Maxed";
+      } else {
+        const nextLevel = capLevel + 1;
+        const capCost = getTowerCapUpgradeCost(typeId, nextLevel);
+        const shardLabel = capCost === 1 ? "Shard" : "Shards";
+        capUpgradeButton.hidden = false;
+        capUpgradeButton.disabled = game.shards < capCost;
+        capUpgradeButton.textContent = `Upgrade Cap (${capCost} ${shardLabel})`;
+      }
+    }
   }
   return selected;
 }
@@ -7466,19 +7496,20 @@ function renderShop() {
       ? `Spawns ${type.spawnCount || 1} every ${type.spawnInterval.toFixed(1)}s | Lane ally`
       : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     fragments.push(`
-      <button class="shop-item" type="button" data-tower-type="${towerTypeId}">
+      <div class="shop-item" data-tower-type="${towerTypeId}" role="button" tabindex="0" aria-label="${escapeHtml(type.name)}">
         <strong>${type.name} - ${type.cost}</strong>
         <span>${type.summary}</span>
         <span>${detailLine}</span>
         <span class="shop-cap-line">${formatPlacementCapLine(towerTypeId, placement, false)}</span>
-      </button>
+        <button class="shop-cap-upgrade-btn" type="button" data-shop-cap-upgrade="${towerTypeId}" hidden>Upgrade Cap</button>
+      </div>
     `);
   }
   shopEl.innerHTML = fragments.join("");
 
   const buttons = shopEl.querySelectorAll(".shop-item");
   for (const button of buttons) {
-    button.addEventListener("click", () => {
+    const selectTowerFromShopCard = () => {
       if (isMultiplayerClient() && isMultiplayerActive()) {
         const towerTypeId = button.dataset.towerType;
         sendMultiplayerAction("selectTowerForBuild", { towerTypeId });
@@ -7508,6 +7539,33 @@ function renderShop() {
         }
       }
       updateHud();
+    };
+
+    button.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest(".shop-cap-upgrade-btn")) return;
+      selectTowerFromShopCard();
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      selectTowerFromShopCard();
+    });
+  }
+
+  const capUpgradeButtons = shopEl.querySelectorAll(".shop-cap-upgrade-btn");
+  for (const button of capUpgradeButtons) {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const towerTypeId = button.dataset.shopCapUpgrade;
+      if (!towerTypeId) return;
+      if (isMultiplayerClient() && isMultiplayerActive()) {
+        sendMultiplayerAction("upgradeTowerPlacementCap", { towerTypeId });
+        setStatus("Placement cap upgrade sent to host.");
+        return;
+      }
+      tryPurchaseLoadoutUpgrade(towerTypeId, "placementCap");
     });
   }
 

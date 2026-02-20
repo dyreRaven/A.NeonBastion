@@ -1643,6 +1643,27 @@ body:not(.menu-active) .menu-screen {
   letter-spacing: 0.02em;
 }
 
+.shop .shop-item .shop-cap-upgrade-btn {
+  margin-top: 0.22rem;
+  padding: 0.2rem 0.44rem;
+  border-radius: 7px;
+  font-size: 0.56rem;
+  border-color: rgba(226, 183, 255, 0.64);
+  background: linear-gradient(180deg, rgba(185, 143, 226, 0.34), rgba(123, 88, 170, 0.2));
+  color: #f5e9ff;
+}
+
+.shop .shop-item .shop-cap-upgrade-btn:disabled {
+  opacity: 0.58;
+  border-color: rgba(190, 190, 208, 0.38);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.shop .shop-item .shop-cap-upgrade-btn[hidden] {
+  display: none !important;
+}
+
 button {
   border: 1px solid rgba(194, 224, 251, 0.32);
   background: linear-gradient(180deg, rgba(158, 197, 231, 0.16), rgba(133, 174, 210, 0.06));
