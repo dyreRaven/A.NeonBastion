@@ -1063,6 +1063,7 @@ const BASE_TOWER_PLACE_CAPS = {
   frost: 3,
   ion: 1,
   quarry: 1,
+  bombarder: 1,
   rift: 2,
   bastion: 1,
   photon: 2,
@@ -1258,6 +1259,22 @@ const TOWER_TYPES = {
     bodyColor: "#dcb48e",
     coreColor: "#4f341f",
     summary: "Siege impact",
+  },
+  bombarder: {
+    name: "Bombarder",
+    cost: 980,
+    range: 14.8,
+    damage: 428,
+    fireInterval: 2.35,
+    turnSpeed: 2.4,
+    projectileSpeed: 20,
+    projectileRadius: 0.33,
+    projectileColor: "#ffd7ad",
+    bodyColor: "#d19b67",
+    coreColor: "#4a2e16",
+    summary: "Manual splash siege",
+    manualAreaTargeting: true,
+    splashRadius: 2.8,
   },
   rift: {
     name: "Rift",
@@ -1975,6 +1992,26 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   tower.projectileSpeed = config.projectileSpeed;
   tower.projectileRadius = config.projectileRadius;
   tower.projectileColor = config.projectileColor;
+  tower.manualAreaTargeting = !!config.manualAreaTargeting;
+  tower.splashRadius = tower.manualAreaTargeting ? Math.max(0.8, Number(config.splashRadius || tower.splashRadius || 1.4)) : 0;
+  if (tower.manualAreaTargeting) {
+    if (!tower.areaMarker) tower.areaMarker = createTowerAreaMarker(config.projectileColor || "#ffbe7c");
+    if (tower.areaMarker) {
+      if (tower.hasAreaTarget && inBounds(tower.areaTargetCellX, tower.areaTargetCellY)) {
+        const targetWorld = cellToWorld(tower.areaTargetCellX, tower.areaTargetCellY);
+        tower.areaTargetX = targetWorld.x;
+        tower.areaTargetZ = targetWorld.z;
+        tower.areaTargetY = getCellTopY(tower.areaTargetCellX, tower.areaTargetCellY) + 0.08;
+        tower.areaMarker.position.set(tower.areaTargetX, tower.areaTargetY, tower.areaTargetZ);
+      }
+      tower.areaMarker.scale.set(tower.splashRadius, tower.splashRadius, 1);
+      tower.areaMarker.visible = !!tower.hasAreaTarget;
+    }
+  } else if (tower.areaMarker) {
+    disposeSceneObject(tower.areaMarker);
+    tower.areaMarker = null;
+    tower.hasAreaTarget = false;
+  }
 }
 
 function refreshPlacedTowerStats(towerTypeId = null) {
@@ -3819,6 +3856,56 @@ function setLanePreviewColor(valid, removing) {
   }
 }
 
+function setBombardPreviewColor(valid) {
+  if (valid) {
+    previewBaseMat.color.set("#ffc17a");
+    previewBaseMat.emissive.set("#703a12");
+    previewRingMat.color.set("#ffb46a");
+    previewRingMat.opacity = 0.4;
+  } else {
+    previewBaseMat.color.set("#ff7d7d");
+    previewBaseMat.emissive.set("#632121");
+    previewRingMat.color.set("#ff6f6f");
+    previewRingMat.opacity = 0.24;
+  }
+}
+
+function createTowerAreaMarker(colorHex = "#ffbe7c") {
+  const marker = new THREE.Group();
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.8, 0.96, 48),
+    new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  marker.add(ring);
+
+  const fill = new THREE.Mesh(
+    new THREE.CircleGeometry(0.76, 42),
+    new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.14,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.y = 0.05;
+  marker.add(fill);
+
+  marker.visible = false;
+  scene.add(marker);
+  return marker;
+}
+
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
 const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -3879,6 +3966,7 @@ const game = {
   allies: [],
   debris: [],
   projectiles: [],
+  bombarderTargetingTower: null,
   hoverCell: null,
   over: false,
   levelOneDefeated: false,
@@ -4657,6 +4745,7 @@ function leaveMultiplayerSession(announce = true) {
   multiplayer.chatLastSentText = "";
   multiplayer.peerChatRateState.clear();
   clearMultiplayerChatHistory();
+  game.bombarderTargetingTower = null;
   refreshMultiplayerPanel();
 }
 
@@ -7795,7 +7884,14 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   turret = new THREE.Group();
   group.add(turret);
 
-  if (towerTypeId === "lance" || towerTypeId === "ion" || towerTypeId === "quarry" || towerTypeId === "sentinel" || towerTypeId === "citadel") {
+  if (
+    towerTypeId === "lance" ||
+    towerTypeId === "ion" ||
+    towerTypeId === "quarry" ||
+    towerTypeId === "bombarder" ||
+    towerTypeId === "sentinel" ||
+    towerTypeId === "citadel"
+  ) {
     turret.position.y = 1.9;
 
     const head = cast(new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.82, 0.78), bodyMat));
@@ -7870,6 +7966,42 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const recoilBlock = cast(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 0.36), coreMat));
       recoilBlock.position.set(0, 0.42, -0.24);
       turret.add(recoilBlock);
+    } else if (towerTypeId === "bombarder") {
+      head.scale.set(1.08, 1.06, 1.18);
+
+      const mortarMount = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 0.48, 12), darkMat));
+      mortarMount.position.set(0, 0.42, 0.44);
+      turret.add(mortarMount);
+
+      const mortarTube = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.9, 12), coreMat));
+      mortarTube.rotation.x = Math.PI / 2;
+      mortarTube.rotation.y = Math.PI;
+      mortarTube.rotation.z = -0.38;
+      mortarTube.position.set(0, 0.72, 1.18);
+      turret.add(mortarTube);
+
+      const tubeLip = cast(new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 10, 26), glowMat));
+      tubeLip.rotation.x = Math.PI / 2;
+      tubeLip.position.set(0, 1.26, 1.74);
+      turret.add(tubeLip);
+
+      const sidePlateL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.58, 1.32), darkMat));
+      sidePlateL.position.set(-0.5, 0.36, 1.04);
+      turret.add(sidePlateL);
+      const sidePlateR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.58, 1.32), darkMat));
+      sidePlateR.position.set(0.5, 0.36, 1.04);
+      turret.add(sidePlateR);
+
+      const recoilCore = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.34, 0.5), coreMat));
+      recoilCore.position.set(0, 0.46, -0.12);
+      turret.add(recoilCore);
+
+      const braceL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 1.08), darkMat));
+      braceL.position.set(-0.26, 0.18, 0.84);
+      turret.add(braceL);
+      const braceR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 1.08), darkMat));
+      braceR.position.set(0.26, 0.18, 0.84);
+      turret.add(braceR);
     } else if (towerTypeId === "sentinel") {
       head.scale.set(0.98, 0.9, 1.1);
 
@@ -7929,6 +8061,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle.position.set(0, 0.42, 2.6);
     if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
     if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
+    if (towerTypeId === "bombarder") muzzle.position.set(0, 1.34, 1.78);
     if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
     if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
     turret.add(muzzle);
@@ -8944,6 +9077,15 @@ class Tower {
     this.trapTriggerRadius = this.isTrap ? Math.max(0.5, Number(config.trapTriggerRadius || config.range || 1)) : 0;
     this.trapDurabilityMax = this.isTrap ? Math.max(1, Math.floor(config.trapDurability || 10)) : 0;
     this.trapDurability = this.trapDurabilityMax;
+    this.manualAreaTargeting = !!config.manualAreaTargeting;
+    this.splashRadius = this.manualAreaTargeting ? Math.max(0.8, Number(config.splashRadius || 1.4)) : 0;
+    this.hasAreaTarget = false;
+    this.areaTargetCellX = this.cellX;
+    this.areaTargetCellY = this.cellY;
+    this.areaTargetX = this.x;
+    this.areaTargetY = this.y + 0.08;
+    this.areaTargetZ = this.z;
+    this.areaMarker = this.manualAreaTargeting ? createTowerAreaMarker(config.projectileColor || "#ffbe7c") : null;
 
     const meshData = createTowerMesh(towerTypeId, config.bodyColor, config.coreColor);
     this.mesh = meshData.group;
@@ -8954,6 +9096,10 @@ class Tower {
     this.mesh.position.set(this.x, this.y + 0.02, this.z);
     scene.add(this.mesh);
     if (this.isTrap) this.setTrapDurability(this.trapDurability);
+    if (this.areaMarker) {
+      this.areaMarker.scale.set(this.splashRadius, this.splashRadius, 1);
+      this.areaMarker.visible = false;
+    }
   }
 
   update(dt) {
@@ -8997,6 +9143,57 @@ class Tower {
       this.cooldown = this.fireInterval;
       const killed = target.applyDamage(this.damage);
       if (killed) handleEnemyDefeated(target);
+      return;
+    }
+
+    if (this.manualAreaTargeting) {
+      if (this.hasAreaTarget) {
+        const targetWorld = cellToWorld(this.areaTargetCellX, this.areaTargetCellY);
+        this.areaTargetX = targetWorld.x;
+        this.areaTargetZ = targetWorld.z;
+        this.areaTargetY = getCellTopY(this.areaTargetCellX, this.areaTargetCellY) + 0.08;
+        if (this.areaMarker) {
+          this.areaMarker.position.set(this.areaTargetX, this.areaTargetY, this.areaTargetZ);
+          this.areaMarker.scale.set(this.splashRadius, this.splashRadius, 1);
+          this.areaMarker.visible = true;
+        }
+      } else if (this.areaMarker) {
+        this.areaMarker.visible = false;
+      }
+
+      if (!this.hasAreaTarget) return;
+
+      let aimError = 0;
+      if (this.turret) {
+        const dx = this.areaTargetX - this.x;
+        const dz = this.areaTargetZ - this.z;
+        const desiredYaw = Math.atan2(dx, dz);
+        const nextYaw = rotateYawTowards(this.turret.rotation.y, desiredYaw, this.turnSpeed * dt);
+        this.turret.rotation.y = nextYaw;
+        aimError = Math.abs(shortestAngleDelta(nextYaw, desiredYaw));
+      }
+
+      if (!game.inWave) return;
+      if (this.cooldown > 0) return;
+      if (this.turret && aimError > 0.26) return;
+
+      const origin = new THREE.Vector3();
+      if (this.muzzle) this.muzzle.getWorldPosition(origin);
+      else origin.set(this.x, this.y + 1.1, this.z);
+
+      this.cooldown = this.fireInterval;
+      audioSystem.playTowerShot(this.damage * 1.08);
+      game.projectiles.push(
+        new BombardProjectile(
+          origin,
+          new THREE.Vector3(this.areaTargetX, this.areaTargetY, this.areaTargetZ),
+          this.damage,
+          this.projectileSpeed,
+          this.projectileColor,
+          this.projectileRadius,
+          this.splashRadius
+        )
+      );
       return;
     }
 
@@ -9060,9 +9257,39 @@ class Tower {
     return this.destroyed;
   }
 
+  setAreaTargetCell(cellX, cellY) {
+    if (!this.manualAreaTargeting) return false;
+    const targetCellX = Math.floor(cellX);
+    const targetCellY = Math.floor(cellY);
+    if (!inBounds(targetCellX, targetCellY)) return false;
+    const world = cellToWorld(targetCellX, targetCellY);
+    this.hasAreaTarget = true;
+    this.areaTargetCellX = targetCellX;
+    this.areaTargetCellY = targetCellY;
+    this.areaTargetX = world.x;
+    this.areaTargetZ = world.z;
+    this.areaTargetY = getCellTopY(targetCellX, targetCellY) + 0.08;
+    if (this.areaMarker) {
+      this.areaMarker.position.set(this.areaTargetX, this.areaTargetY, this.areaTargetZ);
+      this.areaMarker.scale.set(this.splashRadius, this.splashRadius, 1);
+      this.areaMarker.visible = true;
+    }
+    return true;
+  }
+
+  clearAreaTarget() {
+    if (!this.manualAreaTargeting) return;
+    this.hasAreaTarget = false;
+    if (this.areaMarker) this.areaMarker.visible = false;
+  }
+
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.areaMarker) {
+      disposeSceneObject(this.areaMarker);
+      this.areaMarker = null;
+    }
     scene.remove(this.mesh);
   }
 }
@@ -9165,6 +9392,177 @@ class Projectile {
 
     const stretch = 1 + Math.min(this.speed * 0.03, 1.8);
     this.streak.scale.z = stretch;
+  }
+
+  dispose() {
+    scene.remove(this.group);
+  }
+}
+
+function applyBombardSplashDamage(centerX, centerZ, damage, splashRadius) {
+  const radius = Math.max(0.6, Number(splashRadius) || 0.6);
+  const safeDamage = Math.max(1, Math.round(Number(damage) || 1));
+  for (const enemy of game.enemies) {
+    if (!enemy.alive) continue;
+    const dx = enemy.x - centerX;
+    const dz = enemy.z - centerZ;
+    const hitRadius = radius + Math.max(0.15, enemy.radius * 0.4);
+    const distSq = dx * dx + dz * dz;
+    if (distSq > hitRadius * hitRadius) continue;
+    const dist = Math.sqrt(distSq);
+    const falloff = 1 - Math.min(0.75, dist / Math.max(0.001, radius)) * 0.45;
+    const splashDamage = Math.max(1, Math.round(safeDamage * falloff));
+    const killed = enemy.applyDamage(splashDamage);
+    if (killed) handleEnemyDefeated(enemy);
+  }
+}
+
+class BombardImpactEffect {
+  constructor(x, y, z, radius, color) {
+    this.age = 0;
+    this.life = 0.42;
+    this.radius = Math.max(0.7, Number(radius) || 0.7);
+    this.group = new THREE.Group();
+    this.group.position.set(x, y + 0.03, z);
+
+    this.flash = new THREE.Mesh(
+      new THREE.CircleGeometry(Math.max(0.36, this.radius * 0.38), 24),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.72,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.flash.rotation.x = -Math.PI / 2;
+    this.group.add(this.flash);
+
+    this.ring = new THREE.Mesh(
+      new THREE.RingGeometry(Math.max(0.24, this.radius * 0.18), Math.max(0.46, this.radius * 0.3), 30),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.82,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    this.ring.rotation.x = -Math.PI / 2;
+    this.ring.position.y = 0.03;
+    this.group.add(this.ring);
+
+    scene.add(this.group);
+  }
+
+  update(dt) {
+    this.age += dt;
+    const t = THREE.MathUtils.clamp(this.age / this.life, 0, 1);
+    const ringScale = 1 + t * (2.2 + this.radius * 1.35);
+    const flashScale = 1 + t * (1.25 + this.radius * 0.7);
+    this.ring.scale.set(ringScale, ringScale, ringScale);
+    this.flash.scale.set(flashScale, flashScale, flashScale);
+    this.ring.material.opacity = Math.max(0, 0.82 * (1 - t * 1.05));
+    this.flash.material.opacity = Math.max(0, 0.72 * (1 - t * 1.2));
+    return t < 1;
+  }
+
+  dispose() {
+    disposeSceneObject(this.group);
+    this.group = null;
+  }
+}
+
+class BombardProjectile {
+  constructor(origin, targetPoint, damage, speed, color, radius, splashRadius) {
+    this.damage = Math.max(1, Math.round(Number(damage) || 1));
+    this.speed = Math.max(4, Number(speed) || 4);
+    this.color = color;
+    this.radius = Math.max(0.08, Number(radius) || 0.12);
+    this.splashRadius = Math.max(0.8, Number(splashRadius) || 0.8);
+    this.alive = true;
+    this.elapsed = 0;
+
+    this.origin = origin.clone();
+    this.target = targetPoint.clone();
+    this.position = origin.clone();
+    this.renderPosition = origin.clone();
+    this.prevRenderPosition = origin.clone();
+    this.direction = this.target.clone().sub(this.origin);
+    if (this.direction.lengthSq() > 1e-6) this.direction.normalize();
+    else this.direction.set(0, 0, 1);
+    this.moveVec = new THREE.Vector3();
+    this.desiredQuat = new THREE.Quaternion();
+
+    this.flightDistance = Math.max(0.2, this.origin.distanceTo(this.target));
+    this.flightTime = Math.max(0.32, this.flightDistance / this.speed);
+    this.arcHeight = Math.max(0.7, Math.min(4.2, this.flightDistance * 0.22 + this.splashRadius * 0.34));
+
+    this.group = new THREE.Group();
+    this.group.position.copy(this.position);
+
+    const shellMat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 1.1,
+      metalness: 0.35,
+      roughness: 0.24,
+    });
+    this.shell = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 12, 12), shellMat);
+    this.group.add(this.shell);
+
+    const trailMat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.56,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.trail = new THREE.Mesh(
+      new THREE.CylinderGeometry(this.radius * 0.28, this.radius * 0.72, this.radius * 6.8, 10, 1, true),
+      trailMat
+    );
+    this.trail.rotation.x = Math.PI / 2;
+    this.trail.position.z = -this.radius * 2.2;
+    this.group.add(this.trail);
+
+    this.group.quaternion.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
+    scene.add(this.group);
+  }
+
+  impact() {
+    const impactY = getLaneSurfaceY(this.target.x, this.target.z) + 0.06;
+    applyBombardSplashDamage(this.target.x, this.target.z, this.damage, this.splashRadius);
+    if (game.explosionParticlesEnabled) {
+      game.debris.push(new BombardImpactEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color));
+    }
+  }
+
+  update(dt) {
+    if (!this.alive) return;
+    this.elapsed += dt;
+    const t = THREE.MathUtils.clamp(this.elapsed / this.flightTime, 0, 1);
+    this.position.lerpVectors(this.origin, this.target, t);
+    this.position.y += Math.sin(t * Math.PI) * this.arcHeight;
+
+    const smoothing = 1 - Math.exp(-24 * dt);
+    this.renderPosition.lerp(this.position, smoothing);
+    this.moveVec.subVectors(this.renderPosition, this.prevRenderPosition);
+    if (this.moveVec.lengthSq() > 1e-6) this.direction.copy(this.moveVec).normalize();
+
+    this.group.position.copy(this.renderPosition);
+    this.desiredQuat.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
+    this.group.quaternion.slerp(this.desiredQuat, 1 - Math.exp(-30 * dt));
+    this.prevRenderPosition.copy(this.renderPosition);
+
+    const stretch = 1 + Math.min(this.speed * 0.022, 1.35);
+    this.trail.scale.z = stretch;
+
+    if (t >= 1) {
+      this.impact();
+      this.alive = false;
+    }
   }
 
   dispose() {
@@ -9297,6 +9695,11 @@ function serializeTowerState(tower) {
     turretYaw: quantizeNetNumber(tower.turret ? tower.turret.rotation.y : 0),
     spinYaw: quantizeNetNumber(tower.spinNode ? tower.spinNode.rotation.y : 0),
     trapDurability: tower.isTrap ? tower.trapDurability : undefined,
+    hasAreaTarget: tower.manualAreaTargeting ? !!tower.hasAreaTarget : undefined,
+    areaTargetCellX:
+      tower.manualAreaTargeting && tower.hasAreaTarget ? Math.max(0, Math.floor(tower.areaTargetCellX || 0)) : undefined,
+    areaTargetCellY:
+      tower.manualAreaTargeting && tower.hasAreaTarget ? Math.max(0, Math.floor(tower.areaTargetCellY || 0)) : undefined,
   };
 }
 
@@ -9454,6 +9857,20 @@ function syncTowersFromMultiplayer(states) {
     if (tower.spinNode && Number.isFinite(state.spinYaw)) tower.spinNode.rotation.y = state.spinYaw;
     if (tower.isTrap && Number.isFinite(state.trapDurability)) {
       tower.setTrapDurability(state.trapDurability);
+    }
+    if (tower.manualAreaTargeting) {
+      const targetCellX = Math.floor(state.areaTargetCellX);
+      const targetCellY = Math.floor(state.areaTargetCellY);
+      const hasCellTarget =
+        Number.isFinite(state.areaTargetCellX) &&
+        Number.isFinite(state.areaTargetCellY) &&
+        inBounds(targetCellX, targetCellY);
+      const shouldHaveTarget = state.hasAreaTarget === true || (state.hasAreaTarget === undefined && hasCellTarget);
+      if (shouldHaveTarget && hasCellTarget) {
+        tower.setAreaTargetCell(targetCellX, targetCellY);
+      } else {
+        tower.clearAreaTarget();
+      }
     }
     if (tower.destroyed) {
       tower.dispose();
@@ -9852,6 +10269,19 @@ function handleIncomingMultiplayerAction(action, payload = {}, fromPeer = "") {
   if (action === "editLane") {
     editLaneAtCell(Math.floor(payload.cellX), Math.floor(payload.cellY));
     sendMultiplayerSnapshot(true);
+    return;
+  }
+
+  if (action === "setBombarderTarget") {
+    const towerCellX = Math.floor(payload.towerCellX);
+    const towerCellY = Math.floor(payload.towerCellY);
+    const targetCellX = Math.floor(payload.targetCellX);
+    const targetCellY = Math.floor(payload.targetCellY);
+    const tower = getTowerAtCell(towerCellX, towerCellY);
+    if (!isBombarderTower(tower)) return;
+    const assignedByPeer = fromPeer ? getMultiplayerDisplayNameForPeer(fromPeer, "Player") : "";
+    const assigned = applyBombarderTargetCell(tower, targetCellX, targetCellY, !!fromPeer, assignedByPeer);
+    if (assigned) sendMultiplayerSnapshot(true);
     return;
   }
 
@@ -10265,6 +10695,7 @@ function clearActiveCombatState() {
   game.spawnLeft = 0;
   game.spawnTimer = 0;
   game.bossEnemy = null;
+  game.bombarderTargetingTower = null;
 }
 
 function getHighestUnlockedLevel() {
@@ -10358,6 +10789,7 @@ function getMenuPlayButtonLabel() {
 function resetTowersForNewLevel() {
   for (const tower of game.towers) tower.dispose();
   game.towers = [];
+  game.bombarderTargetingTower = null;
 }
 
 function prepareLevel(level) {
@@ -10793,6 +11225,8 @@ function renderShop() {
       ? `Spawns ${type.spawnCount || 1} every ${type.spawnInterval.toFixed(1)}s | Lane ally`
       : type.isTrap
         ? `Trap DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        : type.manualAreaTargeting
+          ? `DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
         : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     fragments.push(`
       <div class="${cardClasses}" data-tower-type="${towerTypeId}" role="button" tabindex="0" aria-label="${escapeHtml(type.name)}">
@@ -10829,6 +11263,14 @@ function renderShop() {
           setStatus(`${type.name} cap reached (${placement.placed}/${placement.cap}). Sell one to place another.`, true);
         } else {
           setStatus(`${type.name} selected. Place it on a lane tile. (${placement.placed}/${placement.cap})`);
+        }
+      } else if (type.manualAreaTargeting) {
+        if (placement.atCap) {
+          setStatus(`${type.name} cap reached (${placement.placed}/${placement.cap}). Sell one to place another.`, true);
+        } else {
+          setStatus(
+            `${type.name} selected. Place it, then click it to set bombard area. (${placement.placed}/${placement.cap})`
+          );
         }
       } else {
         if (placement.atCap) {
@@ -11127,6 +11569,8 @@ function renderLoadoutMenu() {
       ? `Spawner | Spawn ${Math.max(1, Math.floor(type.spawnCount || 1))} every ${type.spawnInterval.toFixed(2)}s`
       : isTrap
         ? `Trap | DMG ${type.damage} | Trigger ${type.range.toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        : type.manualAreaTargeting
+          ? `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
         : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     const options = isUpgradeOpen ? getLoadoutUpgradeOptions(towerTypeId) : [];
     const upgradePanel = isUpgradeOpen
@@ -11599,6 +12043,7 @@ function renderMenuShop() {
     const unlock = TOWER_UNLOCKS[towerTypeId];
     const unlocked = isTowerUnlocked(towerTypeId);
     const canAfford = game.shards >= unlock.shardCost;
+    const splashLabel = type.manualAreaTargeting ? ` | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}` : "";
     const itemClasses = [
       "menu-unlock-item",
       unlocked ? "unlocked" : "",
@@ -11611,7 +12056,7 @@ function renderMenuShop() {
       <div class="${itemClasses}">
         <div>
           <strong>${type.name}</strong>
-          <span>${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}</span>
+          <span>${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}${splashLabel}</span>
         </div>
         <button
           class="unlock-action"
@@ -12334,6 +12779,7 @@ function togglePause() {
     game.placing = false;
     game.selling = false;
     game.editingLane = false;
+    game.bombarderTargetingTower = null;
     game.hoverCell = null;
     setStatus("Game paused.");
   } else {
@@ -12365,6 +12811,7 @@ function toggleSellMode() {
   if (game.over) return;
   game.selling = !game.selling;
   if (game.selling) {
+    game.bombarderTargetingTower = null;
     game.placing = false;
     game.editingLane = false;
   }
@@ -12429,6 +12876,7 @@ function toggleLaneEditMode() {
 
   game.editingLane = !game.editingLane;
   if (game.editingLane) {
+    game.bombarderTargetingTower = null;
     game.placing = false;
     game.selling = false;
     setStatus("Lane edit mode active. Click tiles to add/remove lane. Entry and core are locked.");
@@ -12482,10 +12930,19 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
   game.towers.push(new Tower(targetCellX, targetCellY, towerTypeId));
   const updatedPlacement = getTowerPlacementStats(towerTypeId);
   const placedLabel = isTrapTowerId(towerTypeId) ? "trap armed" : "tower deployed";
+  const requiresAreaTarget = !!selectedTower.manualAreaTargeting;
   if (placedByPeer) {
-    setStatus(`${selectedTower.name} ${placedLabel} by ${placedByPeer}. (${updatedPlacement.placed}/${updatedPlacement.cap})`);
+    setStatus(
+      `${selectedTower.name} ${placedLabel} by ${placedByPeer}. (${updatedPlacement.placed}/${updatedPlacement.cap})${
+        requiresAreaTarget ? " Click it to set a bombard area." : ""
+      }`
+    );
   } else {
-    setStatus(`${selectedTower.name} ${placedLabel}. (${updatedPlacement.placed}/${updatedPlacement.cap})`);
+    setStatus(
+      `${selectedTower.name} ${placedLabel}. (${updatedPlacement.placed}/${updatedPlacement.cap})${
+        requiresAreaTarget ? " Click it to set a bombard area." : ""
+      }`
+    );
   }
   updateHud();
   return true;
@@ -12507,11 +12964,79 @@ function getTowerAtCell(cellX, cellY) {
   return game.towers.find((tower) => tower.cellX === cellX && tower.cellY === cellY) || null;
 }
 
+function isBombarderTower(tower) {
+  return !!(tower && tower.manualAreaTargeting && tower.towerTypeId === "bombarder");
+}
+
+function getActiveBombarderTargetingTower() {
+  const tower = game.bombarderTargetingTower;
+  if (!isBombarderTower(tower)) {
+    game.bombarderTargetingTower = null;
+    return null;
+  }
+  if (tower.destroyed || !game.towers.includes(tower)) {
+    game.bombarderTargetingTower = null;
+    return null;
+  }
+  return tower;
+}
+
+function clearBombarderTargetingMode(announce = false) {
+  const hadMode = !!game.bombarderTargetingTower;
+  game.bombarderTargetingTower = null;
+  if (hadMode && announce) setStatus("Bombard targeting cancelled.");
+  return hadMode;
+}
+
+function canAssignBombarderTargetCell(tower, cellX, cellY) {
+  if (!isBombarderTower(tower)) return false;
+  if (!inBounds(cellX, cellY)) return false;
+  const world = cellToWorld(cellX, cellY);
+  const dx = world.x - tower.x;
+  const dz = world.z - tower.z;
+  const maxRange = Math.max(1.2, tower.range || 1.2);
+  return dx * dx + dz * dz <= maxRange * maxRange;
+}
+
+function applyBombarderTargetCell(tower, cellX, cellY, announce = true, assignedByPeer = "") {
+  if (!isBombarderTower(tower)) return false;
+  const targetCellX = Math.floor(cellX);
+  const targetCellY = Math.floor(cellY);
+  if (!canAssignBombarderTargetCell(tower, targetCellX, targetCellY)) {
+    if (announce) setStatus("Bombard target is out of range. Select a tile inside the tower ring.", true);
+    return false;
+  }
+  tower.setAreaTargetCell(targetCellX, targetCellY);
+  if (announce) {
+    if (assignedByPeer) {
+      setStatus(`Bombarder target set by ${assignedByPeer} at ${targetCellX},${targetCellY}.`);
+    } else {
+      setStatus(`Bombarder target set at ${targetCellX},${targetCellY}.`);
+    }
+  }
+  return true;
+}
+
+function beginBombarderTargetingMode(tower) {
+  if (!isBombarderTower(tower)) return false;
+  game.bombarderTargetingTower = tower;
+  game.placing = false;
+  game.selling = false;
+  game.editingLane = false;
+  setStatus(
+    `Bombarder targeting active. Click a tile within ${tower.range.toFixed(1)} range to set bombard area. Right-click/Escape cancels.`
+  );
+  updateHud();
+  return true;
+}
+
 function purgeDestroyedTowers() {
   let removed = 0;
+  let removedActiveBombarder = false;
   const survivors = [];
   for (const tower of game.towers) {
     if (!tower || tower.destroyed) {
+      if (tower === game.bombarderTargetingTower) removedActiveBombarder = true;
       if (tower) tower.dispose();
       removed += 1;
       continue;
@@ -12519,6 +13044,7 @@ function purgeDestroyedTowers() {
     survivors.push(tower);
   }
   game.towers = survivors;
+  if (removedActiveBombarder) game.bombarderTargetingTower = null;
   return removed;
 }
 
@@ -12531,6 +13057,7 @@ function sellTowerAtCell(cellX, cellY) {
 
   const refund = Math.max(1, Math.round(tower.cost * SELL_REFUND_RATIO));
   game.money += refund;
+  if (tower === game.bombarderTargetingTower) game.bombarderTargetingTower = null;
   tower.dispose();
   game.towers = game.towers.filter((entry) => entry !== tower);
   setStatus(`${tower.name} tower sold for ${refund} credits.`);
@@ -12634,6 +13161,10 @@ function onPointerDown(event) {
   if (game.over) return;
 
   if (event.button === 2) {
+    if (clearBombarderTargetingMode(true)) {
+      updateHud();
+      return;
+    }
     if (game.placing) {
       game.placing = false;
       setStatus("Build mode off.");
@@ -12646,6 +13177,32 @@ function onPointerDown(event) {
   if (!game.hoverCell) return;
 
   const { cellX, cellY } = game.hoverCell;
+  const activeBombarder = getActiveBombarderTargetingTower();
+
+  if (activeBombarder) {
+    const validTarget = canAssignBombarderTargetCell(activeBombarder, cellX, cellY);
+    if (!validTarget) {
+      setStatus("Bombard target is out of range. Pick a tile inside the tower range.", true);
+      return;
+    }
+
+    if (isMultiplayerClient() && isMultiplayerActive()) {
+      sendMultiplayerAction("setBombarderTarget", {
+        towerCellX: activeBombarder.cellX,
+        towerCellY: activeBombarder.cellY,
+        targetCellX: cellX,
+        targetCellY: cellY,
+      });
+      setStatus(`Bombarder target requested at ${cellX},${cellY}.`);
+    } else {
+      const assigned = applyBombarderTargetCell(activeBombarder, cellX, cellY, true);
+      if (assigned && isMultiplayerHost() && isMultiplayerActive()) sendMultiplayerSnapshot(true);
+    }
+
+    clearBombarderTargetingMode(false);
+    updateHud();
+    return;
+  }
 
   if (game.editingLane) {
     if (isMultiplayerClient() && isMultiplayerActive()) {
@@ -12665,7 +13222,11 @@ function onPointerDown(event) {
     return;
   }
 
-  if (!game.placing) return;
+  if (!game.placing) {
+    const clickedTower = getTowerAtCell(cellX, cellY);
+    if (isBombarderTower(clickedTower)) beginBombarderTargetingMode(clickedTower);
+    return;
+  }
   if (isMultiplayerClient() && isMultiplayerActive()) {
     sendMultiplayerAction("placeTower", { cellX, cellY, towerTypeId: game.selectedTowerType });
     return;
@@ -12676,6 +13237,7 @@ function onPointerDown(event) {
 function toggleBuildMode() {
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
+  game.bombarderTargetingTower = null;
   game.placing = !game.placing;
   if (game.placing) {
     game.selling = false;
@@ -12691,6 +13253,10 @@ function toggleBuildMode() {
       );
     } else if (isTrapTowerId(game.selectedTowerType)) {
       setStatus(`Build mode active: ${selectedTower.name} trap (${placement.placed}/${placement.cap}). Place on lane tiles.`);
+    } else if (selectedTower.manualAreaTargeting) {
+      setStatus(
+        `Build mode active: ${selectedTower.name} (${placement.placed}/${placement.cap}). Place it, then click it to set area.`
+      );
     } else {
       setStatus(`Build mode active: ${selectedTower.name} (${placement.placed}/${placement.cap}).`);
     }
@@ -12701,11 +13267,12 @@ function toggleBuildMode() {
 }
 
 function updatePlacementPreview() {
+  const activeBombarder = getActiveBombarderTargetingTower();
   if (
     game.paused ||
     game.menuOpen ||
     game.exitConfirmOpen ||
-    (!game.placing && !game.selling && !game.editingLane) ||
+    (!game.placing && !game.selling && !game.editingLane && !activeBombarder) ||
     !game.hoverCell
   ) {
     previewGroup.visible = false;
@@ -12722,6 +13289,13 @@ function updatePlacementPreview() {
   const baseY = getCellTopY(cellX, cellY);
   previewGroup.visible = true;
   previewGroup.position.set(world.x, baseY, world.z);
+
+  if (activeBombarder) {
+    const valid = canAssignBombarderTargetCell(activeBombarder, cellX, cellY);
+    previewRing.scale.set(activeBombarder.splashRadius, activeBombarder.splashRadius, 1);
+    setBombardPreviewColor(valid);
+    return;
+  }
 
   if (game.editingLane) {
     const key = cellKey(cellX, cellY);
@@ -13430,6 +14004,12 @@ window.addEventListener("keydown", (event) => {
   if (chatPanelEl && !chatPanelEl.hidden && event.key === "Escape") {
     event.preventDefault();
     closeChatPanel();
+    updateHud();
+    return;
+  }
+
+  if (event.key === "Escape" && clearBombarderTargetingMode(true)) {
+    event.preventDefault();
     updateHud();
     return;
   }
