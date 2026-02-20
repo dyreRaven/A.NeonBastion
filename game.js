@@ -1262,7 +1262,7 @@ const TOWER_TYPES = {
     name: "Rift Spikes",
     cost: 130,
     range: 1.04,
-    damage: 52,
+    damage: 12,
     fireInterval: 0.46,
     turnSpeed: 0,
     projectileSpeed: 0,
