@@ -83,6 +83,7 @@ const accountCloudSignOutBtn = $id("accountCloudSignOutBtn");
 const createAccountBtn = $id("createAccountBtn");
 const loginAccountBtn = $id("loginAccountBtn");
 const menuAccountNoteEl = $id("menuAccountNote");
+const menuAccountActionStatusEl = $id("menuAccountActionStatus");
 
 // Unlock/loadout menu.
 const menuShopEl = $id("menuShop");
@@ -166,6 +167,9 @@ const HEALTH_BAR_SHOW_TIME = 1.5;
 const GAME_SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL = 0.16;
+const SOLO_HUD_REFRESH_INTERVAL_SEC = 0.12;
+const SOLO_HUD_REFRESH_TYPING_INTERVAL_SEC = 0.3;
+const LOADOUT_SEARCH_DEBOUNCE_MS = 80;
 const MULTIPLAYER_STATE_FLOAT_PRECISION = 1000;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
@@ -187,7 +191,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-67";
+const BUILD_ID = "2026-02-20-68";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3919,6 +3923,8 @@ const mobilePerformance = {
 };
 
 let startupAuthPendingAccountId = "";
+let soloHudRefreshTimer = 0;
+let loadoutSearchRenderTimer = null;
 
 function sanitizeRoomCode(rawCode) {
   return String(rawCode || "")
@@ -3988,6 +3994,34 @@ function refreshClientHudIfNeeded(dt = 0, force = false) {
   updateHud();
   multiplayer.clientHudTimer = MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL;
   multiplayer.hudDirty = false;
+}
+
+function isTextInputFocused() {
+  const active = document.activeElement;
+  return !!(
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement ||
+    (active instanceof HTMLElement && active.isContentEditable)
+  );
+}
+
+function getSoloHudRefreshInterval() {
+  return isTextInputFocused() ? SOLO_HUD_REFRESH_TYPING_INTERVAL_SEC : SOLO_HUD_REFRESH_INTERVAL_SEC;
+}
+
+function refreshSoloHudIfNeeded(dt = 0, force = false) {
+  const delta = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  soloHudRefreshTimer -= delta;
+  if (!force && soloHudRefreshTimer > 0) return;
+  updateHud();
+}
+
+function scheduleLoadoutSearchRender() {
+  if (loadoutSearchRenderTimer) clearTimeout(loadoutSearchRenderTimer);
+  loadoutSearchRenderTimer = setTimeout(() => {
+    loadoutSearchRenderTimer = null;
+    renderLoadoutMenu();
+  }, LOADOUT_SEARCH_DEBOUNCE_MS);
 }
 
 function getMultiplayerLabel() {
@@ -5665,33 +5699,33 @@ async function syncCloudSessionUser(user, quiet = false) {
 
 async function createCloudAccountFromInput(username, password, confirmPassword) {
   if (!cloudAuth.enabled || !cloudAuth.client) {
-    setStatus("Cloud auth is unavailable right now.", true);
+    setAccountStatus("Cloud auth is unavailable right now.", true);
     return;
   }
   if (password.length < MIN_ACCOUNT_PASSWORD_LENGTH) {
-    setStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
+    setAccountStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
     return;
   }
   if (password !== confirmPassword) {
-    setStatus("Passwords do not match.", true);
+    setAccountStatus("Passwords do not match.", true);
     return;
   }
 
   const email = sanitizeAccountUsername(username);
-  setStatus(`Creating cloud account for ${email}...`);
+  setAccountStatus(`Creating cloud account for ${email}...`);
   try {
     const { data, error } = await cloudAuth.client.auth.signUp({
       email,
       password,
     });
     if (error) {
-      setStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
+      setAccountStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
       return;
     }
 
     const sessionUser = data?.session?.user || null;
     if (!sessionUser) {
-      setStatus(`Account created for ${email}. Confirm your email, then login for cloud sync.`);
+      setAccountStatus(`Account created for ${email}. Confirm your email, then login for cloud sync.`);
       return;
     }
 
@@ -5710,38 +5744,38 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
     if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
     if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
     if (cloudAuth.profileTableMissing) {
-      setStatus(`Cloud login is active for ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
+      setAccountStatus(`Cloud login is active for ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
-      setStatus(`Cloud account created as ${email}. Initial cloud sync is pending.`);
+      setAccountStatus(`Cloud account created as ${email}. Initial cloud sync is pending.`);
     } else {
-      setStatus(`Cloud account created and logged in as ${email}.`);
+      setAccountStatus(`Cloud account created and logged in as ${email}.`);
     }
   } catch (_) {
-    setStatus("Cloud sign-up failed due to a network error.", true);
+    setAccountStatus("Cloud sign-up failed due to a network error.", true);
   }
 }
 
 async function loginCloudAccountFromInput(username, password) {
   if (!cloudAuth.enabled || !cloudAuth.client) {
-    setStatus("Cloud auth is unavailable right now.", true);
+    setAccountStatus("Cloud auth is unavailable right now.", true);
     return;
   }
 
   const email = sanitizeAccountUsername(username);
-  setStatus(`Signing into cloud account ${email}...`);
+  setAccountStatus(`Signing into cloud account ${email}...`);
   try {
     const { data, error } = await cloudAuth.client.auth.signInWithPassword({
       email,
       password,
     });
     if (error) {
-      setStatus(`Cloud login failed: ${formatCloudErrorMessage(error)}`, true);
+      setAccountStatus(`Cloud login failed: ${formatCloudErrorMessage(error)}`, true);
       return;
     }
 
     const user = data?.user || data?.session?.user || null;
     if (!user) {
-      setStatus("Cloud login failed: no user session returned.", true);
+      setAccountStatus("Cloud login failed: no user session returned.", true);
       return;
     }
 
@@ -5761,14 +5795,14 @@ async function loginCloudAccountFromInput(username, password) {
     if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
     if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
     if (cloudAuth.profileTableMissing) {
-      setStatus(`Logged in as ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
+      setAccountStatus(`Logged in as ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
-      setStatus(`Logged in as ${email}. Cloud sync is pending.`);
+      setAccountStatus(`Logged in as ${email}. Cloud sync is pending.`);
     } else {
-      setStatus(`Logged in as ${email} (cloud sync active).`);
+      setAccountStatus(`Logged in as ${email} (cloud sync active).`);
     }
   } catch (_) {
-    setStatus("Cloud login failed due to a network error.", true);
+    setAccountStatus("Cloud login failed due to a network error.", true);
   }
 }
 
@@ -9339,6 +9373,17 @@ function setStatus(message, danger = false) {
   applyStatusExpansionState();
 }
 
+function setAccountActionStatus(message = "", danger = false) {
+  if (!menuAccountActionStatusEl) return;
+  menuAccountActionStatusEl.textContent = String(message || "");
+  menuAccountActionStatusEl.style.color = danger ? "#ff8f8f" : "#bfd6e8";
+}
+
+function setAccountStatus(message, danger = false) {
+  setStatus(message, danger);
+  setAccountActionStatus(message, danger);
+}
+
 function getActiveBossEnemies() {
   return game.enemies.filter(
     (enemy) => enemy.alive && (enemy.typeId === "icosahedron" || enemy.typeId === "rhombus" || enemy.typeId === "star")
@@ -10058,6 +10103,7 @@ function updateShopButtons() {
     game.selectedTowerType = firstAvailableTowerId() || "pulse";
   }
   const selected = getTowerType(game.selectedTowerType);
+  if (!game.started || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return selected;
   const buttons = shopEl.querySelectorAll(".shop-item");
   for (const button of buttons) {
     const typeId = button.dataset.towerType;
@@ -10782,23 +10828,23 @@ function createAccountFromInput() {
   const confirmPassword = accountCreatePasswordConfirmInputEl ? accountCreatePasswordConfirmInputEl.value : "";
 
   if (!username) {
-    setStatus("Enter a username first.", true);
+    setAccountStatus("Enter your email first.", true);
     return;
   }
   if (password.length < MIN_ACCOUNT_PASSWORD_LENGTH) {
-    setStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
+    setAccountStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
     return;
   }
   if (password !== confirmPassword) {
-    setStatus("Passwords do not match.", true);
+    setAccountStatus("Passwords do not match.", true);
     return;
   }
   if (!cloudAuth.enabled || !cloudAuth.client) {
-    setStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
+    setAccountStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
     return;
   }
   if (!isEmailAddress(username)) {
-    setStatus("Use a valid email address to create a cloud account.", true);
+    setAccountStatus("Use a valid email address to create a cloud account.", true);
     return;
   }
   void createCloudAccountFromInput(username, password, confirmPassword);
@@ -10810,15 +10856,15 @@ function loginAccountFromInput() {
   const password = accountLoginPasswordInputEl ? accountLoginPasswordInputEl.value : "";
 
   if (!username) {
-    setStatus("Enter your username.", true);
+    setAccountStatus("Enter your email.", true);
     return;
   }
   if (!cloudAuth.enabled || !cloudAuth.client) {
-    setStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
+    setAccountStatus("Cloud auth is unavailable right now. Try again in a moment.", true);
     return;
   }
   if (!isEmailAddress(username)) {
-    setStatus("Use the email address for your cloud account.", true);
+    setAccountStatus("Use the email address for your cloud account.", true);
     return;
   }
   void loginCloudAccountFromInput(username, password);
@@ -11112,6 +11158,7 @@ function openAccountMenu() {
   renderAccountMenu();
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
   clearAccountAuthInputs();
+  setAccountActionStatus("Use your email + password. Cloud account is required for cross-device saves.");
   const preferredAuthEmail = getCloudSignedInEmail() || (isEmailAddress(game.accountName || "") ? game.accountName : "");
   if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail;
   if (accountLoginUsernameInputEl) {
@@ -11138,6 +11185,10 @@ function openLoadoutMenu() {
   if (game.started && !game.over) {
     setStatus("Loadout changes are menu-only before starting a run.", true);
     return;
+  }
+  if (loadoutSearchRenderTimer) {
+    clearTimeout(loadoutSearchRenderTimer);
+    loadoutSearchRenderTimer = null;
   }
   openMenuShop();
   setMenuView("loadout");
@@ -11187,6 +11238,10 @@ function closeTrapMenu() {
 }
 
 function closeLoadoutMenu() {
+  if (loadoutSearchRenderTimer) {
+    clearTimeout(loadoutSearchRenderTimer);
+    loadoutSearchRenderTimer = null;
+  }
   setMenuView("home");
 }
 
@@ -11459,6 +11514,7 @@ function monitorMobilePerformance(dt) {
 }
 
 function updateHud() {
+  soloHudRefreshTimer = getSoloHudRefreshInterval();
   const selectedTower = updateShopButtons();
   const placement = getTowerPlacementStats(game.selectedTowerType);
   const selectedCapInfo = getTowerCapBreakdown(game.selectedTowerType);
@@ -11567,9 +11623,11 @@ function updateHud() {
   if (settingsToggleBtn) settingsToggleBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
   if (unlockBtn) unlockBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
   menuBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
-  const buttons = shopEl.querySelectorAll(".shop-item");
-  for (const button of buttons) button.disabled = locked;
-  refreshSettingsPanel();
+  if (game.started && !game.menuOpen && !game.exitConfirmOpen && !game.levelClearOpen && !game.defeatOpen) {
+    const buttons = shopEl.querySelectorAll(".shop-item");
+    for (const button of buttons) button.disabled = locked;
+  }
+  if (settingsPanelEl && !settingsPanelEl.hidden) refreshSettingsPanel();
   updateBossBar();
 }
 
@@ -12184,13 +12242,13 @@ function update(dt) {
 
   if (!game.started || game.menuOpen || game.exitConfirmOpen) {
     syncMusicState();
-    updateHud();
+    refreshSoloHudIfNeeded(dt);
     return;
   }
 
   if (game.paused) {
     syncMusicState();
-    updateHud();
+    refreshSoloHudIfNeeded(dt);
     return;
   }
 
@@ -12199,7 +12257,7 @@ function update(dt) {
   updateDebris(dt);
 
   if (game.over) {
-    updateHud();
+    refreshSoloHudIfNeeded(dt);
     return;
   }
 
@@ -12296,7 +12354,7 @@ function update(dt) {
   game.projectiles = aliveProjectiles;
 
   endWaveIfDone();
-  updateHud();
+  refreshSoloHudIfNeeded(dt);
 }
 
 function startGameFromMenu(preferredLevel = null) {
@@ -12550,7 +12608,7 @@ if (multiplayerRoomInputEl) {
   });
 }
 if (menuLoadoutSearchEl) {
-  menuLoadoutSearchEl.addEventListener("input", renderLoadoutMenu);
+  menuLoadoutSearchEl.addEventListener("input", scheduleLoadoutSearchRender);
   menuLoadoutSearchEl.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();

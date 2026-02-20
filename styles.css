@@ -1080,6 +1080,12 @@ body:not(.menu-active) .menu-screen {
   font-size: 0.84rem;
 }
 
+#menuAccountActionStatus {
+  min-height: 1.25rem;
+  margin: 0.2rem 0 0.25rem;
+  color: #bfd6e8;
+}
+
 .menu-account-item {
   width: 100%;
   display: grid;
