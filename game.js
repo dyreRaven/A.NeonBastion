@@ -173,7 +173,7 @@ const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
 const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
 const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-59";
+const BUILD_ID = "2026-02-20-60";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4949,28 +4949,13 @@ function sendMultiplayerAction(action, payload = {}) {
   });
 }
 
-let progressStorageState = 0;
-let progressStorageRef = null;
 let progressStorageUnavailable = false;
 let progressRecoveredFromBackup = false;
 
 function getProgressStorage() {
-  if (progressStorageState === 1) return progressStorageRef;
-  if (progressStorageState === -1) return null;
   try {
-    const storage = window.localStorage;
-    if (!storage) {
-      progressStorageState = -1;
-      return null;
-    }
-    const probeKey = "__neon_bastion_storage_probe__";
-    storage.setItem(probeKey, "1");
-    storage.removeItem(probeKey);
-    progressStorageRef = storage;
-    progressStorageState = 1;
-    return storage;
+    return window.localStorage || null;
   } catch (_) {
-    progressStorageState = -1;
     return null;
   }
 }
@@ -5352,7 +5337,10 @@ function applyAccountToGame(account) {
 
 function persistProgressData() {
   const storage = getProgressStorage();
-  if (!storage) return;
+  if (!storage) {
+    progressStorageUnavailable = true;
+    return false;
+  }
   try {
     const serialized = JSON.stringify(progressData);
     try {
@@ -5367,7 +5355,12 @@ function persistProgressData() {
       }
     } catch (_) {}
     storage.setItem(PROGRESS_STORAGE_KEY, serialized);
-  } catch (_) {}
+    progressStorageUnavailable = false;
+    return true;
+  } catch (_) {
+    progressStorageUnavailable = true;
+    return false;
+  }
 }
 
 function savePlayerProgress() {
