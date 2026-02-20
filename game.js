@@ -179,7 +179,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-62";
+const BUILD_ID = "2026-02-20-63";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4970,6 +4970,7 @@ const cloudAuth = {
   loadingRemote: false,
   profileTableMissing: false,
 };
+let localSaveFailureNotified = false;
 
 function getProgressStorage() {
   try {
@@ -5043,6 +5044,13 @@ function formatCloudErrorMessage(error, fallback = "Cloud request failed.") {
   const message = String(error?.message || "").trim();
   if (message) return message;
   return fallback;
+}
+
+function isLikelyValidProgressPayload(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (!Array.isArray(payload.accounts)) return false;
+  if (payload.accounts.length <= 0) return false;
+  return true;
 }
 
 function serializeProgressSnapshotForCloud() {
@@ -5157,7 +5165,7 @@ async function loadCloudProgressForUser(user, quiet = false) {
     }
     cloudAuth.profileTableMissing = false;
     const remoteProgress = data?.progress;
-    if (!remoteProgress || typeof remoteProgress !== "object") return false;
+    if (!isLikelyValidProgressPayload(remoteProgress)) return false;
     progressData = normalizeProgressData(remoteProgress);
     resolveStartupAuthenticationRequirement();
     syncAccountStartupPreferenceUi();
@@ -5920,7 +5928,13 @@ function savePlayerProgress() {
   if (!progressData.lastAuthenticatedAccountId || !progressData.accounts.some((account) => account.id === progressData.lastAuthenticatedAccountId)) {
     progressData.lastAuthenticatedAccountId = current.id;
   }
-  persistProgressData();
+  const savedLocal = persistProgressData();
+  if (savedLocal) {
+    localSaveFailureNotified = false;
+  } else if (!localSaveFailureNotified && !(cloudAuth.enabled && cloudAuth.user?.id)) {
+    localSaveFailureNotified = true;
+    setStatus("Account save failed on this device. Enable local storage or use cloud login to keep progress.", true);
+  }
   queueCloudProgressSync();
 }
 
@@ -5937,11 +5951,13 @@ function loadPlayerProgress() {
 
   let parsed = null;
   let recoveredFromBackup = false;
+  let storageReadError = false;
 
   try {
     const primaryRaw = storage.getItem(PROGRESS_STORAGE_KEY) || "null";
     parsed = JSON.parse(primaryRaw);
   } catch (_) {
+    storageReadError = true;
     parsed = null;
   }
 
@@ -5953,7 +5969,9 @@ function loadPlayerProgress() {
         parsed = backupParsed;
         recoveredFromBackup = true;
       }
-    } catch (_) {}
+    } catch (_) {
+      storageReadError = true;
+    }
   }
 
   if (!parsed || typeof parsed !== "object") {
@@ -5980,6 +5998,7 @@ function loadPlayerProgress() {
     progressRecoveredFromBackup = true;
     persistProgressData();
   }
+  if (storageReadError) progressStorageUnavailable = true;
   savePlayerProgress();
   return true;
 }
