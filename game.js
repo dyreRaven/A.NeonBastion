@@ -152,7 +152,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-37";
+const BUILD_ID = "2026-02-20-38";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1865,6 +1865,7 @@ function weightedChoice(weightEntries) {
 
 function getLevelDifficultyProfile(level = game.currentLevel) {
   if (level >= 2) {
+    const emberLevel = level >= 3;
     return {
       effectiveWaveOffset: 2,
       spawnMultiplier: 1.36,
@@ -1876,7 +1877,7 @@ function getLevelDifficultyProfile(level = game.currentLevel) {
       spawnStartDelay: 0.18,
       spawnIntervalScale: 0.9,
       minSpawnInterval: 0.15,
-      startingCredits: 220,
+      startingCredits: emberLevel ? 260 : 220,
       startingLives: 19,
     };
   }
