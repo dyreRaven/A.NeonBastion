@@ -170,7 +170,7 @@ const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
 const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
 const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-54";
+const BUILD_ID = "2026-02-20-55";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -2454,6 +2454,33 @@ const rendererCoarsePointer = typeof window.matchMedia === "function" && window.
 const rendererLowPowerMode = rendererCoarsePointer || window.innerWidth <= 980;
 const rendererPixelRatioCap = rendererLowPowerMode ? 1.2 : 2;
 let rendererContextLost = false;
+let rendererWebglAvailable = true;
+
+function createNoopRenderer() {
+  return {
+    __noop: true,
+    shadowMap: { enabled: false, type: THREE.PCFSoftShadowMap },
+    toneMapping: THREE.ACESFilmicToneMapping,
+    toneMappingExposure: 1,
+    setPixelRatio() {},
+    setSize() {},
+    render() {},
+  };
+}
+
+function tryCreateWebglRenderer(options) {
+  try {
+    const candidate = new THREE.WebGLRenderer(options);
+    const gl = typeof candidate.getContext === "function" ? candidate.getContext() : null;
+    if (!gl) {
+      if (typeof candidate.dispose === "function") candidate.dispose();
+      return null;
+    }
+    return candidate;
+  } catch (_) {
+    return null;
+  }
+}
 
 function setBattleCameraDistance(distance) {
   camera.position.copy(BATTLE_CAMERA_TARGET).addScaledVector(BATTLE_CAMERA_VIEW_DIR, distance);
@@ -2491,28 +2518,38 @@ function fitBattleCameraToViewport() {
 }
 
 let renderer = null;
-try {
-  renderer = new THREE.WebGLRenderer({
-    canvas,
+const rendererProfiles = [
+  {
     antialias: !rendererLowPowerMode,
     powerPreference: rendererLowPowerMode ? "low-power" : "high-performance",
-  });
-} catch (_) {
-  try {
-    renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: false,
-      powerPreference: "low-power",
-    });
-  } catch (error) {
-    setStatus("WebGL failed on this device. Try reloading or lowering browser graphics load.", true);
-    throw error;
-  }
+    precision: rendererLowPowerMode ? "mediump" : "highp",
+  },
+  {
+    antialias: false,
+    powerPreference: "low-power",
+    precision: "mediump",
+    failIfMajorPerformanceCaveat: false,
+  },
+  {
+    antialias: false,
+    powerPreference: "default",
+    precision: "lowp",
+    failIfMajorPerformanceCaveat: false,
+  },
+];
+for (const profile of rendererProfiles) {
+  renderer = tryCreateWebglRenderer({ canvas, ...profile });
+  if (renderer) break;
+}
+if (!renderer) {
+  rendererWebglAvailable = false;
+  renderer = createNoopRenderer();
+  setStatus("WebGL unavailable on this device. Menu/account still work; try another browser for gameplay.", true);
 }
 if ("outputColorSpace" in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 else if ("outputEncoding" in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, rendererPixelRatioCap));
-renderer.shadowMap.enabled = !rendererLowPowerMode;
+renderer.shadowMap.enabled = rendererWebglAvailable && !rendererLowPowerMode;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
@@ -11621,6 +11658,8 @@ if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
   const pendingName = pendingAccount?.name || "your account";
   setStatus(`Login required for ${pendingName} before starting.`, true);
+} else if (!rendererWebglAvailable) {
+  setStatus("WebGL unavailable. Account and menu work, but gameplay rendering is disabled on this device.", true);
 } else {
   setStatus(`Press ${getMenuPlayButtonLabel()} to begin.`);
 }
