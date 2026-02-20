@@ -79,8 +79,10 @@ const accountCreatePasswordConfirmInputEl = $id("accountCreatePasswordConfirmInp
 const accountLoginUsernameInputEl = $id("accountLoginUsernameInput");
 const accountLoginPasswordInputEl = $id("accountLoginPasswordInput");
 const accountRequirePasswordOnStartupToggleEl = $id("accountRequirePasswordOnStartupToggle");
+const accountCloudSignOutBtn = $id("accountCloudSignOutBtn");
 const createAccountBtn = $id("createAccountBtn");
 const loginAccountBtn = $id("loginAccountBtn");
+const menuAccountNoteEl = $id("menuAccountNote");
 
 // Unlock/loadout menu.
 const menuShopEl = $id("menuShop");
@@ -172,8 +174,12 @@ const STATUS_HOLD_EXPAND_DELAY_MS = 320;
 const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
 const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
 const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
+const SUPABASE_URL = "https://wfsywtfktmthxpgqoyoi.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK";
+const SUPABASE_PROGRESS_TABLE = "player_profiles";
+const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-60";
+const BUILD_ID = "2026-02-20-61";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4951,12 +4957,459 @@ function sendMultiplayerAction(action, payload = {}) {
 
 let progressStorageUnavailable = false;
 let progressRecoveredFromBackup = false;
+const ACCOUNT_NOTE_BASE_TEXT =
+  "Progress is saved per account. Gmail-style usernames are supported (including aliases). Create/login with username + password, then use the account list to switch quickly.";
+const cloudAuth = {
+  enabled: false,
+  initialized: false,
+  client: null,
+  user: null,
+  syncTimer: null,
+  syncing: false,
+  pendingSync: false,
+  loadingRemote: false,
+  profileTableMissing: false,
+};
 
 function getProgressStorage() {
   try {
     return window.localStorage || null;
   } catch (_) {
     return null;
+  }
+}
+
+function refreshAccountAndMenuUi() {
+  renderMapPreview();
+  renderAccountMenu();
+  renderMenuShop();
+  renderTrapShop();
+  renderCreatureShop();
+  renderLoadoutMenu();
+  renderShop();
+  updateHud();
+}
+
+function isCloudAuthConfigured() {
+  return !!(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+}
+
+function isEmailAddress(value) {
+  const normalized = sanitizeAccountUsername(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+}
+
+function canUseCloudEmailAuth(username) {
+  return !!(cloudAuth.enabled && cloudAuth.client && isEmailAddress(username));
+}
+
+function getCloudSignedInEmail() {
+  return sanitizeAccountUsername(cloudAuth.user?.email || "");
+}
+
+function updateAccountCloudUi() {
+  if (accountCloudSignOutBtn) {
+    accountCloudSignOutBtn.hidden = !cloudAuth.enabled;
+    accountCloudSignOutBtn.disabled = !cloudAuth.user;
+  }
+  if (!menuAccountNoteEl) return;
+  if (!cloudAuth.enabled) {
+    menuAccountNoteEl.textContent = `${ACCOUNT_NOTE_BASE_TEXT} Cloud sync is unavailable in this build.`;
+    return;
+  }
+  const signedInEmail = getCloudSignedInEmail();
+  if (signedInEmail) {
+    menuAccountNoteEl.textContent = `${ACCOUNT_NOTE_BASE_TEXT} Cloud sync active for ${signedInEmail}.`;
+  } else {
+    menuAccountNoteEl.textContent = `${ACCOUNT_NOTE_BASE_TEXT} Use a Gmail login to sync account progress across devices.`;
+  }
+}
+
+function isCloudProfilesTableMissing(error) {
+  const code = String(error?.code || "");
+  const details = String(error?.details || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  if (code === "42P01") return true;
+  if (details.includes("player_profiles")) return true;
+  if (message.includes("player_profiles") && message.includes("does not exist")) return true;
+  return false;
+}
+
+function formatCloudErrorMessage(error, fallback = "Cloud request failed.") {
+  const message = String(error?.message || "").trim();
+  if (message) return message;
+  return fallback;
+}
+
+function serializeProgressSnapshotForCloud() {
+  try {
+    return JSON.parse(JSON.stringify(progressData || defaultProgressData()));
+  } catch (_) {
+    return defaultProgressData();
+  }
+}
+
+function ensureLocalAccountRecord(username, password = "") {
+  const normalizedName = sanitizeAccountUsername(username);
+  if (!normalizedName) return null;
+
+  let account = findAccountByUsername(normalizedName);
+  if (!account) {
+    account = createAccountRecord(normalizedName, {
+      passwordHash: password ? hashAccountPassword(normalizedName, password) : "",
+    });
+    progressData.accounts.push(account);
+  } else if (password) {
+    account.passwordHash = hashAccountPassword(normalizedName, password);
+  }
+
+  return account;
+}
+
+function queueCloudProgressSync(delayMs = CLOUD_SYNC_DEBOUNCE_MS) {
+  if (!cloudAuth.enabled || !cloudAuth.client || !cloudAuth.user?.id) return;
+  if (cloudAuth.loadingRemote) return;
+  const delay = Math.max(120, Math.floor(Number(delayMs) || CLOUD_SYNC_DEBOUNCE_MS));
+  if (cloudAuth.syncTimer) clearTimeout(cloudAuth.syncTimer);
+  cloudAuth.syncTimer = setTimeout(() => {
+    cloudAuth.syncTimer = null;
+    void syncCloudProgressNow();
+  }, delay);
+}
+
+async function syncCloudProgressNow(forceStatus = false) {
+  if (!cloudAuth.enabled || !cloudAuth.client || !cloudAuth.user?.id) return false;
+  if (cloudAuth.loadingRemote) return false;
+  if (cloudAuth.syncing) {
+    cloudAuth.pendingSync = true;
+    return false;
+  }
+
+  cloudAuth.syncing = true;
+  try {
+    const payload = {
+      id: cloudAuth.user.id,
+      email: cloudAuth.user.email || null,
+      profile_name: sanitizeAccountUsername(game.accountName || cloudAuth.user.email || "Commander"),
+      progress: serializeProgressSnapshotForCloud(),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await cloudAuth.client.from(SUPABASE_PROGRESS_TABLE).upsert(payload, { onConflict: "id" });
+    if (error) {
+      if (isCloudProfilesTableMissing(error)) {
+        cloudAuth.profileTableMissing = true;
+        if (forceStatus) {
+          setStatus("Cloud table missing. Run the Supabase SQL setup for player_profiles.", true);
+        }
+      } else if (forceStatus) {
+        setStatus(`Cloud sync failed: ${formatCloudErrorMessage(error)}`, true);
+      }
+      return false;
+    }
+    cloudAuth.profileTableMissing = false;
+    return true;
+  } catch (_) {
+    if (forceStatus) setStatus("Cloud sync failed due to a network error.", true);
+    return false;
+  } finally {
+    cloudAuth.syncing = false;
+    if (cloudAuth.pendingSync) {
+      cloudAuth.pendingSync = false;
+      queueCloudProgressSync(450);
+    }
+    updateAccountCloudUi();
+  }
+}
+
+async function loadCloudProgressForUser(user, quiet = false) {
+  if (!cloudAuth.enabled || !cloudAuth.client || !user?.id) return false;
+  cloudAuth.loadingRemote = true;
+  try {
+    const { data, error } = await cloudAuth.client
+      .from(SUPABASE_PROGRESS_TABLE)
+      .select("progress, updated_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) {
+      if (isCloudProfilesTableMissing(error)) {
+        cloudAuth.profileTableMissing = true;
+        if (!quiet) setStatus("Cloud table missing. Run the Supabase SQL setup for player_profiles.", true);
+      } else if (!quiet) {
+        setStatus(`Cloud read failed: ${formatCloudErrorMessage(error)}`, true);
+      }
+      return false;
+    }
+    cloudAuth.profileTableMissing = false;
+    const remoteProgress = data?.progress;
+    if (!remoteProgress || typeof remoteProgress !== "object") return false;
+    progressData = normalizeProgressData(remoteProgress);
+    resolveStartupAuthenticationRequirement();
+    syncAccountStartupPreferenceUi();
+    applyAccountToGame(getCurrentAccountRecord());
+    savePlayerProgress();
+    refreshAccountAndMenuUi();
+    const signedInEmail = sanitizeAccountUsername(user.email || "");
+    if (signedInEmail && accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = signedInEmail;
+    if (signedInEmail && accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = signedInEmail;
+    if (!quiet) setStatus(`Cloud progress loaded for ${signedInEmail || "your account"}.`);
+    return true;
+  } catch (_) {
+    if (!quiet) setStatus("Cloud read failed due to a network error.", true);
+    return false;
+  } finally {
+    cloudAuth.loadingRemote = false;
+    updateAccountCloudUi();
+  }
+}
+
+async function syncCloudSessionUser(user, quiet = false) {
+  if (!user?.id) return false;
+  cloudAuth.user = user;
+  updateAccountCloudUi();
+
+  const loadedRemote = await loadCloudProgressForUser(user, true);
+  if (loadedRemote) {
+    if (!quiet) {
+      const signedInEmail = sanitizeAccountUsername(user.email || "");
+      setStatus(`Cloud login active for ${signedInEmail || "your account"}.`);
+    }
+    return true;
+  }
+
+  const signedInEmail = sanitizeAccountUsername(user.email || "");
+  const account = ensureLocalAccountRecord(signedInEmail || game.accountName || "Commander");
+  if (account) {
+    progressData.currentAccountId = account.id;
+    progressData.lastAuthenticatedAccountId = account.id;
+    clearStartupAuthenticationRequirement();
+    applyAccountToGame(account);
+    savePlayerProgress();
+    refreshAccountAndMenuUi();
+  }
+
+  const synced = await syncCloudProgressNow(false);
+  if (!quiet) {
+    if (synced) setStatus(`Cloud sync ready for ${signedInEmail || "your account"}.`);
+    else if (cloudAuth.profileTableMissing) {
+      setStatus("Cloud login works, but the cloud table is missing. Run the Supabase SQL setup.", true);
+    } else {
+      setStatus("Cloud login works, but first sync is pending.", true);
+    }
+  }
+  return synced;
+}
+
+async function createCloudAccountFromInput(username, password, confirmPassword) {
+  if (!cloudAuth.enabled || !cloudAuth.client) {
+    setStatus("Cloud auth is unavailable right now.", true);
+    return;
+  }
+  if (password.length < MIN_ACCOUNT_PASSWORD_LENGTH) {
+    setStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    setStatus("Passwords do not match.", true);
+    return;
+  }
+
+  const email = sanitizeAccountUsername(username);
+  setStatus(`Creating cloud account for ${email}...`);
+  try {
+    const { data, error } = await cloudAuth.client.auth.signUp({
+      email,
+      password,
+    });
+    if (error) {
+      const account = ensureLocalAccountRecord(email, password);
+      if (account) {
+        progressData.currentAccountId = account.id;
+        progressData.lastAuthenticatedAccountId = account.id;
+        clearStartupAuthenticationRequirement();
+        applyAccountToGame(account);
+        savePlayerProgress();
+        refreshAccountAndMenuUi();
+        clearAccountAuthInputs();
+        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
+        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+        setStatus(`Cloud sign-up failed (${formatCloudErrorMessage(error)}). Created local account instead.`, true);
+        return;
+      }
+      setStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
+      return;
+    }
+
+    const sessionUser = data?.session?.user || null;
+    if (!sessionUser) {
+      setStatus(`Account created for ${email}. Confirm it from your email, then login.`);
+      return;
+    }
+
+    const account = ensureLocalAccountRecord(email, password);
+    if (account) {
+      progressData.currentAccountId = account.id;
+      progressData.lastAuthenticatedAccountId = account.id;
+      clearStartupAuthenticationRequirement();
+      applyAccountToGame(account);
+      savePlayerProgress();
+    }
+    await syncCloudSessionUser(sessionUser, true);
+    clearAccountAuthInputs();
+    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
+    if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+    setStatus(`Cloud account created and logged in as ${email}.`);
+  } catch (_) {
+    setStatus("Cloud sign-up failed due to a network error.", true);
+  }
+}
+
+async function loginCloudAccountFromInput(username, password) {
+  if (!cloudAuth.enabled || !cloudAuth.client) {
+    setStatus("Cloud auth is unavailable right now.", true);
+    return;
+  }
+
+  const email = sanitizeAccountUsername(username);
+  setStatus(`Signing into cloud account ${email}...`);
+  try {
+    const { data, error } = await cloudAuth.client.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      const localAccount = findAccountByUsername(email);
+      if (localAccount && verifyAccountPassword(localAccount, password)) {
+        switchToAccount(localAccount.id, true);
+        clearStartupAuthenticationRequirement();
+        clearAccountAuthInputs();
+        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = localAccount.name;
+        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = localAccount.name;
+        setStatus(`Cloud login failed (${formatCloudErrorMessage(error)}). Signed in locally as ${localAccount.name}.`, true);
+        return;
+      }
+      setStatus(`Cloud login failed: ${formatCloudErrorMessage(error)}`, true);
+      return;
+    }
+
+    const user = data?.user || data?.session?.user || null;
+    if (!user) {
+      setStatus("Cloud login failed: no user session returned.", true);
+      return;
+    }
+
+    const account = ensureLocalAccountRecord(email, password);
+    if (account) {
+      progressData.currentAccountId = account.id;
+      progressData.lastAuthenticatedAccountId = account.id;
+      clearStartupAuthenticationRequirement();
+      applyAccountToGame(account);
+      savePlayerProgress();
+    }
+
+    await syncCloudSessionUser(user, true);
+    clearAccountAuthInputs();
+    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
+    if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+    setStatus(`Logged in as ${email} (cloud sync active).`);
+  } catch (_) {
+    setStatus("Cloud login failed due to a network error.", true);
+  }
+}
+
+async function signOutCloudAccount() {
+  if (!cloudAuth.enabled || !cloudAuth.client) {
+    setStatus("Cloud auth is not enabled.", true);
+    return;
+  }
+  const currentEmail = getCloudSignedInEmail() || "your cloud account";
+  try {
+    const { error } = await cloudAuth.client.auth.signOut();
+    if (error) {
+      setStatus(`Cloud sign out failed: ${formatCloudErrorMessage(error)}`, true);
+      return;
+    }
+    cloudAuth.user = null;
+    cloudAuth.pendingSync = false;
+    if (cloudAuth.syncTimer) {
+      clearTimeout(cloudAuth.syncTimer);
+      cloudAuth.syncTimer = null;
+    }
+    updateAccountCloudUi();
+    setStatus(`Signed out of ${currentEmail}.`);
+  } catch (_) {
+    setStatus("Cloud sign out failed due to a network error.", true);
+  }
+}
+
+async function initializeCloudAuth() {
+  if (cloudAuth.initialized) return;
+  cloudAuth.initialized = true;
+
+  if (!isCloudAuthConfigured()) {
+    updateAccountCloudUi();
+    return;
+  }
+  const createClient = window.supabase && typeof window.supabase.createClient === "function"
+    ? window.supabase.createClient
+    : null;
+  if (!createClient) {
+    updateAccountCloudUi();
+    return;
+  }
+
+  try {
+    cloudAuth.client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+    cloudAuth.enabled = true;
+  } catch (_) {
+    cloudAuth.enabled = false;
+    cloudAuth.client = null;
+    updateAccountCloudUi();
+    return;
+  }
+
+  cloudAuth.client.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      cloudAuth.user = null;
+      cloudAuth.pendingSync = false;
+      if (cloudAuth.syncTimer) {
+        clearTimeout(cloudAuth.syncTimer);
+        cloudAuth.syncTimer = null;
+      }
+      updateAccountCloudUi();
+      return;
+    }
+    const sessionUser = session?.user || null;
+    if (!sessionUser) return;
+    const changedUser = !cloudAuth.user || cloudAuth.user.id !== sessionUser.id;
+    cloudAuth.user = sessionUser;
+    updateAccountCloudUi();
+    if (event === "SIGNED_IN" || changedUser) {
+      void syncCloudSessionUser(sessionUser, true);
+    }
+  });
+
+  try {
+    const { data, error } = await cloudAuth.client.auth.getSession();
+    if (error) {
+      updateAccountCloudUi();
+      return;
+    }
+    const sessionUser = data?.session?.user || null;
+    if (sessionUser) {
+      await syncCloudSessionUser(sessionUser, true);
+      const signedInEmail = sanitizeAccountUsername(sessionUser.email || "");
+      setStatus(`Cloud session restored for ${signedInEmail || "your account"}.`);
+    }
+  } catch (_) {
+    // Ignore startup session errors and stay in local mode.
+  } finally {
+    updateAccountCloudUi();
   }
 }
 
@@ -5409,6 +5862,7 @@ function savePlayerProgress() {
     progressData.lastAuthenticatedAccountId = current.id;
   }
   persistProgressData();
+  queueCloudProgressSync();
 }
 
 function loadPlayerProgress() {
@@ -9602,6 +10056,7 @@ function formatShardWordHtml(word = "Shards") {
 function renderAccountMenu() {
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
   syncAccountStartupPreferenceUi();
+  updateAccountCloudUi();
   if (!menuAccountEl) return;
 
   const fragments = [];
@@ -9740,6 +10195,10 @@ function createAccountFromInput() {
     setStatus("Passwords do not match.", true);
     return;
   }
+  if (canUseCloudEmailAuth(username)) {
+    void createCloudAccountFromInput(username, password, confirmPassword);
+    return;
+  }
 
   const existing = findAccountByUsername(username);
   if (existing) {
@@ -9781,6 +10240,10 @@ function loginAccountFromInput() {
 
   if (!username) {
     setStatus("Enter your username.", true);
+    return;
+  }
+  if (canUseCloudEmailAuth(username)) {
+    void loginCloudAccountFromInput(username, password);
     return;
   }
 
@@ -10099,6 +10562,8 @@ function openAccountMenu() {
     setStatus("Local storage is blocked. Account changes will reset after closing the browser.", true);
   } else if (progressRecoveredFromBackup) {
     setStatus("Recovered account data from backup. Verify your accounts before continuing.");
+  } else if (cloudAuth.enabled && cloudAuth.user?.email) {
+    setStatus(`Cloud sync active for ${sanitizeAccountUsername(cloudAuth.user.email)}.`);
   }
 }
 
@@ -11408,6 +11873,11 @@ if (statusEl) {
 }
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
 if (loginAccountBtn) loginAccountBtn.addEventListener("click", loginAccountFromInput);
+if (accountCloudSignOutBtn) {
+  accountCloudSignOutBtn.addEventListener("click", () => {
+    void signOutCloudAccount();
+  });
+}
 if (accountRequirePasswordOnStartupToggleEl) {
   accountRequirePasswordOnStartupToggleEl.addEventListener("change", () => {
     setRequirePasswordOnStartup(accountRequirePasswordOnStartupToggleEl.checked, true);
@@ -11737,6 +12207,7 @@ renderLoadoutMenu();
 refreshMultiplayerPanel();
 onResize();
 openMenuShop();
+void initializeCloudAuth();
 if (menuScreenEl) menuScreenEl.hidden = false;
 if (playBtn) playBtn.addEventListener("click", () => startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel()));
 if (startupAuthPendingAccountId) {

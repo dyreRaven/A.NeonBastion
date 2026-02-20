@@ -40,3 +40,15 @@ Use Render/Railway/Fly.io and deploy the `server/` folder as a Node service.
 
 - Host is authoritative (host controls wave flow/game speed).
 - GitHub Pages hosts the game frontend, and the WebSocket server hosts multiplayer relay.
+
+## Supabase Cloud Accounts (Gmail)
+
+This build supports Supabase cloud login/sync for email accounts.
+
+1. In Supabase Dashboard, open SQL Editor.
+2. Run `supabase_setup.sql` from this repo.
+3. In game menu, open `Account Setup`.
+4. Create/Login using a Gmail email + password.
+5. Keep `Require password each launch` turned off if you want auto-remembered login.
+
+If SQL setup has not been run yet, login works but cloud save sync will show a setup warning.
