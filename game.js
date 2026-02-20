@@ -200,7 +200,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-79";
+const BUILD_ID = "2026-02-20-80";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -215,6 +215,7 @@ const audioSystem = {
   compressor: null,
   shotCooldownUntil: 0,
   bombShotCooldownUntil: 0,
+  bombImpactCooldownUntil: 0,
   notificationCooldownUntil: 0,
   glassNoiseBuffer: null,
   bossPulseTimer: null,
@@ -591,6 +592,81 @@ const audioSystem = {
       blastGain.connect(this.sfxGain);
       blast.start(now);
       blast.stop(now + 0.12 + intensity * 0.03);
+    }
+  },
+
+  playBombarderImpact(damage = 420, splashRadius = 2.8) {
+    const ctx = this.ensure();
+    if (!ctx || ctx.state !== "running" || !this.sfxGain || !this.sfxEnabled || !this.shotSfxEnabled) return;
+
+    const now = ctx.currentTime;
+    if (now < this.bombImpactCooldownUntil) return;
+    this.bombImpactCooldownUntil = now + 0.05;
+
+    const damageNorm = Math.max(120, Math.min(2000, Number(damage) || 420));
+    const splashNorm = Math.max(0.8, Math.min(7, Number(splashRadius) || 2.8));
+    const intensity = Math.max(0.8, Math.min(3.4, damageNorm / 520 + splashNorm * 0.28));
+    const blastDuration = 0.24 + intensity * 0.09;
+
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(84 + intensity * 10 + Math.random() * 4, now);
+    sub.frequency.exponentialRampToValueAtTime(Math.max(26, 34 + intensity * 2), now + blastDuration);
+
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.0001, now);
+    subGain.gain.exponentialRampToValueAtTime(Math.min(0.28, 0.085 + intensity * 0.055), now + 0.01);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, now + blastDuration);
+    sub.connect(subGain);
+    subGain.connect(this.sfxGain);
+    sub.start(now);
+    sub.stop(now + blastDuration + 0.04);
+
+    const crack = ctx.createOscillator();
+    crack.type = "square";
+    crack.frequency.setValueAtTime(230 + intensity * 34, now + 0.004);
+    crack.frequency.exponentialRampToValueAtTime(62 + intensity * 8, now + blastDuration * 0.56);
+
+    const crackFilter = ctx.createBiquadFilter();
+    crackFilter.type = "bandpass";
+    crackFilter.Q.value = 1.6;
+    crackFilter.frequency.setValueAtTime(520 + intensity * 170, now);
+
+    const crackGain = ctx.createGain();
+    crackGain.gain.setValueAtTime(0.0001, now + 0.004);
+    crackGain.gain.exponentialRampToValueAtTime(Math.min(0.16, 0.05 + intensity * 0.03), now + 0.016);
+    crackGain.gain.exponentialRampToValueAtTime(0.0001, now + blastDuration * 0.62);
+    crack.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(this.sfxGain);
+    crack.start(now + 0.004);
+    crack.stop(now + blastDuration * 0.66 + 0.03);
+
+    const noiseBuffer = this.getGlassNoiseBuffer();
+    if (noiseBuffer) {
+      const debris = ctx.createBufferSource();
+      debris.buffer = noiseBuffer;
+
+      const debrisHigh = ctx.createBiquadFilter();
+      debrisHigh.type = "highpass";
+      debrisHigh.frequency.setValueAtTime(200 + intensity * 80, now);
+
+      const debrisBand = ctx.createBiquadFilter();
+      debrisBand.type = "bandpass";
+      debrisBand.Q.value = 1.25;
+      debrisBand.frequency.setValueAtTime(760 + intensity * 210 + Math.random() * 120, now);
+
+      const debrisGain = ctx.createGain();
+      debrisGain.gain.setValueAtTime(0.0001, now);
+      debrisGain.gain.exponentialRampToValueAtTime(Math.min(0.2, 0.07 + intensity * 0.04), now + 0.006);
+      debrisGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13 + intensity * 0.04);
+
+      debris.connect(debrisHigh);
+      debrisHigh.connect(debrisBand);
+      debrisBand.connect(debrisGain);
+      debrisGain.connect(this.sfxGain);
+      debris.start(now);
+      debris.stop(now + 0.17 + intensity * 0.05);
     }
   },
 
@@ -8063,41 +8139,94 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       recoilBlock.position.set(0, 0.42, -0.24);
       turret.add(recoilBlock);
     } else if (towerTypeId === "bombarder") {
-      head.scale.set(1.08, 1.06, 1.18);
+      head.scale.set(1.04, 1.08, 1.24);
+      barrel.scale.set(1.24, 1.14, 0.74);
+      barrel.position.set(0, 0.46, 1.02);
+      railL.position.set(-0.22, 0.64, 0.96);
+      railL.scale.set(1, 1.34, 0.72);
+      railR.position.set(0.22, 0.64, 0.96);
+      railR.scale.set(1, 1.34, 0.72);
+      tail.scale.set(1.16, 1.08, 1.34);
+      tail.position.set(0, 0.3, -0.5);
+      beacon.position.set(0, 0.92, 0.06);
 
-      const mortarMount = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.52, 0.48, 12), darkMat));
-      mortarMount.position.set(0, 0.42, 0.44);
-      turret.add(mortarMount);
+      const armoredDeck = cast(new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.36, 1.58), darkMat));
+      armoredDeck.position.set(0, 0.28, 0.58);
+      turret.add(armoredDeck);
 
-      const mortarTube = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.9, 12), coreMat));
-      mortarTube.rotation.x = Math.PI / 2;
-      mortarTube.rotation.y = Math.PI;
-      mortarTube.rotation.z = -0.38;
-      mortarTube.position.set(0, 0.72, 1.18);
-      turret.add(mortarTube);
+      const skirtL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.56, 1.36), darkMat));
+      skirtL.position.set(-0.52, 0.36, 1.0);
+      turret.add(skirtL);
+      const skirtR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.56, 1.36), darkMat));
+      skirtR.position.set(0.52, 0.36, 1.0);
+      turret.add(skirtR);
 
-      const tubeLip = cast(new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 10, 26), glowMat));
-      tubeLip.rotation.x = Math.PI / 2;
-      tubeLip.position.set(0, 1.26, 1.74);
-      turret.add(tubeLip);
+      const turretCollar = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.54, 0.24, 14), bodyMat));
+      turretCollar.position.set(0, 0.54, 0.5);
+      turret.add(turretCollar);
 
-      const sidePlateL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.58, 1.32), darkMat));
-      sidePlateL.position.set(-0.5, 0.36, 1.04);
-      turret.add(sidePlateL);
-      const sidePlateR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.58, 1.32), darkMat));
-      sidePlateR.position.set(0.5, 0.36, 1.04);
-      turret.add(sidePlateR);
+      const trunnion = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.02, 12), coreMat));
+      trunnion.rotation.z = Math.PI / 2;
+      trunnion.position.set(0, 0.58, 0.58);
+      turret.add(trunnion);
 
-      const recoilCore = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.34, 0.5), coreMat));
-      recoilCore.position.set(0, 0.46, -0.12);
-      turret.add(recoilCore);
+      const recoilHousing = cast(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.38, 0.56), darkMat));
+      recoilHousing.position.set(0, 0.44, -0.12);
+      turret.add(recoilHousing);
 
-      const braceL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 1.08), darkMat));
-      braceL.position.set(-0.26, 0.18, 0.84);
-      turret.add(braceL);
-      const braceR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 1.08), darkMat));
-      braceR.position.set(0.26, 0.18, 0.84);
-      turret.add(braceR);
+      const barrelRig = new THREE.Group();
+      barrelRig.position.set(0, 0.68, 0.72);
+      barrelRig.rotation.x = -0.24;
+      turret.add(barrelRig);
+
+      const breech = cast(new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.38, 0.52), darkMat));
+      breech.position.set(0, -0.06, -0.16);
+      barrelRig.add(breech);
+
+      const recoilSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.54, 14), bodyMat));
+      recoilSleeve.rotation.x = Math.PI / 2;
+      recoilSleeve.position.set(0, 0.02, 0.18);
+      barrelRig.add(recoilSleeve);
+
+      const barrelCore = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 1.94, 14), coreMat));
+      barrelCore.rotation.x = Math.PI / 2;
+      barrelCore.position.set(0, 0.06, 1.04);
+      barrelRig.add(barrelCore);
+
+      const barrelJacket = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 1.24, 14), darkMat));
+      barrelJacket.rotation.x = Math.PI / 2;
+      barrelJacket.position.set(0, 0.06, 1.66);
+      barrelRig.add(barrelJacket);
+
+      const muzzleRing = cast(new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.05, 10, 24), glowMat));
+      muzzleRing.rotation.x = Math.PI / 2;
+      muzzleRing.position.set(0, 0.06, 2.2);
+      barrelRig.add(muzzleRing);
+
+      const muzzleCrown = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.29, 0.34, 12), coreMat));
+      muzzleCrown.rotation.x = Math.PI / 2;
+      muzzleCrown.position.set(0, 0.06, 2.18);
+      barrelRig.add(muzzleCrown);
+
+      const muzzleVentL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.34), glowMat));
+      muzzleVentL.position.set(-0.24, 0.06, 2.18);
+      barrelRig.add(muzzleVentL);
+      const muzzleVentR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.34), glowMat));
+      muzzleVentR.position.set(0.24, 0.06, 2.18);
+      barrelRig.add(muzzleVentR);
+
+      const stabilizerL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 1.28), darkMat));
+      stabilizerL.position.set(-0.34, 0.2, 0.98);
+      stabilizerL.rotation.x = -0.08;
+      turret.add(stabilizerL);
+      const stabilizerR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 1.28), darkMat));
+      stabilizerR.position.set(0.34, 0.2, 0.98);
+      stabilizerR.rotation.x = -0.08;
+      turret.add(stabilizerR);
+
+      const serviceHatch = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.08, 0.72), glowMat));
+      serviceHatch.position.set(0, 0.84, 0.58);
+      turret.add(serviceHatch);
     } else if (towerTypeId === "sentinel") {
       head.scale.set(0.98, 0.9, 1.1);
 
@@ -8157,7 +8286,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle.position.set(0, 0.42, 2.6);
     if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
     if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
-    if (towerTypeId === "bombarder") muzzle.position.set(0, 1.34, 1.78);
+    if (towerTypeId === "bombarder") muzzle.position.set(0, 1.3, 2.98);
     if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
     if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
     turret.add(muzzle);
@@ -9521,62 +9650,142 @@ function applyBombardSplashDamage(centerX, centerZ, damage, splashRadius) {
 class BombardMuzzleFireEffect {
   constructor(origin, direction, color, radius) {
     this.age = 0;
-    this.life = 0.22;
-    this.baseSize = Math.max(0.08, Number(radius) || 0.08);
+    this.life = 0.3;
+    this.baseSize = Math.max(0.14, (Number(radius) || 0.08) * 1.8);
     this.origin = origin.clone();
     this.direction = direction.clone();
     if (this.direction.lengthSq() > 1e-6) this.direction.normalize();
     else this.direction.set(0, 0, 1);
 
-    const flameColor = new THREE.Color(color).lerp(new THREE.Color("#ffcf9a"), 0.32);
+    const flameColor = new THREE.Color(color).lerp(new THREE.Color("#ff8f2b"), 0.56);
+    const hotColor = flameColor.clone().lerp(new THREE.Color("#fff3cc"), 0.62);
+    const emberColor = new THREE.Color("#ffb24d");
+
     this.group = new THREE.Group();
-    this.group.position.copy(this.origin).addScaledVector(this.direction, this.baseSize * 0.2);
+    this.group.position.copy(this.origin).addScaledVector(this.direction, this.baseSize * 0.26);
     this.group.quaternion.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
 
-    this.flameMat = new THREE.MeshBasicMaterial({
+    this.outerMat = new THREE.MeshBasicMaterial({
       color: flameColor,
+      transparent: true,
+      opacity: 0.98,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.outerFlame = new THREE.Mesh(
+      new THREE.ConeGeometry(this.baseSize * 1.24, this.baseSize * 5.8, 16, 1, true),
+      this.outerMat
+    );
+    this.outerFlame.rotation.x = Math.PI / 2;
+    this.outerFlame.position.z = this.baseSize * 1.84;
+    this.group.add(this.outerFlame);
+
+    this.midMat = new THREE.MeshBasicMaterial({
+      color: flameColor.clone().lerp(new THREE.Color("#ffbe5c"), 0.34),
       transparent: true,
       opacity: 0.92,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    this.flame = new THREE.Mesh(
-      new THREE.ConeGeometry(this.baseSize * 0.86, this.baseSize * 3.7, 12, 1, true),
-      this.flameMat
+    this.midFlame = new THREE.Mesh(
+      new THREE.ConeGeometry(this.baseSize * 0.94, this.baseSize * 4.4, 14, 1, true),
+      this.midMat
     );
-    this.flame.rotation.x = Math.PI / 2;
-    this.flame.position.z = this.baseSize * 1.24;
-    this.group.add(this.flame);
+    this.midFlame.rotation.x = Math.PI / 2;
+    this.midFlame.position.z = this.baseSize * 1.38;
+    this.group.add(this.midFlame);
 
-    this.coreMat = new THREE.MeshBasicMaterial({
-      color: flameColor.clone().lerp(new THREE.Color("#fff0cb"), 0.38),
+    this.innerMat = new THREE.MeshBasicMaterial({
+      color: hotColor,
       transparent: true,
-      opacity: 0.84,
+      opacity: 0.88,
+      side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    this.core = new THREE.Mesh(new THREE.SphereGeometry(this.baseSize * 0.78, 12, 12), this.coreMat);
-    this.core.position.z = this.baseSize * 0.34;
+    this.innerFlame = new THREE.Mesh(
+      new THREE.ConeGeometry(this.baseSize * 0.56, this.baseSize * 2.8, 12, 1, true),
+      this.innerMat
+    );
+    this.innerFlame.rotation.x = Math.PI / 2;
+    this.innerFlame.position.z = this.baseSize * 1.02;
+    this.group.add(this.innerFlame);
+
+    this.coreMat = new THREE.MeshBasicMaterial({
+      color: hotColor,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.core = new THREE.Mesh(new THREE.SphereGeometry(this.baseSize * 0.96, 12, 12), this.coreMat);
+    this.core.position.z = this.baseSize * 0.32;
     this.group.add(this.core);
 
     this.ringMat = new THREE.MeshBasicMaterial({
       color: flameColor,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.78,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(this.baseSize * 0.56, this.baseSize * 0.92, 20),
+      new THREE.RingGeometry(this.baseSize * 0.56, this.baseSize * 1.2, 24),
       this.ringMat
     );
-    this.ring.position.z = this.baseSize * 0.18;
+    this.ring.position.z = this.baseSize * 0.2;
     this.group.add(this.ring);
 
-    this.light = new THREE.PointLight(flameColor, 2.7, 8.8, 2);
-    this.light.position.set(0, 0, this.baseSize * 0.26);
+    this.crossRingMat = new THREE.MeshBasicMaterial({
+      color: emberColor,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.crossRing = new THREE.Mesh(
+      new THREE.RingGeometry(this.baseSize * 0.48, this.baseSize * 0.92, 20),
+      this.crossRingMat
+    );
+    this.crossRing.rotation.x = Math.PI / 2;
+    this.crossRing.position.z = this.baseSize * 0.16;
+    this.group.add(this.crossRing);
+
+    this.sparkMat = new THREE.MeshBasicMaterial({
+      color: emberColor,
+      transparent: true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.sparks = [];
+    for (let i = 0; i < 10; i += 1) {
+      const spark = new THREE.Mesh(
+        new THREE.SphereGeometry(this.baseSize * (0.08 + Math.random() * 0.04), 6, 6),
+        this.sparkMat
+      );
+      spark.position.set(
+        (Math.random() - 0.5) * this.baseSize * 0.34,
+        (Math.random() - 0.5) * this.baseSize * 0.28,
+        this.baseSize * (0.1 + Math.random() * 0.24)
+      );
+      this.group.add(spark);
+      this.sparks.push({
+        mesh: spark,
+        velocity: new THREE.Vector3(
+          (Math.random() - 0.5) * 1.8,
+          (Math.random() - 0.5) * 1.2,
+          4.8 + Math.random() * 4.4
+        ),
+      });
+    }
+
+    this.light = new THREE.PointLight(hotColor, 5.8, 11.5, 2);
+    this.light.position.set(0, 0, this.baseSize * 0.28);
     this.group.add(this.light);
 
     scene.add(this.group);
@@ -9585,14 +9794,33 @@ class BombardMuzzleFireEffect {
   update(dt) {
     this.age += dt;
     const t = THREE.MathUtils.clamp(this.age / this.life, 0, 1);
-    this.group.position.addScaledVector(this.direction, dt * (6.1 + this.baseSize * 7.8));
-    this.flame.scale.set(1 + t * 1.9, 1 + t * 1.9, 1 + t * 1.25);
-    this.core.scale.setScalar(1 + t * 1.3);
-    this.ring.scale.set(1 + t * 2.4, 1 + t * 2.4, 1);
-    this.flameMat.opacity = Math.max(0, 0.92 * (1 - t * 1.45));
-    this.coreMat.opacity = Math.max(0, 0.84 * (1 - t * 1.28));
-    this.ringMat.opacity = Math.max(0, 0.72 * (1 - t * 1.18));
-    this.light.intensity = Math.max(0, 2.7 * (1 - t) * (1 - t * 0.25));
+    const flare = 1 + Math.sin(this.age * 96) * 0.1;
+
+    this.group.position.addScaledVector(this.direction, dt * (8.2 + this.baseSize * 10.4));
+    this.outerFlame.scale.set((1 + t * 2.6) * flare, (1 + t * 2.6) * flare, 1 + t * 1.46);
+    this.midFlame.scale.set((1 + t * 2.1) * flare, (1 + t * 2.1) * flare, 1 + t * 1.28);
+    this.innerFlame.scale.set(1 + t * 1.5, 1 + t * 1.5, 1 + t * 1.1);
+    this.core.scale.setScalar((1 + t * 1.42) * flare);
+    this.ring.scale.set(1 + t * 3.0, 1 + t * 3.0, 1);
+    this.crossRing.scale.set(1 + t * 2.5, 1 + t * 2.5, 1);
+
+    for (const spark of this.sparks) {
+      spark.mesh.position.addScaledVector(spark.velocity, dt);
+      spark.velocity.x *= Math.max(0, 1 - dt * 4.2);
+      spark.velocity.y *= Math.max(0, 1 - dt * 4.2);
+      spark.velocity.z *= Math.max(0, 1 - dt * 3.6);
+      spark.velocity.y += dt * 0.24;
+      spark.mesh.scale.setScalar(Math.max(0.2, 1 - t * 0.9));
+    }
+
+    this.outerMat.opacity = Math.max(0, 0.98 * (1 - t * 1.22));
+    this.midMat.opacity = Math.max(0, 0.92 * (1 - t * 1.26));
+    this.innerMat.opacity = Math.max(0, 0.88 * (1 - t * 1.3));
+    this.coreMat.opacity = Math.max(0, 0.9 * (1 - t * 1.18));
+    this.ringMat.opacity = Math.max(0, 0.78 * (1 - t * 1.14));
+    this.crossRingMat.opacity = Math.max(0, 0.7 * (1 - t * 1.2));
+    this.sparkMat.opacity = Math.max(0, 0.92 * (1 - t * 1.08));
+    this.light.intensity = Math.max(0, (5.8 + Math.sin(this.age * 122) * 0.8) * (1 - t * 0.7));
     return t < 1;
   }
 
@@ -9760,6 +9988,7 @@ class BombardProjectile {
 
   impact() {
     const impactY = getLaneSurfaceY(this.target.x, this.target.z) + 0.06;
+    audioSystem.playBombarderImpact(this.damage, this.splashRadius);
     applyBombardSplashDamage(this.target.x, this.target.z, this.damage, this.splashRadius);
     if (game.explosionParticlesEnabled) {
       game.debris.push(new BombardImpactEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color));
