@@ -149,6 +149,14 @@ const SELL_REFUND_RATIO = 0.4;
 const PROGRESS_STORAGE_KEY = "tower-defense-progress-v2";
 const PROGRESS_BACKUP_STORAGE_KEY = "tower-defense-progress-v2-backup";
 const LEGACY_PROGRESS_STORAGE_KEY = "tower-defense-progress-v1";
+const PROGRESS_IDB_NAME = "tower-defense-progress-db";
+const PROGRESS_IDB_STORE = "kv";
+const PROGRESS_IDB_PRIMARY_KEY = "progress-v2";
+const PROGRESS_IDB_BACKUP_KEY = "progress-v2-backup";
+const PROGRESS_IDB_WRITE_DEBOUNCE_MS = 280;
+const PROGRESS_RUNTIME_DIR_NAME = "NeonBastion";
+const PROGRESS_RUNTIME_PRIMARY_FILENAME = "tower-defense-progress-v2.json";
+const PROGRESS_RUNTIME_BACKUP_FILENAME = "tower-defense-progress-v2-backup.json";
 const ACCOUNT_DISPLAY_NAME_MAX_LENGTH = 24;
 const ACCOUNT_USERNAME_MAX_LENGTH = 64;
 const SHATTER_GRAVITY = -38;
@@ -179,7 +187,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-63";
+const BUILD_ID = "2026-02-20-65";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4957,6 +4965,8 @@ function sendMultiplayerAction(action, payload = {}) {
 
 let progressStorageUnavailable = false;
 let progressRecoveredFromBackup = false;
+let progressRecoveredFromIndexedDb = false;
+let progressRecoveredFromRuntimeFile = false;
 const ACCOUNT_NOTE_BASE_TEXT =
   "Progress is saved per account. Gmail-style usernames are supported (including aliases). Create/login with username + password, then use the account list to switch quickly.";
 const cloudAuth = {
@@ -4971,6 +4981,16 @@ const cloudAuth = {
   profileTableMissing: false,
 };
 let localSaveFailureNotified = false;
+let progressLoadedFromStorage = false;
+let progressIndexedDbHydrationComplete = false;
+let progressIndexedDbOpenPromise = null;
+let progressIndexedDbOperational = null;
+let progressIndexedDbWriteTimer = null;
+let progressIndexedDbWriteInFlight = false;
+let progressIndexedDbPendingSerialized = "";
+let progressRuntimeBridgeResolved = false;
+let progressRuntimeBridge = null;
+let progressRuntimeFileWriteHealthy = false;
 
 function getProgressStorage() {
   try {
@@ -4978,6 +4998,423 @@ function getProgressStorage() {
   } catch (_) {
     return null;
   }
+}
+
+function resolveRuntimeProgressStorageBasePath(pathApi, env = null) {
+  const appData = String(env?.APPDATA || "").trim();
+  if (appData) return appData;
+
+  const localAppData = String(env?.LOCALAPPDATA || "").trim();
+  if (localAppData) return localAppData;
+
+  const home = String(env?.USERPROFILE || env?.HOME || "").trim();
+  if (!home) return "";
+  return pathApi.join(home, "AppData", "Roaming");
+}
+
+function getRuntimeProgressBridge() {
+  if (progressRuntimeBridgeResolved) return progressRuntimeBridge;
+  progressRuntimeBridgeResolved = true;
+
+  try {
+    if (typeof window === "undefined") {
+      progressRuntimeBridge = null;
+      return progressRuntimeBridge;
+    }
+    const requireFn = typeof window.require === "function" ? window.require : null;
+    if (!requireFn) {
+      progressRuntimeBridge = null;
+      return progressRuntimeBridge;
+    }
+
+    const fsApi = requireFn("fs");
+    const pathApi = requireFn("path");
+    if (!fsApi || !pathApi) {
+      progressRuntimeBridge = null;
+      return progressRuntimeBridge;
+    }
+
+    const processEnv = window.process && typeof window.process === "object" && window.process.env
+      ? window.process.env
+      : null;
+    let basePath = resolveRuntimeProgressStorageBasePath(pathApi, processEnv);
+    if (!basePath && window.nw?.App?.dataPath) basePath = String(window.nw.App.dataPath || "").trim();
+    if (!basePath) {
+      progressRuntimeBridge = null;
+      return progressRuntimeBridge;
+    }
+
+    const directoryPath = pathApi.join(basePath, PROGRESS_RUNTIME_DIR_NAME);
+    progressRuntimeBridge = {
+      fsApi,
+      directoryPath,
+      primaryPath: pathApi.join(directoryPath, PROGRESS_RUNTIME_PRIMARY_FILENAME),
+      backupPath: pathApi.join(directoryPath, PROGRESS_RUNTIME_BACKUP_FILENAME),
+    };
+  } catch (_) {
+    progressRuntimeBridge = null;
+  }
+
+  return progressRuntimeBridge;
+}
+
+function supportsRuntimeProgressStorage() {
+  return !!getRuntimeProgressBridge();
+}
+
+function hasRuntimeProgressPersistence() {
+  return supportsRuntimeProgressStorage() && progressRuntimeFileWriteHealthy;
+}
+
+function hasIndexedDbProgressPersistence() {
+  if (!supportsProgressIndexedDb()) return false;
+  return progressIndexedDbOperational !== false;
+}
+
+function hasDurableLocalProgressFallback() {
+  return hasRuntimeProgressPersistence() || hasIndexedDbProgressPersistence();
+}
+
+function readRuntimeProgressRawFile(filePath) {
+  const bridge = getRuntimeProgressBridge();
+  if (!bridge || !filePath) return "";
+  try {
+    if (!bridge.fsApi.existsSync(filePath)) return "";
+    const raw = bridge.fsApi.readFileSync(filePath, "utf8");
+    return typeof raw === "string" ? raw : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function writeRuntimeProgressRawFile(filePath, value) {
+  const bridge = getRuntimeProgressBridge();
+  if (!bridge || !filePath || typeof value !== "string") return false;
+  try {
+    bridge.fsApi.writeFileSync(filePath, value, "utf8");
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function readProgressFromRuntimeFileSnapshot() {
+  const bridge = getRuntimeProgressBridge();
+  if (!bridge) return { parsed: null, recoveredFromBackup: false };
+
+  const primaryRaw = readRuntimeProgressRawFile(bridge.primaryPath);
+  const primaryParsed = parseProgressSnapshot(primaryRaw);
+  if (primaryParsed) return { parsed: primaryParsed, recoveredFromBackup: false };
+
+  const backupRaw = readRuntimeProgressRawFile(bridge.backupPath);
+  const backupParsed = parseProgressSnapshot(backupRaw);
+  if (backupParsed) return { parsed: backupParsed, recoveredFromBackup: true };
+
+  return { parsed: null, recoveredFromBackup: false };
+}
+
+function persistProgressToRuntimeFile(serialized) {
+  const bridge = getRuntimeProgressBridge();
+  if (!bridge || typeof serialized !== "string" || !serialized) return false;
+
+  try {
+    bridge.fsApi.mkdirSync(bridge.directoryPath, { recursive: true });
+  } catch (_) {
+    progressRuntimeFileWriteHealthy = false;
+    return false;
+  }
+
+  const previous = readRuntimeProgressRawFile(bridge.primaryPath);
+  if (previous && previous !== serialized && parseProgressSnapshot(previous)) {
+    writeRuntimeProgressRawFile(bridge.backupPath, previous);
+  }
+
+  const written = writeRuntimeProgressRawFile(bridge.primaryPath, serialized);
+  progressRuntimeFileWriteHealthy = written;
+  return written;
+}
+
+function clearRuntimeProgressFiles() {
+  const bridge = getRuntimeProgressBridge();
+  if (!bridge) {
+    progressRuntimeFileWriteHealthy = false;
+    return;
+  }
+
+  for (const filePath of [bridge.primaryPath, bridge.backupPath]) {
+    try {
+      if (bridge.fsApi.existsSync(filePath)) bridge.fsApi.unlinkSync(filePath);
+    } catch (_) {}
+  }
+  progressRuntimeFileWriteHealthy = false;
+}
+
+function supportsProgressIndexedDb() {
+  try {
+    return typeof window !== "undefined" && !!window.indexedDB;
+  } catch (_) {
+    return false;
+  }
+}
+
+function parseProgressSnapshot(raw) {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
+function isLikelyFreshDefaultProgress(data) {
+  if (!isLikelyValidProgressPayload(data)) return false;
+  if (data.accounts.length !== 1) return false;
+  const account = data.accounts[0];
+  if (!account || typeof account !== "object") return false;
+  const name = sanitizeAccountUsername(account.name || "");
+  const shards = Number(account.shards);
+  const level = Number(account.maxLevelUnlocked);
+  return (!name || name === "Commander") && (!Number.isFinite(shards) || Math.floor(shards) <= 0) && (!Number.isFinite(level) || Math.floor(level) <= 1);
+}
+
+function shouldRestoreProgressFromFallbackSnapshot(snapshot) {
+  if (!isLikelyValidProgressPayload(snapshot)) return false;
+  if (!progressLoadedFromStorage) return true;
+  if (progressStorageUnavailable) return true;
+  if (!isLikelyValidProgressPayload(progressData)) return true;
+  const currentLooksFresh = isLikelyFreshDefaultProgress(progressData);
+  const snapshotLooksFresh = isLikelyFreshDefaultProgress(snapshot);
+  if (currentLooksFresh && !snapshotLooksFresh) return true;
+  return false;
+}
+
+function openProgressIndexedDb() {
+  if (!supportsProgressIndexedDb()) return Promise.resolve(null);
+  if (progressIndexedDbOpenPromise) return progressIndexedDbOpenPromise;
+  progressIndexedDbOpenPromise = new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      progressIndexedDbOperational = !!value;
+      resolve(value);
+    };
+    try {
+      const request = window.indexedDB.open(PROGRESS_IDB_NAME, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(PROGRESS_IDB_STORE)) {
+          db.createObjectStore(PROGRESS_IDB_STORE);
+        }
+      };
+      request.onsuccess = () => settle(request.result || null);
+      request.onerror = () => settle(null);
+      request.onblocked = () => settle(null);
+    } catch (_) {
+      settle(null);
+    }
+  });
+  return progressIndexedDbOpenPromise;
+}
+
+function progressIndexedDbGetRaw(key) {
+  return openProgressIndexedDb().then(
+    (db) =>
+      new Promise((resolve) => {
+        if (!db) {
+          progressIndexedDbOperational = false;
+          resolve(null);
+          return;
+        }
+        try {
+          const tx = db.transaction(PROGRESS_IDB_STORE, "readonly");
+          const store = tx.objectStore(PROGRESS_IDB_STORE);
+          const request = store.get(String(key || ""));
+          request.onsuccess = () => {
+            progressIndexedDbOperational = true;
+            resolve(typeof request.result === "string" ? request.result : null);
+          };
+          request.onerror = () => {
+            progressIndexedDbOperational = false;
+            resolve(null);
+          };
+        } catch (_) {
+          progressIndexedDbOperational = false;
+          resolve(null);
+        }
+      })
+  );
+}
+
+function progressIndexedDbSetRaw(key, value) {
+  return openProgressIndexedDb().then(
+    (db) =>
+      new Promise((resolve) => {
+        if (!db || typeof value !== "string") {
+          progressIndexedDbOperational = false;
+          resolve(false);
+          return;
+        }
+        try {
+          const tx = db.transaction(PROGRESS_IDB_STORE, "readwrite");
+          const store = tx.objectStore(PROGRESS_IDB_STORE);
+          store.put(value, String(key || ""));
+          tx.oncomplete = () => {
+            progressIndexedDbOperational = true;
+            resolve(true);
+          };
+          tx.onerror = () => {
+            progressIndexedDbOperational = false;
+            resolve(false);
+          };
+          tx.onabort = () => {
+            progressIndexedDbOperational = false;
+            resolve(false);
+          };
+        } catch (_) {
+          progressIndexedDbOperational = false;
+          resolve(false);
+        }
+      })
+  );
+}
+
+async function readProgressFromIndexedDbSnapshot() {
+  const primaryRaw = await progressIndexedDbGetRaw(PROGRESS_IDB_PRIMARY_KEY);
+  const primaryParsed = parseProgressSnapshot(primaryRaw);
+  if (primaryParsed) return { parsed: primaryParsed, recoveredFromBackup: false };
+
+  const backupRaw = await progressIndexedDbGetRaw(PROGRESS_IDB_BACKUP_KEY);
+  const backupParsed = parseProgressSnapshot(backupRaw);
+  if (backupParsed) return { parsed: backupParsed, recoveredFromBackup: true };
+
+  return { parsed: null, recoveredFromBackup: false };
+}
+
+async function clearProgressIndexedDbSnapshot() {
+  if (!supportsProgressIndexedDb()) {
+    progressIndexedDbOperational = false;
+    return false;
+  }
+  progressIndexedDbPendingSerialized = "";
+  if (progressIndexedDbWriteTimer) {
+    clearTimeout(progressIndexedDbWriteTimer);
+    progressIndexedDbWriteTimer = null;
+  }
+
+  try {
+    const db = await openProgressIndexedDb();
+    if (!db) {
+      progressIndexedDbOperational = false;
+      return false;
+    }
+    return await new Promise((resolve) => {
+      try {
+        const tx = db.transaction(PROGRESS_IDB_STORE, "readwrite");
+        const store = tx.objectStore(PROGRESS_IDB_STORE);
+        store.delete(PROGRESS_IDB_PRIMARY_KEY);
+        store.delete(PROGRESS_IDB_BACKUP_KEY);
+        tx.oncomplete = () => {
+          progressIndexedDbOperational = true;
+          resolve(true);
+        };
+        tx.onerror = () => {
+          progressIndexedDbOperational = false;
+          resolve(false);
+        };
+        tx.onabort = () => {
+          progressIndexedDbOperational = false;
+          resolve(false);
+        };
+      } catch (_) {
+        progressIndexedDbOperational = false;
+        resolve(false);
+      }
+    });
+  } catch (_) {
+    progressIndexedDbOperational = false;
+    return false;
+  }
+}
+
+function queuePersistProgressToIndexedDb(serialized) {
+  if (!progressIndexedDbHydrationComplete) return false;
+  if (!supportsProgressIndexedDb()) return false;
+  if (progressIndexedDbOperational === false) return false;
+  if (typeof serialized !== "string" || !serialized) return false;
+  progressIndexedDbPendingSerialized = serialized;
+  if (progressIndexedDbWriteTimer) clearTimeout(progressIndexedDbWriteTimer);
+  progressIndexedDbWriteTimer = setTimeout(() => {
+    progressIndexedDbWriteTimer = null;
+    void flushPersistProgressToIndexedDb();
+  }, PROGRESS_IDB_WRITE_DEBOUNCE_MS);
+  return true;
+}
+
+async function flushPersistProgressToIndexedDb() {
+  if (!supportsProgressIndexedDb()) return false;
+  if (progressIndexedDbWriteInFlight) return false;
+  if (progressIndexedDbWriteTimer) {
+    clearTimeout(progressIndexedDbWriteTimer);
+    progressIndexedDbWriteTimer = null;
+  }
+
+  const serialized = progressIndexedDbPendingSerialized;
+  if (!serialized) return true;
+  progressIndexedDbPendingSerialized = "";
+  progressIndexedDbWriteInFlight = true;
+  try {
+    const previous = await progressIndexedDbGetRaw(PROGRESS_IDB_PRIMARY_KEY);
+    if (previous && previous !== serialized && parseProgressSnapshot(previous)) {
+      await progressIndexedDbSetRaw(PROGRESS_IDB_BACKUP_KEY, previous);
+    }
+    return await progressIndexedDbSetRaw(PROGRESS_IDB_PRIMARY_KEY, serialized);
+  } catch (_) {
+    return false;
+  } finally {
+    progressIndexedDbWriteInFlight = false;
+    if (progressIndexedDbPendingSerialized) {
+      void flushPersistProgressToIndexedDb();
+    }
+  }
+}
+
+async function hydrateProgressFromIndexedDbIfNeeded() {
+  if (progressIndexedDbHydrationComplete) return false;
+  if (!supportsProgressIndexedDb()) {
+    progressIndexedDbOperational = false;
+    progressIndexedDbHydrationComplete = true;
+    return false;
+  }
+
+  let restored = false;
+  try {
+    const snapshot = await readProgressFromIndexedDbSnapshot();
+    if (snapshot.parsed && shouldRestoreProgressFromFallbackSnapshot(snapshot.parsed)) {
+      progressIndexedDbHydrationComplete = true;
+      progressData = normalizeProgressData(snapshot.parsed);
+      resolveStartupAuthenticationRequirement();
+      syncAccountStartupPreferenceUi();
+      applyAccountToGame(getCurrentAccountRecord());
+      progressRecoveredFromIndexedDb = true;
+      progressStorageUnavailable = false;
+      localSaveFailureNotified = false;
+      savePlayerProgress();
+      refreshAccountAndMenuUi();
+      setStatus("Recovered account data from EXE fallback storage.");
+      restored = true;
+      return true;
+    }
+  } catch (_) {}
+
+  if (!progressIndexedDbHydrationComplete) progressIndexedDbHydrationComplete = true;
+  try {
+    const serialized = JSON.stringify(progressData);
+    queuePersistProgressToIndexedDb(serialized);
+  } catch (_) {}
+  return restored;
 }
 
 function refreshAccountAndMenuUi() {
@@ -5856,31 +6293,44 @@ function applyAccountToGame(account) {
 }
 
 function persistProgressData() {
+  let serialized = "";
+  try {
+    serialized = JSON.stringify(progressData);
+  } catch (_) {
+    return false;
+  }
+
+  let savedLocal = false;
   const storage = getProgressStorage();
   if (!storage) {
     progressStorageUnavailable = true;
-    return false;
-  }
-  try {
-    const serialized = JSON.stringify(progressData);
+  } else {
     try {
-      const previous = storage.getItem(PROGRESS_STORAGE_KEY);
-      if (previous && previous !== serialized) {
-        let previousValid = false;
-        try {
-          const parsedPrevious = JSON.parse(previous);
-          previousValid = !!parsedPrevious && typeof parsedPrevious === "object";
-        } catch (_) {}
-        if (previousValid) storage.setItem(PROGRESS_BACKUP_STORAGE_KEY, previous);
-      }
-    } catch (_) {}
-    storage.setItem(PROGRESS_STORAGE_KEY, serialized);
-    progressStorageUnavailable = false;
-    return true;
-  } catch (_) {
-    progressStorageUnavailable = true;
-    return false;
+      try {
+        const previous = storage.getItem(PROGRESS_STORAGE_KEY);
+        if (previous && previous !== serialized) {
+          let previousValid = false;
+          try {
+            const parsedPrevious = JSON.parse(previous);
+            previousValid = !!parsedPrevious && typeof parsedPrevious === "object";
+          } catch (_) {}
+          if (previousValid) storage.setItem(PROGRESS_BACKUP_STORAGE_KEY, previous);
+        }
+      } catch (_) {}
+      storage.setItem(PROGRESS_STORAGE_KEY, serialized);
+      progressStorageUnavailable = false;
+      savedLocal = true;
+    } catch (_) {
+      progressStorageUnavailable = true;
+    }
   }
+
+  const savedRuntimeFile = persistProgressToRuntimeFile(serialized);
+  if (savedRuntimeFile) progressStorageUnavailable = false;
+  const queuedIndexedDb = queuePersistProgressToIndexedDb(serialized);
+
+  if (savedLocal || savedRuntimeFile || queuedIndexedDb) return true;
+  return false;
 }
 
 function savePlayerProgress() {
@@ -5931,7 +6381,12 @@ function savePlayerProgress() {
   const savedLocal = persistProgressData();
   if (savedLocal) {
     localSaveFailureNotified = false;
-  } else if (!localSaveFailureNotified && !(cloudAuth.enabled && cloudAuth.user?.id)) {
+  } else if (
+    !localSaveFailureNotified &&
+    !(cloudAuth.enabled && cloudAuth.user?.id) &&
+    !hasIndexedDbProgressPersistence() &&
+    !hasRuntimeProgressPersistence()
+  ) {
     localSaveFailureNotified = true;
     setStatus("Account save failed on this device. Enable local storage or use cloud login to keep progress.", true);
   }
@@ -5941,44 +6396,67 @@ function savePlayerProgress() {
 function loadPlayerProgress() {
   progressStorageUnavailable = false;
   progressRecoveredFromBackup = false;
+  progressRecoveredFromIndexedDb = false;
+  progressRecoveredFromRuntimeFile = false;
+  progressLoadedFromStorage = false;
   const storage = getProgressStorage();
-  if (!storage) {
-    progressStorageUnavailable = true;
-    progressData = defaultProgressData();
-    applyAccountToGame(getCurrentAccountRecord());
-    return false;
-  }
-
   let parsed = null;
   let recoveredFromBackup = false;
+  let recoveredFromRuntimeFile = false;
   let storageReadError = false;
+  let hasFallbackRuntimeData = false;
 
-  try {
-    const primaryRaw = storage.getItem(PROGRESS_STORAGE_KEY) || "null";
-    parsed = JSON.parse(primaryRaw);
-  } catch (_) {
-    storageReadError = true;
-    parsed = null;
-  }
-
-  if (!parsed || typeof parsed !== "object") {
+  if (!storage) {
+    progressStorageUnavailable = true;
+  } else {
     try {
-      const backupRaw = storage.getItem(PROGRESS_BACKUP_STORAGE_KEY) || "null";
-      const backupParsed = JSON.parse(backupRaw);
-      if (backupParsed && typeof backupParsed === "object") {
-        parsed = backupParsed;
-        recoveredFromBackup = true;
-      }
+      const primaryRaw = storage.getItem(PROGRESS_STORAGE_KEY) || "null";
+      parsed = JSON.parse(primaryRaw);
     } catch (_) {
       storageReadError = true;
+      parsed = null;
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      try {
+        const backupRaw = storage.getItem(PROGRESS_BACKUP_STORAGE_KEY) || "null";
+        const backupParsed = JSON.parse(backupRaw);
+        if (backupParsed && typeof backupParsed === "object") {
+          parsed = backupParsed;
+          recoveredFromBackup = true;
+        }
+      } catch (_) {
+        storageReadError = true;
+      }
     }
   }
 
+  let runtimeSnapshot = { parsed: null, recoveredFromBackup: false };
+  if (supportsRuntimeProgressStorage()) {
+    runtimeSnapshot = readProgressFromRuntimeFileSnapshot();
+    hasFallbackRuntimeData = !!runtimeSnapshot.parsed;
+    if (runtimeSnapshot.parsed) progressRuntimeFileWriteHealthy = true;
+  }
+  if ((!parsed || typeof parsed !== "object") && runtimeSnapshot.parsed) {
+    parsed = runtimeSnapshot.parsed;
+    recoveredFromRuntimeFile = true;
+    if (runtimeSnapshot.recoveredFromBackup) recoveredFromBackup = true;
+  }
+
   if (!parsed || typeof parsed !== "object") {
-    const legacy = parseLegacyProgress(storage);
+    const legacy = storage ? parseLegacyProgress(storage) : null;
     progressData = legacy ? defaultProgressData(legacy) : defaultProgressData();
+    progressLoadedFromStorage = !!legacy;
   } else {
     progressData = normalizeProgressData(parsed);
+    progressLoadedFromStorage = true;
+  }
+
+  if (!recoveredFromRuntimeFile && runtimeSnapshot.parsed && shouldRestoreProgressFromFallbackSnapshot(runtimeSnapshot.parsed)) {
+    progressData = normalizeProgressData(runtimeSnapshot.parsed);
+    progressLoadedFromStorage = true;
+    recoveredFromRuntimeFile = true;
+    if (runtimeSnapshot.recoveredFromBackup) recoveredFromBackup = true;
   }
 
   const current = getCurrentAccountRecord();
@@ -5996,11 +6474,17 @@ function loadPlayerProgress() {
   applyAccountToGame(getCurrentAccountRecord());
   if (recoveredFromBackup) {
     progressRecoveredFromBackup = true;
+  }
+  if (recoveredFromRuntimeFile) {
+    progressRecoveredFromRuntimeFile = true;
+    progressStorageUnavailable = false;
+  }
+  if (recoveredFromBackup || recoveredFromRuntimeFile) {
     persistProgressData();
   }
-  if (storageReadError) progressStorageUnavailable = true;
+  if (storageReadError && !hasFallbackRuntimeData) progressStorageUnavailable = true;
   savePlayerProgress();
-  return true;
+  return progressLoadedFromStorage;
 }
 
 function createEnemyMesh(typeId, colorA, colorB, options = null) {
@@ -10355,6 +10839,8 @@ function resetAllProgressFromCommand() {
       storage.removeItem(LEGACY_PROGRESS_STORAGE_KEY);
     } catch (_) {}
   }
+  clearRuntimeProgressFiles();
+  void clearProgressIndexedDbSnapshot();
 
   progressData = defaultProgressData();
   applyAccountToGame(getCurrentAccountRecord());
@@ -10636,10 +11122,14 @@ function openAccountMenu() {
     accountLoginUsernameInputEl.focus();
     accountLoginUsernameInputEl.select();
   }
-  if (progressStorageUnavailable) {
+  if (progressRecoveredFromRuntimeFile) {
+    setStatus("Recovered account data from EXE file storage.");
+  } else if (progressStorageUnavailable && !hasDurableLocalProgressFallback()) {
     setStatus("Local storage is blocked. Account changes will reset after closing the browser.", true);
   } else if (progressRecoveredFromBackup) {
     setStatus("Recovered account data from backup. Verify your accounts before continuing.");
+  } else if (progressRecoveredFromIndexedDb) {
+    setStatus("Recovered account data from EXE fallback storage.");
   } else if (cloudAuth.profileTableMissing) {
     setStatus("Cloud login is active, but database table setup is missing. Run supabase_setup.sql in Supabase SQL Editor.", true);
   } else if (cloudAuth.enabled && cloudAuth.user?.email) {
@@ -12275,17 +12765,23 @@ window.addEventListener("online", () => {
 });
 window.addEventListener("pagehide", () => {
   flushQueuedCloudSync(false);
+  void flushPersistProgressToIndexedDb();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") flushQueuedCloudSync(false);
+  if (document.visibilityState === "hidden") {
+    flushQueuedCloudSync(false);
+    void flushPersistProgressToIndexedDb();
+  }
 });
 window.addEventListener("beforeunload", () => {
   leaveMultiplayerSession(true);
   savePlayerProgress();
   flushQueuedCloudSync(false);
+  void flushPersistProgressToIndexedDb();
 });
 
 loadPlayerProgress();
+void hydrateProgressFromIndexedDbIfNeeded();
 resetLaneToLevelDefaults(game.currentLevel);
 rebuildWorld();
 renderShop();
@@ -12304,10 +12800,14 @@ if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
   const pendingName = pendingAccount?.name || "your account";
   setStatus(`Login required for ${pendingName} before starting.`, true);
-} else if (progressStorageUnavailable) {
+} else if (progressRecoveredFromRuntimeFile) {
+  setStatus("Recovered account data from EXE file storage.");
+} else if (progressStorageUnavailable && !hasDurableLocalProgressFallback()) {
   setStatus("Local storage is blocked. Account progress will not persist on this device.", true);
 } else if (progressRecoveredFromBackup) {
   setStatus("Recovered account data from backup. Check Account Setup to confirm everything looks right.");
+} else if (progressRecoveredFromIndexedDb) {
+  setStatus("Recovered account data from EXE fallback storage.");
 } else if (cloudAuth.profileTableMissing) {
   setStatus("Cloud login is active, but database table setup is missing. Run supabase_setup.sql in Supabase SQL Editor.", true);
 } else if (!rendererWebglAvailable) {
