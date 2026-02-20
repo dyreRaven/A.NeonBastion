@@ -1108,9 +1108,11 @@ body:not(.menu-active) .menu-screen {
   border-radius: 10px;
   background: linear-gradient(145deg, rgba(92, 151, 193, 0.13), rgba(13, 30, 47, 0.34));
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   line-height: 1.35;
-  overflow-y: auto;
+  overflow: hidden;
   overflow-wrap: anywhere;
   color: #bfd6e8;
 }
