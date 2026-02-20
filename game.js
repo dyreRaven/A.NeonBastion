@@ -170,6 +170,8 @@ const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL = 0.16;
 const SOLO_HUD_REFRESH_INTERVAL_SEC = 0.12;
 const SOLO_HUD_REFRESH_TYPING_INTERVAL_SEC = 0.3;
+const SOLO_HUD_MENU_REFRESH_INTERVAL_SEC = 0.55;
+const SOLO_HUD_MENU_TYPING_REFRESH_INTERVAL_SEC = 1;
 const LOADOUT_SEARCH_DEBOUNCE_MS = 80;
 const MULTIPLAYER_STATE_FLOAT_PRECISION = 1000;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
@@ -197,7 +199,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-75";
+const BUILD_ID = "2026-02-20-76";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4018,6 +4020,9 @@ function isTextInputFocused() {
 }
 
 function getSoloHudRefreshInterval() {
+  if (game.menuOpen) {
+    return isTextInputFocused() ? SOLO_HUD_MENU_TYPING_REFRESH_INTERVAL_SEC : SOLO_HUD_MENU_REFRESH_INTERVAL_SEC;
+  }
   return isTextInputFocused() ? SOLO_HUD_REFRESH_TYPING_INTERVAL_SEC : SOLO_HUD_REFRESH_INTERVAL_SEC;
 }
 
@@ -4026,6 +4031,35 @@ function refreshSoloHudIfNeeded(dt = 0, force = false) {
   soloHudRefreshTimer -= delta;
   if (!force && soloHudRefreshTimer > 0) return;
   updateHud();
+}
+
+function updateHudChatVisibility() {
+  const chatVisible = canUseMultiplayerChat();
+  if (chatToggleBtn) chatToggleBtn.hidden = !chatVisible;
+  updateMultiplayerChatToggleNotification();
+  if (!chatPanelEl) return;
+  if (!chatVisible) {
+    chatPanelEl.hidden = true;
+    multiplayer.chatOpen = false;
+    return;
+  }
+  chatPanelEl.hidden = !multiplayer.chatOpen;
+  if (multiplayer.chatOpen) renderMultiplayerChat();
+}
+
+function updateMenuHud() {
+  soloHudRefreshTimer = getSoloHudRefreshInterval();
+  document.body.classList.remove("mobile-round-layout", "mobile-shop-open");
+  if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
+  if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
+  if (menuShardsEl) menuShardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
+  if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
+  if (speedControlEl) speedControlEl.hidden = true;
+  if (autoWaveBtn) autoWaveBtn.hidden = true;
+  if (settingsToggleBtn) settingsToggleBtn.classList.toggle("active", game.settingsOpen);
+  updateHudChatVisibility();
+  applyStatusExpansionState();
+  if (settingsPanelEl && !settingsPanelEl.hidden) refreshSettingsPanel();
 }
 
 function scheduleLoadoutSearchRender() {
@@ -11162,7 +11196,8 @@ function renderAccountMenu() {
       <div class="menu-account-item ${active ? "active" : ""}">
         <div>
           <strong>${escapeHtml(displayName)}</strong>
-          <span>${escapeHtml(email || "no-email")} | ${authTag} | ${startupModeTag} | ${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
+          <span class="menu-account-meta">${escapeHtml(email || "no-email")} | ${authTag} | ${startupModeTag}</span>
+          <span class="menu-account-stats">${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
         </div>
         <div class="menu-account-actions">
           <span class="menu-account-badge">${active ? "Signed In" : "Saved"}</span>
@@ -12046,6 +12081,11 @@ function monitorMobilePerformance(dt) {
 }
 
 function updateHud() {
+  if (game.menuOpen) {
+    updateMenuHud();
+    return;
+  }
+
   soloHudRefreshTimer = getSoloHudRefreshInterval();
   const selectedTower = updateShopButtons();
   const placement = getTowerPlacementStats(game.selectedTowerType);
@@ -12121,18 +12161,7 @@ function updateHud() {
 
   if (speedControlEl) speedControlEl.hidden = !game.started || game.menuOpen;
   if (autoWaveBtn) autoWaveBtn.hidden = !game.started || game.menuOpen;
-  const chatVisible = canUseMultiplayerChat();
-  if (chatToggleBtn) chatToggleBtn.hidden = !chatVisible;
-  updateMultiplayerChatToggleNotification();
-  if (chatPanelEl) {
-    if (!chatVisible) {
-      chatPanelEl.hidden = true;
-      multiplayer.chatOpen = false;
-    } else {
-      chatPanelEl.hidden = !multiplayer.chatOpen;
-      if (multiplayer.chatOpen) renderMultiplayerChat();
-    }
-  }
+  updateHudChatVisibility();
   applyStatusExpansionState();
   const lockMetaMenusDuringRun = game.started && !game.over;
   if (openUnlockShopBtn) openUnlockShopBtn.disabled = lockMetaMenusDuringRun;
@@ -12952,9 +12981,12 @@ function loop(now) {
 
   monitorMobilePerformance(dt);
   update(simDt);
-  updatePlacementPreview();
-  updateMapEffects(effectDt);
-  if (!rendererContextLost) renderer.render(scene, camera);
+  const renderWorldFrame = !(game.menuOpen && document.body.classList.contains("menu-active"));
+  if (renderWorldFrame) {
+    updatePlacementPreview();
+    updateMapEffects(effectDt);
+    if (!rendererContextLost) renderer.render(scene, camera);
+  }
   requestAnimationFrame(loop);
 }
 
