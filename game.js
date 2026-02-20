@@ -1797,7 +1797,9 @@ const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
 const ALLY_SPAWN_GAP_PADDING = 0.08;
 const ALLY_SPAWN_SLOT_MAX = 8;
+const ALLY_SURFACE_FOLLOW_RATE = 10;
 const SAME_TYPE_SPAWNER_SEQUENCE_DELAY = 1;
+const BOSS_WAVE_DIFFICULTY_MULTIPLIER = 2;
 
 const CREATURE_SPAWNER_UNLOCKS = {
   crawler: { killRequirement: 200, towerCost: 260, spawnInterval: 2.3 },
@@ -2261,8 +2263,8 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   if (level === 1 && wave === 20) return ["icosahedron", ...Array(12).fill("minion")];
   if (level >= 3 && wave === 40) return ["star"];
   if (level === 2 && wave === 30) {
-    const escortBlock = Array(4).fill("rhombusMinus");
-    return [...escortBlock, "rhombus", ...escortBlock, "rhombus", ...escortBlock];
+    const betweenEscortBlock = Array(6).fill("rhombusMinus");
+    return ["rhombus", ...betweenEscortBlock, "rhombus"];
   }
 
   const profile = getLevelDifficultyProfile(level);
@@ -2321,7 +2323,15 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   return queue;
 }
 
-function createEnemyStats(typeId, wave, level = game.currentLevel) {
+function isBossWave(level = game.currentLevel, wave = game.wave) {
+  if (level === 1 && wave === 20) return true;
+  if (level === 2 && wave === 30) return true;
+  if (level >= 3 && wave === 40) return true;
+  return false;
+}
+
+function createEnemyStats(typeId, wave, level = game.currentLevel, options = null) {
+  const forAlly = !!options?.forAlly;
   const profile = getLevelDifficultyProfile(level);
   const type = ENEMY_TYPES[typeId] || ENEMY_TYPES.crawler;
   const effectiveWave = Math.max(1, wave + profile.effectiveWaveOffset);
@@ -2330,7 +2340,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
   const rewardScaled = (typeId === "crawler" ? baseReward : baseReward / 3) * profile.rewardMultiplier;
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
   let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 77508 : scaledHp;
-  if (level === 1 && typeId === "icosahedron") hp = Math.max(1, Math.round(hp * 2));
+  if (!forAlly && isBossWave(level, wave)) hp = Math.max(1, Math.round(hp * BOSS_WAVE_DIFFICULTY_MULTIPLIER));
 
   return {
     typeId,
@@ -2360,7 +2370,7 @@ function waveThreatLabel(wave, level = game.currentLevel) {
     return "Ember threat: Enemy probes gathering heat in the rift.";
   }
   if (level === 2) {
-    if (wave === 30) return "Lunar threat: Twin Rhombus apex bosses with Rhombus Minion escorts.";
+    if (wave === 30) return "Lunar threat: Twin Rhombus apex bosses with Rhombus Minions screening between them.";
     if (wave >= 21) return "Lunar threat: Monolith command units escalating to apex intensity.";
     if (wave >= 10) return "Lunar threat: Leviathan-class siege swarm under low gravity.";
     if (wave >= 9) return "Lunar threat: Colossus and Warden phalanx advancing.";
@@ -7569,7 +7579,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     solarshard: {
       shape: "triangle",
       size: 1.06,
-      ringRadius: 0.86,
+      ringRadius: 0,
       coreRadius: 0.18,
       coreY: 0.12,
     },
@@ -7633,14 +7643,6 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     );
     baseCollar.position.y = -height * 0.44;
     group.add(baseCollar);
-
-    for (let i = 0; i < sides; i += 2) {
-      const angle = (i / sides) * Math.PI * 2 + Math.PI / sides;
-      const rib = cast(new THREE.Mesh(new THREE.BoxGeometry(baseRadius * 0.22, height * 0.42, 0.08), darkMat));
-      rib.position.set(Math.cos(angle) * baseRadius * 0.62, -height * 0.08, Math.sin(angle) * baseRadius * 0.62);
-      rib.rotation.y = angle;
-      group.add(rib);
-    }
   } else if (setup.shape === "cube") {
     body = cast(new THREE.Mesh(new THREE.BoxGeometry(setup.sizeX, setup.sizeY, setup.sizeZ), bodyMat));
     group.add(body);
@@ -9176,7 +9178,8 @@ class AllyMinion {
     this.bobAmplitude = 0.08;
     this.surfaceClearance = 0.05;
     this.baseYOffset = -this.visualMinY + this.surfaceClearance + this.bobAmplitude;
-    this.currentY = getLaneSurfaceY(this.x, this.z) + this.baseYOffset;
+    this.surfaceY = getLaneSurfaceY(this.x, this.z) + this.baseYOffset;
+    this.currentY = this.surfaceY;
     this.rollRadius = Math.max(0.22, (this.visualMaxY - this.visualMinY) * 0.5);
     this.rollAxis = new THREE.Vector3(1, 0, 0);
     this.rollQuat = new THREE.Quaternion();
@@ -9229,7 +9232,11 @@ class AllyMinion {
     }
 
     const bob = Math.sin(game.time * 4 + this.animSeed) * this.bobAmplitude;
-    this.currentY = getLaneSurfaceY(this.x, this.z) + this.baseYOffset + bob;
+    const targetSurfaceY = getLaneSurfaceY(this.x, this.z) + this.baseYOffset;
+    const followWeight = 1 - Math.exp(-ALLY_SURFACE_FOLLOW_RATE * dt);
+    if (!Number.isFinite(this.surfaceY)) this.surfaceY = targetSurfaceY;
+    else this.surfaceY += (targetSurfaceY - this.surfaceY) * followWeight;
+    this.currentY = this.surfaceY + bob;
     this.mesh.position.set(this.x, this.currentY, this.z);
     const movedX = this.x - prevX;
     const movedZ = this.z - prevZ;
@@ -10582,6 +10589,8 @@ function syncAlliesFromMultiplayer(states) {
       ally.z += (nextZ - ally.z) * syncWeight;
       ally.currentY += (nextY - ally.currentY) * syncWeight;
     }
+    const syncBob = Math.sin(game.time * 4 + ally.animSeed) * (Number.isFinite(ally.bobAmplitude) ? ally.bobAmplitude : 0);
+    ally.surfaceY = ally.currentY - syncBob;
     ally.pathIndex = Number.isFinite(state.pathIndex) ? Math.max(0, Math.floor(state.pathIndex)) : ally.pathIndex;
     ally.reachedStart = !!state.reachedStart;
     ally.headingX = Number.isFinite(state.headingX) ? state.headingX : ally.headingX;
@@ -11646,7 +11655,7 @@ function createAllyStatsForType(enemyTypeId) {
   const type = ENEMY_TYPES[enemyTypeId];
   if (!type) return null;
   const waveForStats = Math.max(1, game.wave || 1);
-  const enemyStats = createEnemyStats(enemyTypeId, waveForStats, game.currentLevel);
+  const enemyStats = createEnemyStats(enemyTypeId, waveForStats, game.currentLevel, { forAlly: true });
   return {
     typeId: enemyTypeId,
     name: type.name,
@@ -14172,8 +14181,15 @@ function updateClientReplicaAlly(ally, dt) {
 
   ally.x += moveDirX * speed * dt;
   ally.z += moveDirZ * speed * dt;
-  const bob = Math.sin(game.time * 4 + ally.animSeed) * (Number.isFinite(ally.bobAmplitude) ? ally.bobAmplitude : 0);
-  ally.currentY = getLaneSurfaceY(ally.x, ally.z) + (Number.isFinite(ally.baseYOffset) ? ally.baseYOffset : 0) + bob;
+  const bobAmplitude = Number.isFinite(ally.bobAmplitude) ? ally.bobAmplitude : 0;
+  const bob = Math.sin(game.time * 4 + ally.animSeed) * bobAmplitude;
+  const targetSurfaceY = getLaneSurfaceY(ally.x, ally.z) + (Number.isFinite(ally.baseYOffset) ? ally.baseYOffset : 0);
+  const followWeight = 1 - Math.exp(-ALLY_SURFACE_FOLLOW_RATE * dt);
+  if (!Number.isFinite(ally.surfaceY)) {
+    ally.surfaceY = Number.isFinite(ally.currentY) ? ally.currentY - bob : targetSurfaceY;
+  }
+  ally.surfaceY += (targetSurfaceY - ally.surfaceY) * followWeight;
+  ally.currentY = ally.surfaceY + bob;
   ally.mesh.position.set(ally.x, ally.currentY, ally.z);
 
   const movedX = ally.x - prevX;
@@ -14266,11 +14282,11 @@ function update(dt) {
 
       const isRhombusWave = game.currentLevel === 2 && game.wave === 30;
       if (isRhombusWave && spawnedType === "rhombusMinus") {
-        // Keep escort units spaced so they stride with the bosses instead of clumping.
-        nextSpawnDelay = Math.max(nextSpawnDelay, 0.58);
+        // Keep moon boss escorts well separated for cleaner pacing and readability.
+        nextSpawnDelay = Math.max(nextSpawnDelay, 0.95);
       }
       if (isRhombusWave && spawnedType === "rhombus" && game.spawnQueue.includes("rhombus")) {
-        nextSpawnDelay = Math.max(nextSpawnDelay, 0.72);
+        nextSpawnDelay = Math.max(nextSpawnDelay, 1.4);
       }
       game.spawnTimer = nextSpawnDelay;
     }
