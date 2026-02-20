@@ -1040,6 +1040,7 @@ const TOWER_UNLOCKS = {
   ion: { shardCost: 56 },
   frost: { shardCost: 28 },
   quarry: { shardCost: 44 },
+  bombarder: { shardCost: 50 },
   rift: { shardCost: 32 },
   volt: { shardCost: 36 },
   bastion: { shardCost: 48 },
@@ -1047,7 +1048,7 @@ const TOWER_UNLOCKS = {
   citadel: { shardCost: 72 },
 };
 
-const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "rift", "volt", "bastion", "photon", "citadel"];
+const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "bombarder", "rift", "volt", "bastion", "photon", "citadel"];
 const MENU_TRAP_UNLOCK_TOWER_IDS = ["spikes"];
 const BASE_LOADOUT_SLOTS = 6;
 const MAX_LOADOUT_SLOTS = 10;

@@ -1258,6 +1258,14 @@ body:not(.menu-active) .menu-screen {
   grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
 }
 
+#menuShop {
+  max-height: min(52vh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 0.14rem;
+}
+
 .menu-shop-list::-webkit-scrollbar {
   width: 8px;
 }
@@ -2522,6 +2530,10 @@ canvas {
   #menuCreatureShop,
   #menuLoadout {
     grid-template-columns: 1fr;
+  }
+
+  #menuShop {
+    max-height: min(46vh, 360px);
   }
 
   .hud {
