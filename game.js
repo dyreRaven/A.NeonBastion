@@ -25,7 +25,6 @@ const unlockBtn = $id("unlockBtn");
 const menuBtn = $id("menuBtn");
 const startWaveBtn = $id("startWaveBtn");
 const pauseBtn = $id("pauseBtn");
-const fullscreenBtn = $id("fullscreenBtn");
 const autoWaveBtn = $id("autoWaveBtn");
 const shopEl = $id("shop");
 const speedControlEl = $id("speedControl");
@@ -39,7 +38,6 @@ const menuCardEl = $id("menuCard");
 const buildStampEl = $id("buildStamp");
 const menuShardCornerEl = $id("menuShardCorner");
 const playBtn = $id("playBtn");
-const menuFullscreenBtn = $id("menuFullscreenBtn");
 const mapPrevBtn = $id("mapPrevBtn");
 const mapNextBtn = $id("mapNextBtn");
 const mapPreviewEl = $id("mapPreview");
@@ -1799,9 +1797,7 @@ const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
 const ALLY_SPAWN_GAP_PADDING = 0.08;
 const ALLY_SPAWN_SLOT_MAX = 8;
-const SAME_TYPE_SPAWNER_GAP_FRACTION = 0.08;
-const SAME_TYPE_SPAWNER_GAP_MIN = 0.08;
-const SAME_TYPE_SPAWNER_GAP_MAX = 0.24;
+const SAME_TYPE_SPAWNER_SEQUENCE_DELAY = 1;
 
 const CREATURE_SPAWNER_UNLOCKS = {
   crawler: { killRequirement: 200, towerCost: 260, spawnInterval: 2.3 },
@@ -2142,6 +2138,10 @@ function formatPlacementCapLine(towerTypeId, placement = null, includeMaxTag = t
 function applyTowerTypeConfigToPlacedTower(tower) {
   if (!tower || !tower.towerTypeId) return;
   const config = getTowerType(tower.towerTypeId);
+  if (!Number.isFinite(tower.spawnerSequenceId)) {
+    tower.spawnerSequenceId = game.nextSpawnerSequenceId;
+    game.nextSpawnerSequenceId += 1;
+  }
   tower.name = config.name;
   tower.isSpawner = !!config.spawnerEnemyTypeId;
   tower.spawnEnemyTypeId = config.spawnerEnemyTypeId || null;
@@ -4140,7 +4140,8 @@ const game = {
   wave: 0,
   inWave: false,
   waveCreditsEarned: 0,
-  allySpawnTypeLastTime: Object.create(null),
+  spawnerTypeSequenceState: Object.create(null),
+  nextSpawnerSequenceId: 1,
   spawnLeft: 0,
   spawnTimer: 0,
   spawnQueue: [],
@@ -9329,6 +9330,8 @@ class Tower {
     this.cost = config.cost;
     this.destroyed = false;
     this.disposed = false;
+    this.spawnerSequenceId = game.nextSpawnerSequenceId;
+    game.nextSpawnerSequenceId += 1;
     this.isSpawner = !!config.spawnerEnemyTypeId;
     this.isTrap = !!config.isTrap;
     this.spawnEnemyTypeId = config.spawnerEnemyTypeId || null;
@@ -9386,24 +9389,14 @@ class Tower {
       if (!game.inWave) return;
       if (this.cooldown > 0) return;
       const spawnTypeId = this.spawnEnemyTypeId;
-      const sameTypeGap = getSameTypeSpawnerGapSeconds(this.spawnInterval);
-      const lastSpawnTime = spawnTypeId ? game.allySpawnTypeLastTime[spawnTypeId] : null;
-      if (spawnTypeId && Number.isFinite(lastSpawnTime)) {
-        const sinceLastSpawn = game.time - lastSpawnTime;
-        if (sinceLastSpawn < sameTypeGap) {
-          this.cooldown = Math.max(this.cooldown, sameTypeGap - sinceLastSpawn);
-          return;
-        }
-      }
+      if (!canSpawnerTowerFireInSequence(this)) return;
       let spawnedCount = 0;
       for (let i = 0; i < this.spawnCount; i += 1) {
         if (!spawnAllyFromTower(spawnTypeId)) break;
         spawnedCount += 1;
       }
-      if (spawnedCount > 0 && spawnTypeId) {
-        game.allySpawnTypeLastTime[spawnTypeId] = game.time;
-      }
       this.cooldown = spawnedCount > 0 ? this.spawnInterval : Math.min(0.8, this.spawnInterval * 0.3);
+      advanceSpawnerSequence(this, spawnedCount);
       return;
     }
 
@@ -10943,78 +10936,6 @@ function onStatusClick() {
   applyStatusExpansionState();
 }
 
-function canUseFullscreenApi() {
-  const root = document.documentElement;
-  if (!root) return false;
-  const request =
-    root.requestFullscreen ||
-    root.webkitRequestFullscreen ||
-    root.msRequestFullscreen;
-  const exit =
-    document.exitFullscreen ||
-    document.webkitExitFullscreen ||
-    document.msExitFullscreen;
-  return typeof request === "function" && typeof exit === "function";
-}
-
-function isFullscreenActive() {
-  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-}
-
-function updateFullscreenButtons() {
-  const supported = canUseFullscreenApi();
-  const active = supported && isFullscreenActive();
-  const label = !supported ? "Fullscreen N/A" : active ? "Exit Fullscreen" : "Fullscreen";
-  const title = !supported ? "Fullscreen not supported on this browser" : active ? "Exit fullscreen" : "Enter fullscreen";
-  if (fullscreenBtn) {
-    fullscreenBtn.textContent = label;
-    fullscreenBtn.title = title;
-    fullscreenBtn.disabled = !supported;
-  }
-  if (menuFullscreenBtn) {
-    menuFullscreenBtn.textContent = label;
-    menuFullscreenBtn.title = title;
-    menuFullscreenBtn.disabled = !supported;
-  }
-}
-
-function requestFullscreenCompat() {
-  const root = document.documentElement;
-  if (!root) return Promise.reject(new Error("Document root unavailable."));
-  const request =
-    root.requestFullscreen ||
-    root.webkitRequestFullscreen ||
-    root.msRequestFullscreen;
-  if (typeof request !== "function") return Promise.reject(new Error("Fullscreen request API unavailable."));
-  return Promise.resolve(request.call(root));
-}
-
-function exitFullscreenCompat() {
-  const exit =
-    document.exitFullscreen ||
-    document.webkitExitFullscreen ||
-    document.msExitFullscreen;
-  if (typeof exit !== "function") return Promise.reject(new Error("Fullscreen exit API unavailable."));
-  return Promise.resolve(exit.call(document));
-}
-
-async function toggleFullscreenMode() {
-  if (!canUseFullscreenApi()) {
-    setStatus("Fullscreen is not supported in this browser.", true);
-    updateFullscreenButtons();
-    return;
-  }
-  try {
-    if (isFullscreenActive()) await exitFullscreenCompat();
-    else await requestFullscreenCompat();
-  } catch (error) {
-    console.error("Fullscreen toggle failed:", error);
-    setStatus("Unable to change fullscreen mode on this device.", true);
-  } finally {
-    updateFullscreenButtons();
-  }
-}
-
 function setStatus(message, danger = false) {
   statusEl.innerHTML = decorateShardWordsForHtml(message);
   statusEl.style.color = danger ? "#ff8f8f" : "#bfd6e8";
@@ -11340,7 +11261,7 @@ function clearActiveCombatState() {
   game.debris = [];
   game.inWave = false;
   game.waveCreditsEarned = 0;
-  game.allySpawnTypeLastTime = Object.create(null);
+  game.spawnerTypeSequenceState = Object.create(null);
   game.spawnQueue = [];
   game.spawnLeft = 0;
   game.spawnTimer = 0;
@@ -11736,9 +11657,59 @@ function createAllyStatsForType(enemyTypeId) {
   };
 }
 
-function getSameTypeSpawnerGapSeconds(spawnInterval) {
-  const interval = Number.isFinite(spawnInterval) ? Math.max(0.35, spawnInterval) : 1;
-  return Math.min(SAME_TYPE_SPAWNER_GAP_MAX, Math.max(SAME_TYPE_SPAWNER_GAP_MIN, interval * SAME_TYPE_SPAWNER_GAP_FRACTION));
+function getSpawnerTowersForType(enemyTypeId) {
+  if (!enemyTypeId) return [];
+  return game.towers
+    .filter((tower) => tower && !tower.destroyed && tower.isSpawner && tower.spawnEnemyTypeId === enemyTypeId)
+    .sort((a, b) => (a.spawnerSequenceId || 0) - (b.spawnerSequenceId || 0));
+}
+
+function getSpawnerTypeSequenceState(enemyTypeId) {
+  if (!enemyTypeId) return null;
+  if (!game.spawnerTypeSequenceState[enemyTypeId]) {
+    game.spawnerTypeSequenceState[enemyTypeId] = { cursor: 0, nextSpawnAt: 0 };
+  }
+  return game.spawnerTypeSequenceState[enemyTypeId];
+}
+
+function canSpawnerTowerFireInSequence(tower) {
+  const enemyTypeId = tower?.spawnEnemyTypeId;
+  if (!enemyTypeId) return true;
+  const sameTypeTowers = getSpawnerTowersForType(enemyTypeId);
+  if (sameTypeTowers.length <= 1) return true;
+
+  const state = getSpawnerTypeSequenceState(enemyTypeId);
+  if (!state) return true;
+  if (!Number.isFinite(state.cursor) || state.cursor < 0) state.cursor = 0;
+  if (state.cursor >= sameTypeTowers.length) state.cursor = 0;
+  if (!Number.isFinite(state.nextSpawnAt)) state.nextSpawnAt = 0;
+
+  const towerIndex = sameTypeTowers.indexOf(tower);
+  if (towerIndex < 0) return false;
+  if (towerIndex !== state.cursor) return false;
+
+  const wait = state.nextSpawnAt - game.time;
+  if (wait > 0) {
+    tower.cooldown = Math.max(tower.cooldown, wait);
+    return false;
+  }
+  return true;
+}
+
+function advanceSpawnerSequence(tower, spawnedCount) {
+  const enemyTypeId = tower?.spawnEnemyTypeId;
+  if (!enemyTypeId) return;
+  const sameTypeTowers = getSpawnerTowersForType(enemyTypeId);
+  if (sameTypeTowers.length <= 1) return;
+
+  const state = getSpawnerTypeSequenceState(enemyTypeId);
+  if (!state) return;
+  const towerIndex = sameTypeTowers.indexOf(tower);
+  const resolvedIndex =
+    towerIndex >= 0 ? towerIndex : Math.max(0, Math.min(sameTypeTowers.length - 1, Number.isFinite(state.cursor) ? state.cursor : 0));
+  state.cursor = (resolvedIndex + 1) % sameTypeTowers.length;
+  const delay = spawnedCount > 0 ? SAME_TYPE_SPAWNER_SEQUENCE_DELAY : Math.min(0.8, tower.spawnInterval * 0.3);
+  state.nextSpawnAt = game.time + delay;
 }
 
 function resolveAllySpawnPosition(radius) {
@@ -13842,7 +13813,7 @@ function startWave() {
   game.editingLane = false;
   game.wave += 1;
   game.inWave = true;
-  game.allySpawnTypeLastTime = Object.create(null);
+  game.spawnerTypeSequenceState = Object.create(null);
   game.waveCreditsEarned = 0;
   const profile = getLevelDifficultyProfile(game.currentLevel);
   const baseSpawnCount = 7 + game.wave * 2;
@@ -14631,8 +14602,6 @@ if (menuLoadoutSearchEl) {
 }
 startWaveBtn.addEventListener("click", startWave);
 if (pauseBtn) pauseBtn.addEventListener("click", togglePause);
-if (fullscreenBtn) fullscreenBtn.addEventListener("click", toggleFullscreenMode);
-if (menuFullscreenBtn) menuFullscreenBtn.addEventListener("click", toggleFullscreenMode);
 if (speedDownBtn) speedDownBtn.addEventListener("click", () => stepGameSpeed(-1));
 if (speedUpBtn) speedUpBtn.addEventListener("click", () => stepGameSpeed(1));
 if (hostMultiplayerBtn) hostMultiplayerBtn.addEventListener("click", hostMultiplayerSession);
@@ -14850,9 +14819,6 @@ document.addEventListener("visibilitychange", () => {
     void flushPersistProgressToIndexedDb();
   }
 });
-document.addEventListener("fullscreenchange", updateFullscreenButtons);
-document.addEventListener("webkitfullscreenchange", updateFullscreenButtons);
-document.addEventListener("MSFullscreenChange", updateFullscreenButtons);
 window.addEventListener("beforeunload", () => {
   leaveMultiplayerSession(true);
   savePlayerProgress();
@@ -14877,7 +14843,6 @@ openMenuShop();
 void initializeCloudAuth();
 if (menuScreenEl) menuScreenEl.hidden = false;
 if (playBtn) playBtn.addEventListener("click", () => startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel()));
-updateFullscreenButtons();
 if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
   const pendingName = getAccountDisplayName(pendingAccount, "your account");
