@@ -6,6 +6,7 @@ import { WebSocketServer } from "ws";
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
+const SERVER_BUILD_ID = "2026-02-20-41a";
 const ROOM_CODE_LIMIT = 16;
 const PEER_ID_LIMIT = 48;
 const DISPLAY_NAME_LIMIT = 24;
@@ -231,7 +232,7 @@ const server = createServer(async (req, res) => {
 
   if (pathname === "/healthz") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    res.end(JSON.stringify({ ok: true, rooms: rooms.size, build: SERVER_BUILD_ID }));
     return;
   }
 
