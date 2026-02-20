@@ -1996,7 +1996,7 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   tower.manualAreaTargeting = !!config.manualAreaTargeting;
   tower.splashRadius = tower.manualAreaTargeting ? Math.max(0.8, Number(config.splashRadius || tower.splashRadius || 1.4)) : 0;
   if (tower.manualAreaTargeting) {
-    if (!tower.areaMarker) tower.areaMarker = createTowerAreaMarker(config.projectileColor || "#ffbe7c");
+    if (!tower.areaMarker) tower.areaMarker = createTowerAreaMarker("#ff3a3a");
     if (tower.areaMarker) {
       if (tower.hasAreaTarget && inBounds(tower.areaTargetCellX, tower.areaTargetCellY)) {
         const targetWorld = cellToWorld(tower.areaTargetCellX, tower.areaTargetCellY);
@@ -2005,7 +2005,7 @@ function applyTowerTypeConfigToPlacedTower(tower) {
         tower.areaTargetY = getCellTopY(tower.areaTargetCellX, tower.areaTargetCellY) + 0.08;
         tower.areaMarker.position.set(tower.areaTargetX, tower.areaTargetY, tower.areaTargetZ);
       }
-      tower.areaMarker.scale.set(tower.splashRadius, tower.splashRadius, 1);
+      tower.areaMarker.scale.set(1, 1, 1);
       tower.areaMarker.visible = !!tower.hasAreaTarget;
     }
   } else if (tower.areaMarker) {
@@ -3871,36 +3871,53 @@ function setBombardPreviewColor(valid) {
   }
 }
 
-function createTowerAreaMarker(colorHex = "#ffbe7c") {
+function createTowerAreaMarker(colorHex = "#ff3a3a") {
   const marker = new THREE.Group();
 
+  const markerColor = new THREE.Color(colorHex);
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.8, 0.96, 48),
+    new THREE.RingGeometry(0.42, 0.52, 48),
     new THREE.MeshBasicMaterial({
-      color: colorHex,
+      color: markerColor.clone().lerp(new THREE.Color("#ff8b8b"), 0.15),
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.86,
       side: THREE.DoubleSide,
       depthWrite: false,
     })
   );
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.06;
+  ring.position.y = 0.07;
   marker.add(ring);
 
   const fill = new THREE.Mesh(
-    new THREE.CircleGeometry(0.76, 42),
+    new THREE.CircleGeometry(0.4, 42),
     new THREE.MeshBasicMaterial({
-      color: colorHex,
+      color: markerColor,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.2,
       side: THREE.DoubleSide,
       depthWrite: false,
     })
   );
   fill.rotation.x = -Math.PI / 2;
-  fill.position.y = 0.05;
+  fill.position.y = 0.06;
   marker.add(fill);
+
+  const crossMat = new THREE.MeshBasicMaterial({
+    color: markerColor.clone().lerp(new THREE.Color("#ffd0d0"), 0.18),
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+  });
+  const crossLength = 0.94;
+  const crossA = new THREE.Mesh(new THREE.BoxGeometry(crossLength, 0.045, 0.11), crossMat);
+  crossA.position.y = 0.085;
+  crossA.rotation.y = Math.PI / 4;
+  marker.add(crossA);
+  const crossB = new THREE.Mesh(new THREE.BoxGeometry(crossLength, 0.045, 0.11), crossMat);
+  crossB.position.y = 0.085;
+  crossB.rotation.y = -Math.PI / 4;
+  marker.add(crossB);
 
   marker.visible = false;
   scene.add(marker);
@@ -9086,7 +9103,7 @@ class Tower {
     this.areaTargetX = this.x;
     this.areaTargetY = this.y + 0.08;
     this.areaTargetZ = this.z;
-    this.areaMarker = this.manualAreaTargeting ? createTowerAreaMarker(config.projectileColor || "#ffbe7c") : null;
+    this.areaMarker = this.manualAreaTargeting ? createTowerAreaMarker("#ff3a3a") : null;
 
     const meshData = createTowerMesh(towerTypeId, config.bodyColor, config.coreColor);
     this.mesh = meshData.group;
@@ -9098,7 +9115,7 @@ class Tower {
     scene.add(this.mesh);
     if (this.isTrap) this.setTrapDurability(this.trapDurability);
     if (this.areaMarker) {
-      this.areaMarker.scale.set(this.splashRadius, this.splashRadius, 1);
+      this.areaMarker.scale.set(1, 1, 1);
       this.areaMarker.visible = false;
     }
   }
@@ -9155,7 +9172,7 @@ class Tower {
         this.areaTargetY = getCellTopY(this.areaTargetCellX, this.areaTargetCellY) + 0.08;
         if (this.areaMarker) {
           this.areaMarker.position.set(this.areaTargetX, this.areaTargetY, this.areaTargetZ);
-          this.areaMarker.scale.set(this.splashRadius, this.splashRadius, 1);
+          this.areaMarker.scale.set(1, 1, 1);
           this.areaMarker.visible = true;
         }
       } else if (this.areaMarker) {
@@ -9272,7 +9289,7 @@ class Tower {
     this.areaTargetY = getCellTopY(targetCellX, targetCellY) + 0.08;
     if (this.areaMarker) {
       this.areaMarker.position.set(this.areaTargetX, this.areaTargetY, this.areaTargetZ);
-      this.areaMarker.scale.set(this.splashRadius, this.splashRadius, 1);
+      this.areaMarker.scale.set(1, 1, 1);
       this.areaMarker.visible = true;
     }
     return true;
@@ -9421,17 +9438,19 @@ function applyBombardSplashDamage(centerX, centerZ, damage, splashRadius) {
 class BombardImpactEffect {
   constructor(x, y, z, radius, color) {
     this.age = 0;
-    this.life = 0.42;
+    this.life = 0.62;
     this.radius = Math.max(0.7, Number(radius) || 0.7);
     this.group = new THREE.Group();
-    this.group.position.set(x, y + 0.03, z);
+    this.group.position.set(x, y + 0.04, z);
+    const colorA = new THREE.Color(color);
+    const colorB = colorA.clone().lerp(new THREE.Color("#ffd2a8"), 0.36);
 
     this.flash = new THREE.Mesh(
-      new THREE.CircleGeometry(Math.max(0.36, this.radius * 0.38), 24),
+      new THREE.CircleGeometry(Math.max(0.42, this.radius * 0.44), 26),
       new THREE.MeshBasicMaterial({
-        color,
+        color: colorB,
         transparent: true,
-        opacity: 0.72,
+        opacity: 0.9,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
@@ -9439,10 +9458,25 @@ class BombardImpactEffect {
     this.flash.rotation.x = -Math.PI / 2;
     this.group.add(this.flash);
 
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(Math.max(0.24, this.radius * 0.18), Math.max(0.46, this.radius * 0.3), 30),
+    this.ringPrimary = new THREE.Mesh(
+      new THREE.RingGeometry(Math.max(0.26, this.radius * 0.16), Math.max(0.54, this.radius * 0.31), 34),
       new THREE.MeshBasicMaterial({
-        color,
+        color: colorA,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    this.ringPrimary.rotation.x = -Math.PI / 2;
+    this.ringPrimary.position.y = 0.03;
+    this.group.add(this.ringPrimary);
+
+    this.ringSecondary = new THREE.Mesh(
+      new THREE.RingGeometry(Math.max(0.22, this.radius * 0.12), Math.max(0.44, this.radius * 0.24), 30),
+      new THREE.MeshBasicMaterial({
+        color: colorB,
         transparent: true,
         opacity: 0.82,
         blending: THREE.AdditiveBlending,
@@ -9450,9 +9484,27 @@ class BombardImpactEffect {
         side: THREE.DoubleSide,
       })
     );
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.03;
-    this.group.add(this.ring);
+    this.ringSecondary.rotation.x = -Math.PI / 2;
+    this.ringSecondary.position.y = 0.035;
+    this.group.add(this.ringSecondary);
+
+    this.heatDisk = new THREE.Mesh(
+      new THREE.CircleGeometry(Math.max(0.52, this.radius * 0.52), 30),
+      new THREE.MeshBasicMaterial({
+        color: colorA.clone().lerp(new THREE.Color("#ff954f"), 0.3),
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.heatDisk.rotation.x = -Math.PI / 2;
+    this.heatDisk.position.y = 0.025;
+    this.group.add(this.heatDisk);
+
+    this.light = new THREE.PointLight(colorA.clone().lerp(new THREE.Color("#ffaf67"), 0.28), 3.9, 24, 2);
+    this.light.position.set(0, 1.05, 0);
+    this.group.add(this.light);
 
     scene.add(this.group);
   }
@@ -9460,12 +9512,19 @@ class BombardImpactEffect {
   update(dt) {
     this.age += dt;
     const t = THREE.MathUtils.clamp(this.age / this.life, 0, 1);
-    const ringScale = 1 + t * (2.2 + this.radius * 1.35);
-    const flashScale = 1 + t * (1.25 + this.radius * 0.7);
-    this.ring.scale.set(ringScale, ringScale, ringScale);
+    const ringScaleA = 1 + t * (3.6 + this.radius * 2.05);
+    const ringScaleB = 1 + t * (2.8 + this.radius * 1.48);
+    const flashScale = 1 + t * (2.05 + this.radius * 1.05);
+    const heatScale = 1 + t * (1.45 + this.radius * 0.88);
+    this.ringPrimary.scale.set(ringScaleA, ringScaleA, ringScaleA);
+    this.ringSecondary.scale.set(ringScaleB, ringScaleB, ringScaleB);
     this.flash.scale.set(flashScale, flashScale, flashScale);
-    this.ring.material.opacity = Math.max(0, 0.82 * (1 - t * 1.05));
-    this.flash.material.opacity = Math.max(0, 0.72 * (1 - t * 1.2));
+    this.heatDisk.scale.set(heatScale, heatScale, heatScale);
+    this.ringPrimary.material.opacity = Math.max(0, 0.9 * (1 - t * 1.12));
+    this.ringSecondary.material.opacity = Math.max(0, 0.82 * (1 - t * 1.24));
+    this.flash.material.opacity = Math.max(0, 0.9 * (1 - t * 1.34));
+    this.heatDisk.material.opacity = Math.max(0, 0.4 * (1 - t * 1.08));
+    this.light.intensity = Math.max(0, 3.9 * (1 - t) * (1 - t * 0.35));
     return t < 1;
   }
 
@@ -9537,6 +9596,71 @@ class BombardProjectile {
     applyBombardSplashDamage(this.target.x, this.target.z, this.damage, this.splashRadius);
     if (game.explosionParticlesEnabled) {
       game.debris.push(new BombardImpactEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color));
+
+      const blastColor = new THREE.Color(this.color);
+      const shrapnelCount = Math.min(36, 16 + Math.round(this.splashRadius * 6.6));
+      for (let i = 0; i < shrapnelCount; i += 1) {
+        const size = THREE.MathUtils.lerp(this.splashRadius * 0.055, this.splashRadius * 0.14, Math.random());
+        const geometry =
+          i % 2 === 0
+            ? new THREE.TetrahedronGeometry(size, 0)
+            : new THREE.BoxGeometry(size * 1.18, size * 0.74, size * 1.24);
+        const material = new THREE.MeshStandardMaterial({
+          color: blastColor.clone().lerp(new THREE.Color("#ffd2a8"), 0.18 + Math.random() * 0.22),
+          emissive: blastColor.clone().multiplyScalar(0.46),
+          emissiveIntensity: 0.94,
+          roughness: 0.3,
+          metalness: 0.36,
+          transparent: true,
+          opacity: 0.95,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        const launchDir = new THREE.Vector3(
+          Math.random() * 2 - 1,
+          Math.random() * 1.15 + 0.3,
+          Math.random() * 2 - 1
+        ).normalize();
+        const speed = THREE.MathUtils.lerp(8.4, 19.4, Math.random()) * (0.78 + this.splashRadius * 0.24);
+        mesh.position.set(
+          this.target.x + (Math.random() * 2 - 1) * this.splashRadius * 0.32,
+          impactY + 0.03 + Math.random() * 0.2,
+          this.target.z + (Math.random() * 2 - 1) * this.splashRadius * 0.32
+        );
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        scene.add(mesh);
+        game.debris.push(new EnemyDebrisPiece(mesh, launchDir.multiplyScalar(speed), size));
+      }
+
+      const pulseBase = Math.max(0.44, this.splashRadius * 0.66);
+      const pulseA = new THREE.Mesh(
+        new THREE.SphereGeometry(pulseBase, 14, 14),
+        new THREE.MeshBasicMaterial({
+          color: blastColor.clone().lerp(new THREE.Color("#ffc386"), 0.22),
+          transparent: true,
+          opacity: 0.64,
+          depthWrite: false,
+        })
+      );
+      pulseA.position.set(this.target.x, impactY + 0.03, this.target.z);
+      scene.add(pulseA);
+      game.debris.push(new EnemyDebrisPulse(pulseA, pulseBase));
+
+      const pulseB = new THREE.Mesh(
+        new THREE.SphereGeometry(pulseBase * 0.72, 12, 12),
+        new THREE.MeshBasicMaterial({
+          color: blastColor.clone().lerp(new THREE.Color("#ffdcb6"), 0.36),
+          transparent: true,
+          opacity: 0.54,
+          depthWrite: false,
+        })
+      );
+      pulseB.position.set(this.target.x, impactY + 0.04, this.target.z);
+      scene.add(pulseB);
+      game.debris.push(new EnemyDebrisPulse(pulseB, pulseBase * 0.72));
     }
   }
 
