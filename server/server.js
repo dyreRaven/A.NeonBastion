@@ -1,4 +1,7 @@
-﻿import { createServer } from "http";
+import { createServer } from "http";
+import { createReadStream } from "fs";
+import { stat } from "fs/promises";
+import { extname, isAbsolute, normalize, relative, resolve } from "path";
 import { WebSocketServer } from "ws";
 
 const HOST = process.env.HOST || "0.0.0.0";
@@ -7,6 +10,24 @@ const ROOM_CODE_LIMIT = 16;
 const PEER_ID_LIMIT = 48;
 const DISPLAY_NAME_LIMIT = 24;
 const HEARTBEAT_MS = 25000;
+const STATIC_ROOT = resolve(process.cwd(), "..");
+const STATIC_DENY_PREFIXES = ["server/", ".git/"];
+const STATIC_MIME_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+};
+const STATIC_ALLOWED_EXTENSIONS = new Set(Object.keys(STATIC_MIME_TYPES));
 
 function sanitizeRoomCode(raw) {
   return String(raw || "")
@@ -129,15 +150,102 @@ function getPeerFromSocket(socket) {
   return meta ? meta.peerId : "";
 }
 
-const server = createServer((req, res) => {
-  if (req.url === "/healthz") {
+function isPathInside(basePath, targetPath) {
+  const rel = relative(basePath, targetPath);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+async function resolveStaticFilePath(pathname) {
+  let decodedPath = "";
+  try {
+    decodedPath = decodeURIComponent(String(pathname || "/"));
+  } catch (_) {
+    return null;
+  }
+
+  let normalizedPath = normalize(decodedPath).replace(/\\/g, "/");
+  if (!normalizedPath.startsWith("/")) normalizedPath = `/${normalizedPath}`;
+  if (normalizedPath === "/") normalizedPath = "/index.html";
+  if (normalizedPath.endsWith("/")) normalizedPath += "index.html";
+
+  const relativePath = normalizedPath.slice(1);
+  if (!relativePath) return null;
+  for (const denied of STATIC_DENY_PREFIXES) {
+    if (relativePath.startsWith(denied)) return null;
+  }
+
+  const extension = extname(relativePath).toLowerCase();
+  if (!STATIC_ALLOWED_EXTENSIONS.has(extension)) return null;
+
+  const fullPath = resolve(STATIC_ROOT, relativePath);
+  if (!isPathInside(STATIC_ROOT, fullPath)) return null;
+
+  try {
+    const fileStat = await stat(fullPath);
+    if (!fileStat.isFile()) return null;
+  } catch (_) {
+    return null;
+  }
+  return fullPath;
+}
+
+function getCacheControlHeader(filePath) {
+  const extension = extname(filePath).toLowerCase();
+  if (extension === ".html") return "no-cache";
+  return "public, max-age=31536000, immutable";
+}
+
+async function tryServeStatic(req, res, pathname) {
+  const filePath = await resolveStaticFilePath(pathname);
+  if (!filePath) return false;
+
+  const extension = extname(filePath).toLowerCase();
+  const contentType = STATIC_MIME_TYPES[extension] || "application/octet-stream";
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": getCacheControlHeader(filePath),
+  };
+
+  if (req.method === "HEAD") {
+    res.writeHead(200, headers);
+    res.end();
+    return true;
+  }
+
+  res.writeHead(200, headers);
+  const stream = createReadStream(filePath);
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+    }
+    res.end("Failed to load static asset.\n");
+  });
+  stream.pipe(res);
+  return true;
+}
+
+const server = createServer(async (req, res) => {
+  const method = String(req.method || "GET").toUpperCase();
+  const requestUrl = new URL(req.url || "/", "http://localhost");
+  const pathname = requestUrl.pathname;
+
+  if (pathname === "/healthz") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
     return;
   }
 
-  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Neon Bastion multiplayer server is running.\n");
+  if (method !== "GET" && method !== "HEAD") {
+    res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Method not allowed.\n");
+    return;
+  }
+
+  const served = await tryServeStatic(req, res, pathname);
+  if (served) return;
+
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("Not found.\n");
 });
 
 const wss = new WebSocketServer({ server });

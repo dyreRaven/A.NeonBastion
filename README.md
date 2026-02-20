@@ -2,7 +2,8 @@
 
 ## Play Online
 
-- Live site: `https://dyreraven.github.io/A.NeonBastion/`
+- Live site (game + multiplayer server on one URL): `https://neon-bastion-multiplayer.onrender.com`
+- Mirror site: `https://dyreraven.github.io/A.NeonBastion/`
 
 ## Local Run
 
