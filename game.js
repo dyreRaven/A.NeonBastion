@@ -48,8 +48,13 @@ const closeLoadoutBtn = document.getElementById("closeLoadoutBtn");
 const closeMultiplayerBtn = document.getElementById("closeMultiplayerBtn");
 const menuAccountEl = document.getElementById("menuAccountList");
 const menuAccountCurrentEl = document.getElementById("menuAccountCurrent");
-const accountNameInputEl = document.getElementById("accountNameInput");
+const accountCreateUsernameInputEl = document.getElementById("accountCreateUsernameInput");
+const accountCreatePasswordInputEl = document.getElementById("accountCreatePasswordInput");
+const accountCreatePasswordConfirmInputEl = document.getElementById("accountCreatePasswordConfirmInput");
+const accountLoginUsernameInputEl = document.getElementById("accountLoginUsernameInput");
+const accountLoginPasswordInputEl = document.getElementById("accountLoginPasswordInput");
 const createAccountBtn = document.getElementById("createAccountBtn");
+const loginAccountBtn = document.getElementById("loginAccountBtn");
 const menuShopEl = document.getElementById("menuShop");
 const menuShardsEl = document.getElementById("menuShards");
 const menuCreatureShopEl = document.getElementById("menuCreatureShop");
@@ -121,7 +126,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-30";
+const BUILD_ID = "2026-02-20-31";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3934,6 +3939,62 @@ function sanitizeAccountName(name) {
     .slice(0, 24);
 }
 
+const MIN_ACCOUNT_PASSWORD_LENGTH = 4;
+
+function sanitizeAccountUsername(username) {
+  return sanitizeAccountName(username);
+}
+
+function getAccountUsernameKey(username) {
+  return sanitizeAccountUsername(username).toLowerCase();
+}
+
+function hashAccountPassword(username, password) {
+  const usernameKey = getAccountUsernameKey(username);
+  const source = `${usernameKey}::${String(password || "")}`;
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function normalizeStoredPasswordHash(rawHash) {
+  const hash = String(rawHash || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{8,128}$/.test(hash)) return "";
+  return hash;
+}
+
+function accountHasPassword(account) {
+  return !!normalizeStoredPasswordHash(account?.passwordHash);
+}
+
+function verifyAccountPassword(account, password) {
+  if (!account) return false;
+  const storedHash = normalizeStoredPasswordHash(account.passwordHash);
+  if (!storedHash) return String(password || "").length === 0;
+  return storedHash === hashAccountPassword(account.name || "", password);
+}
+
+function findAccountByUsername(username) {
+  const usernameKey = getAccountUsernameKey(username);
+  if (!usernameKey) return null;
+  return (
+    progressData.accounts.find((account) => getAccountUsernameKey(account.name || "") === usernameKey) || null
+  );
+}
+
+function clearAccountAuthInputs(options = {}) {
+  const keepCreateUsername = !!options.keepCreateUsername;
+  const keepLoginUsername = !!options.keepLoginUsername;
+  if (accountCreateUsernameInputEl && !keepCreateUsername) accountCreateUsernameInputEl.value = "";
+  if (accountCreatePasswordInputEl) accountCreatePasswordInputEl.value = "";
+  if (accountCreatePasswordConfirmInputEl) accountCreatePasswordConfirmInputEl.value = "";
+  if (accountLoginUsernameInputEl && !keepLoginUsername) accountLoginUsernameInputEl.value = "";
+  if (accountLoginPasswordInputEl) accountLoginPasswordInputEl.value = "";
+}
+
 function createAccountId() {
   return `acct_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -4043,9 +4104,11 @@ function createAccountRecord(name = "Commander", seed = null) {
   const levelValue = Number(seed?.maxLevelUnlocked);
   const seededId = typeof seed?.id === "string" ? seed.id.trim() : "";
   const safeId = /^[A-Za-z0-9_-]{4,80}$/.test(seededId) ? seededId : "";
+  const passwordHash = normalizeStoredPasswordHash(seed?.passwordHash);
   return {
     id: safeId || createAccountId(),
-    name: sanitizeAccountName(seed?.name ?? name) || "Commander",
+    name: sanitizeAccountUsername(seed?.name ?? name) || "Commander",
+    passwordHash,
     shards: Number.isFinite(shardValue) ? Math.max(0, Math.floor(shardValue)) : 0,
     maxLevelUnlocked: Number.isFinite(levelValue) ? Math.max(1, Math.floor(levelValue)) : 1,
     maxLoadoutSlots,
@@ -4120,7 +4183,7 @@ function getCurrentAccountRecord() {
 function applyAccountToGame(account) {
   if (!account) return;
   game.accountId = account.id;
-  game.accountName = sanitizeAccountName(account.name) || "Commander";
+  game.accountName = sanitizeAccountUsername(account.name) || "Commander";
   game.shards = Math.max(0, Math.floor(account.shards || 0));
   game.maxLevelUnlocked = Math.max(1, Math.floor(account.maxLevelUnlocked || 1));
   game.maxLoadoutSlots = clampLoadoutSlotLimit(Number(account.maxLoadoutSlots));
@@ -4174,7 +4237,7 @@ function savePlayerProgress() {
     progressData.currentAccountId = current.id;
   }
 
-  current.name = sanitizeAccountName(game.accountName) || "Commander";
+  current.name = sanitizeAccountUsername(game.accountName) || "Commander";
   current.shards = Math.max(0, Math.floor(game.shards || 0));
   current.maxLevelUnlocked = Math.max(1, Math.floor(game.maxLevelUnlocked || 1));
   current.maxLoadoutSlots = getCurrentLoadoutSlotLimit();
@@ -7817,16 +7880,15 @@ function renderAccountMenu() {
     const active = account.id === game.accountId;
     const spawnerCount = Array.isArray(account.unlockedSpawnerTowers) ? account.unlockedSpawnerTowers.length : 0;
     const loadoutSlots = clampLoadoutSlotLimit(Number(account.maxLoadoutSlots));
+    const authTag = accountHasPassword(account) ? "Password Set" : "No Password";
     fragments.push(`
       <div class="menu-account-item ${active ? "active" : ""}">
         <div>
           <strong>${escapeHtml(account.name)}</strong>
-          <span>${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
+          <span>${authTag} | ${account.shards} ${formatShardWordHtml("shards")} | ${account.unlockedTowers.length} towers | ${spawnerCount} spawners | ${loadoutSlots} slots | L${Math.max(1, account.maxLevelUnlocked || 1)}</span>
         </div>
         <div class="menu-account-actions">
-          <button type="button" data-account-action="switch" data-account-id="${account.id}" ${active ? "disabled" : ""}>
-            ${active ? "Active" : "Switch"}
-          </button>
+          <span class="menu-account-badge">${active ? "Signed In" : "Saved"}</span>
           <button type="button" data-account-action="delete" data-account-id="${account.id}">
             Delete
           </button>
@@ -7844,11 +7906,6 @@ function renderAccountMenu() {
     const accountId = button.dataset.accountId;
     const action = button.dataset.accountAction;
     if (!accountId || !action) return;
-    if (action === "switch") {
-      if (accountId === game.accountId) return;
-      switchToAccount(accountId);
-      return;
-    }
     if (action === "delete") {
       deleteAccountById(accountId);
     }
@@ -7894,7 +7951,8 @@ function deleteAccountById(accountId) {
   renderLoadoutMenu();
   renderShop();
   updateHud();
-  if (accountNameInputEl) accountNameInputEl.value = game.accountName || "";
+  clearAccountAuthInputs();
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = game.accountName || "";
   setStatus(`Deleted account ${removed.name}.`);
 }
 
@@ -7912,25 +7970,45 @@ function switchToAccount(accountId, quiet = false) {
   renderLoadoutMenu();
   renderShop();
   updateHud();
+  clearAccountAuthInputs();
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name || "";
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name || "";
   if (!quiet) setStatus(`Switched to account ${account.name}.`);
 }
 
 function createAccountFromInput() {
-  const rawName = accountNameInputEl ? accountNameInputEl.value : "";
-  const name = sanitizeAccountName(rawName);
-  if (!name) {
-    setStatus("Enter an account name first.", true);
+  const rawUsername = accountCreateUsernameInputEl ? accountCreateUsernameInputEl.value : "";
+  const username = sanitizeAccountUsername(rawUsername);
+  const password = accountCreatePasswordInputEl ? accountCreatePasswordInputEl.value : "";
+  const confirmPassword = accountCreatePasswordConfirmInputEl ? accountCreatePasswordConfirmInputEl.value : "";
+
+  if (!username) {
+    setStatus("Enter a username first.", true);
+    return;
+  }
+  if (password.length < MIN_ACCOUNT_PASSWORD_LENGTH) {
+    setStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    setStatus("Passwords do not match.", true);
     return;
   }
 
-  const existing = progressData.accounts.find((account) => account.name.toLowerCase() === name.toLowerCase());
+  const existing = findAccountByUsername(username);
   if (existing) {
-    switchToAccount(existing.id);
-    if (accountNameInputEl) accountNameInputEl.value = existing.name;
+    setStatus("Username already exists. Use Login instead.", true);
+    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = existing.name;
+    if (accountLoginPasswordInputEl) {
+      accountLoginPasswordInputEl.focus();
+      accountLoginPasswordInputEl.select();
+    }
     return;
   }
 
-  const account = createAccountRecord(name);
+  const account = createAccountRecord(username, {
+    passwordHash: hashAccountPassword(username, password),
+  });
   progressData.accounts.push(account);
   progressData.currentAccountId = account.id;
   applyAccountToGame(account);
@@ -7941,8 +8019,38 @@ function createAccountFromInput() {
   renderLoadoutMenu();
   renderShop();
   updateHud();
-  if (accountNameInputEl) accountNameInputEl.value = account.name;
-  setStatus(`Account ${account.name} created.`);
+  clearAccountAuthInputs();
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name;
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name;
+  setStatus(`Account ${account.name} created. Logged in.`);
+}
+
+function loginAccountFromInput() {
+  const rawUsername = accountLoginUsernameInputEl ? accountLoginUsernameInputEl.value : "";
+  const username = sanitizeAccountUsername(rawUsername);
+  const password = accountLoginPasswordInputEl ? accountLoginPasswordInputEl.value : "";
+
+  if (!username) {
+    setStatus("Enter your username.", true);
+    return;
+  }
+
+  const account = findAccountByUsername(username);
+  if (!account) {
+    setStatus("Username not found.", true);
+    return;
+  }
+
+  if (!verifyAccountPassword(account, password)) {
+    setStatus("Incorrect password.", true);
+    return;
+  }
+
+  switchToAccount(account.id, true);
+  clearAccountAuthInputs();
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = account.name;
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = account.name;
+  setStatus(`Logged in as ${account.name}.`);
 }
 
 function resetAllProgressFromCommand() {
@@ -8134,10 +8242,12 @@ function openAccountMenu() {
   setMenuView("account");
   renderAccountMenu();
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
-  if (accountNameInputEl) {
-    accountNameInputEl.value = game.accountName || "";
-    accountNameInputEl.focus();
-    accountNameInputEl.select();
+  clearAccountAuthInputs();
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = game.accountName || "";
+  if (accountLoginUsernameInputEl) {
+    accountLoginUsernameInputEl.value = game.accountName || "";
+    accountLoginUsernameInputEl.focus();
+    accountLoginUsernameInputEl.select();
   }
 }
 
@@ -9137,6 +9247,7 @@ if (chatToggleBtn) chatToggleBtn.addEventListener("click", toggleChatPanel);
 if (chatCloseBtn) chatCloseBtn.addEventListener("click", closeChatPanel);
 if (chatSendBtn) chatSendBtn.addEventListener("click", sendMultiplayerChatFromInput);
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
+if (loginAccountBtn) loginAccountBtn.addEventListener("click", loginAccountFromInput);
 if (mapPrevBtn) mapPrevBtn.addEventListener("click", () => cycleMenuLevel(-1));
 if (mapNextBtn) mapNextBtn.addEventListener("click", () => cycleMenuLevel(1));
 if (commandInputEl) {
@@ -9162,11 +9273,27 @@ if (chatInputEl) {
     }
   });
 }
-if (accountNameInputEl) {
-  accountNameInputEl.addEventListener("keydown", (event) => {
+for (const inputEl of [accountCreateUsernameInputEl, accountCreatePasswordInputEl, accountCreatePasswordConfirmInputEl]) {
+  if (!inputEl) continue;
+  inputEl.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       createAccountFromInput();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeAccountMenu();
+    }
+  });
+}
+for (const inputEl of [accountLoginUsernameInputEl, accountLoginPasswordInputEl]) {
+  if (!inputEl) continue;
+  inputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loginAccountFromInput();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeAccountMenu();
     }
   });
 }
@@ -9259,7 +9386,13 @@ window.addEventListener("keydown", (event) => {
     }
     return;
   }
-  if (accountNameInputEl && document.activeElement === accountNameInputEl) {
+  if (
+    (accountCreateUsernameInputEl && document.activeElement === accountCreateUsernameInputEl) ||
+    (accountCreatePasswordInputEl && document.activeElement === accountCreatePasswordInputEl) ||
+    (accountCreatePasswordConfirmInputEl && document.activeElement === accountCreatePasswordConfirmInputEl) ||
+    (accountLoginUsernameInputEl && document.activeElement === accountLoginUsernameInputEl) ||
+    (accountLoginPasswordInputEl && document.activeElement === accountLoginPasswordInputEl)
+  ) {
     if (event.key === "Escape") {
       event.preventDefault();
       closeAccountMenu();

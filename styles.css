@@ -987,14 +987,35 @@ body:not(.menu-active) .menu-screen {
   justify-content: flex-end;
 }
 
-.menu-account-create {
+.menu-account-auth {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.45rem;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.52rem;
 }
 
-#accountNameInput,
+.menu-account-form {
+  border: 1px solid rgba(176, 222, 249, 0.22);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(103, 166, 209, 0.1), rgba(16, 34, 52, 0.28));
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.38rem;
+  align-content: start;
+}
+
+.menu-account-form h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d8eeff;
+}
+
+#accountCreateUsernameInput,
+#accountCreatePasswordInput,
+#accountCreatePasswordConfirmInput,
+#accountLoginUsernameInput,
+#accountLoginPasswordInput,
 #menuLoadoutSearch,
 #multiplayerServerInput,
 #multiplayerRoomInput {
@@ -1008,7 +1029,11 @@ body:not(.menu-active) .menu-screen {
   outline: none;
 }
 
-#accountNameInput:focus,
+#accountCreateUsernameInput:focus,
+#accountCreatePasswordInput:focus,
+#accountCreatePasswordConfirmInput:focus,
+#accountLoginUsernameInput:focus,
+#accountLoginPasswordInput:focus,
 #menuLoadoutSearch:focus,
 #multiplayerServerInput:focus,
 #multiplayerRoomInput:focus {
@@ -1016,7 +1041,8 @@ body:not(.menu-active) .menu-screen {
   box-shadow: 0 0 0 1px rgba(99, 245, 212, 0.35);
 }
 
-#createAccountBtn {
+#createAccountBtn,
+#loginAccountBtn {
   min-height: 2.1rem;
   border-radius: 8px;
   padding: 0.34rem 0.62rem;
@@ -1068,6 +1094,17 @@ body:not(.menu-active) .menu-screen {
   display: flex;
   align-items: center;
   gap: 0.34rem;
+}
+
+.menu-account-badge {
+  border: 1px solid rgba(176, 219, 247, 0.34);
+  border-radius: 999px;
+  padding: 0.16rem 0.46rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #d7eeff;
+  background: rgba(63, 102, 136, 0.24);
 }
 
 .menu-account-actions button {
@@ -2139,6 +2176,10 @@ canvas {
   .menu-shop-panel {
     height: auto;
     max-height: min(76vh, 620px);
+  }
+
+  .menu-account-auth {
+    grid-template-columns: 1fr;
   }
 
   .menu-multiplayer-panels {

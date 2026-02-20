@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260220ac" />
+    <link rel="stylesheet" href="styles.css?v=20260220ad" />
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
@@ -44,19 +44,58 @@
             <h2>Account Setup</h2>
             <span id="menuAccountCurrent">Account: -</span>
           </div>
-          <div class="menu-account-create">
-            <input
-              id="accountNameInput"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              maxlength="24"
-              placeholder="Enter account name"
-            />
-            <button id="createAccountBtn" type="button">Create / Switch</button>
+          <div class="menu-account-auth">
+            <section class="menu-account-form" aria-label="Create account">
+              <h3>Create Account</h3>
+              <input
+                id="accountCreateUsernameInput"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="24"
+                placeholder="Username"
+              />
+              <input
+                id="accountCreatePasswordInput"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                maxlength="48"
+                placeholder="Password"
+              />
+              <input
+                id="accountCreatePasswordConfirmInput"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                maxlength="48"
+                placeholder="Confirm password"
+              />
+              <button id="createAccountBtn" type="button">Create</button>
+            </section>
+            <section class="menu-account-form" aria-label="Login">
+              <h3>Login</h3>
+              <input
+                id="accountLoginUsernameInput"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="24"
+                placeholder="Username"
+              />
+              <input
+                id="accountLoginPasswordInput"
+                type="password"
+                autocomplete="current-password"
+                spellcheck="false"
+                maxlength="48"
+                placeholder="Password"
+              />
+              <button id="loginAccountBtn" type="button">Login</button>
+            </section>
           </div>
           <div id="menuAccountList" class="menu-shop-list"></div>
-          <p class="menu-shop-note">Progress is saved per account. Click any account to switch or delete.</p>
+          <p class="menu-shop-note">Progress is saved per account. Create with username + password, then login with the same credentials.</p>
           <div class="menu-shop-actions">
             <button id="closeAccountBtn" class="menu-play-btn" type="button">Menu Page</button>
           </div>
@@ -323,6 +362,6 @@
     </section>
 
     <script src="vendor/three.min.js"></script>
-    <script src="game.js?v=20260220ab"></script>
+    <script src="game.js?v=20260220ad"></script>
   </body>
 </html>
