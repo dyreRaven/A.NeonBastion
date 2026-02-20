@@ -156,7 +156,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-42";
+const BUILD_ID = "2026-02-20-43";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -1482,6 +1482,20 @@ const ENEMY_TYPES = {
     colorB: "#fff7b8",
     hoverHeight: 1.62,
   },
+  solarshard: {
+    name: "Solar Shard",
+    hp: 6200,
+    speed: 3.25,
+    reward: 220,
+    radius: 1.08,
+    coreDamage: 10,
+    hpGrowth: 0,
+    speedGrowth: 0,
+    rewardGrowth: 0,
+    colorA: "#ffe24a",
+    colorB: "#fff7b6",
+    hoverHeight: 1.22,
+  },
   rhombus: {
     name: "Rhombus",
     hp: 7424,
@@ -1514,6 +1528,8 @@ const ENEMY_TYPES = {
 
 const SPAWNER_TOWER_PREFIX = "spawner_";
 const BOSS_ENEMY_IDS = new Set(["icosahedron", "rhombus", "star"]);
+const SOLAR_SHARD_TYPE_ID = "solarshard";
+const SOLAR_SHARD_COUNT = 2;
 const ALLY_COLOR_A = "#2cff72";
 const ALLY_COLOR_B = "#2cff72";
 const ALLY_UNIT_CAP = 96;
@@ -5181,6 +5197,13 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       coreRadius: 0,
       coreY: 0.12,
     },
+    solarshard: {
+      shape: "triangle",
+      size: 1.06,
+      ringRadius: 0.86,
+      coreRadius: 0.18,
+      coreY: 0.12,
+    },
     rhombus: {
       shape: "rhombus",
       radius: 2.15,
@@ -6245,6 +6268,7 @@ function getEnemySpinSpeed(typeId) {
   if (typeId === "pyramidion") return 1.3;
   if (typeId === "diamondarchon") return 0.94;
   if (typeId === "star") return 0.48;
+  if (typeId === SOLAR_SHARD_TYPE_ID) return 1.86;
   if (typeId === "rhombus") return 1.05;
   if (typeId === "rhombusMinus") return 1.22;
   if (typeId === "monolith") return 1.18;
@@ -7828,6 +7852,127 @@ function onRhombusDefeated() {
   );
 }
 
+function onSolarTyrantDefeated() {
+  completeCurrentLevel(
+    3,
+    40,
+    "Solar Tyrant neutralized. +40 shards.",
+    "Solar Tyrant and both Solar Shards destroyed. Mission complete. +40 shards awarded."
+  );
+}
+
+function spawnSolarTyrantShards(defeatedEnemy) {
+  if (!defeatedEnemy || pathPoints.length < 2) return 0;
+
+  const maxPathIndex = Math.max(0, pathPoints.length - 2);
+  const basePathIndex = Number.isFinite(defeatedEnemy.pathIndex)
+    ? Math.max(0, Math.min(maxPathIndex, Math.floor(defeatedEnemy.pathIndex)))
+    : 0;
+
+  let headingX = Number.isFinite(defeatedEnemy.headingX) ? defeatedEnemy.headingX : 0;
+  let headingZ = Number.isFinite(defeatedEnemy.headingZ) ? defeatedEnemy.headingZ : 0;
+  let headingLen = Math.hypot(headingX, headingZ);
+  if (headingLen < 1e-4) {
+    const nextPoint = pathPoints[basePathIndex + 1] || pathPoints[basePathIndex];
+    headingX = (nextPoint?.x || 0) - defeatedEnemy.x;
+    headingZ = (nextPoint?.z || 0) - defeatedEnemy.z;
+    headingLen = Math.hypot(headingX, headingZ);
+  }
+  if (headingLen < 1e-4) {
+    headingX = 1;
+    headingZ = 0;
+    headingLen = 1;
+  }
+  headingX /= headingLen;
+  headingZ /= headingLen;
+
+  const lateralX = -headingZ;
+  const lateralZ = headingX;
+  const spawnPattern = [
+    { lateral: 2.05, back: 3.1 },
+    { lateral: -2.05, back: 5.1 },
+  ];
+  let spawned = 0;
+
+  for (let i = 0; i < SOLAR_SHARD_COUNT; i += 1) {
+    const spawnSpec = spawnPattern[i % spawnPattern.length];
+    const shardStats = createEnemyStats(SOLAR_SHARD_TYPE_ID, game.wave, game.currentLevel);
+    const shard = new Enemy(shardStats);
+    shard.pathIndex = basePathIndex;
+    shard.headingX = headingX;
+    shard.headingZ = headingZ;
+    shard.progressScore = Math.max(0, (defeatedEnemy.progressScore || 0) - spawnSpec.back);
+
+    shard.x = defeatedEnemy.x + lateralX * spawnSpec.lateral - headingX * spawnSpec.back;
+    shard.z = defeatedEnemy.z + lateralZ * spawnSpec.lateral - headingZ * spawnSpec.back;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      let overlapped = false;
+      for (const other of game.enemies) {
+        if (!other || !other.alive) continue;
+        const gap = shard.radius + other.radius + 0.25;
+        const dx = shard.x - other.x;
+        const dz = shard.z - other.z;
+        if (dx * dx + dz * dz >= gap * gap) continue;
+        overlapped = true;
+        shard.x += lateralX * (spawnSpec.lateral > 0 ? 0.62 : -0.62);
+        shard.z += lateralZ * (spawnSpec.lateral > 0 ? 0.62 : -0.62);
+        shard.x -= headingX * 0.5;
+        shard.z -= headingZ * 0.5;
+      }
+      if (!overlapped) break;
+    }
+
+    const bob = Math.sin(game.time * 4 + shard.animSeed) * shard.bobAmplitude;
+    shard.currentY = getLaneSurfaceY(shard.x, shard.z) + shard.baseYOffset + bob;
+    shard.mesh.position.set(shard.x, shard.currentY, shard.z);
+    shard.updateHealthBar();
+    game.enemies.push(shard);
+    spawned += 1;
+  }
+
+  return spawned;
+}
+
+function stabilizeSolarShardSpacing() {
+  const liveShards = [];
+  for (const enemy of game.enemies) {
+    if (!enemy || !enemy.alive || enemy.typeId !== SOLAR_SHARD_TYPE_ID) continue;
+    liveShards.push(enemy);
+  }
+  if (liveShards.length < 2) return;
+
+  for (let i = 0; i < liveShards.length - 1; i += 1) {
+    const a = liveShards[i];
+    for (let j = i + 1; j < liveShards.length; j += 1) {
+      const b = liveShards[j];
+      const minGap = a.radius + b.radius + 0.3;
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq >= minGap * minGap) continue;
+
+      const dist = Math.max(0.001, Math.sqrt(distSq));
+      const push = (minGap - dist) * 0.5;
+      const nx = dx / dist;
+      const nz = dz / dist;
+      a.x -= nx * push;
+      a.z -= nz * push;
+      b.x += nx * push;
+      b.z += nz * push;
+
+      const aBob = Math.sin(game.time * 4 + a.animSeed) * a.bobAmplitude;
+      const bBob = Math.sin(game.time * 4 + b.animSeed) * b.bobAmplitude;
+      a.currentY = getLaneSurfaceY(a.x, a.z) + a.baseYOffset + aBob;
+      b.currentY = getLaneSurfaceY(b.x, b.z) + b.baseYOffset + bBob;
+      a.mesh.position.set(a.x, a.currentY, a.z);
+      b.mesh.position.set(b.x, b.currentY, b.z);
+      a.updateHealthBar();
+      b.updateHealthBar();
+    }
+  }
+}
+
 function clearActiveCombatState() {
   clearPendingLevelClearPanel();
   closeDefeatPanel();
@@ -8187,6 +8332,8 @@ function handleEnemyDefeated(enemy) {
   if (!enemy || !enemy.alive) return;
   const wasIcosahedronBoss = enemy.typeId === "icosahedron" && game.currentLevel === 1;
   const wasRhombusBoss = enemy.typeId === "rhombus" && game.currentLevel === 2;
+  const wasSolarTyrantBoss = enemy.typeId === "star" && game.currentLevel >= 3 && game.wave >= 40;
+  const wasSolarShard = enemy.typeId === SOLAR_SHARD_TYPE_ID && game.currentLevel >= 3 && game.wave >= 40;
   enemy.alive = false;
   enemy.shatter();
   game.money += enemy.reward;
@@ -8196,6 +8343,17 @@ function handleEnemyDefeated(enemy) {
   if (wasRhombusBoss) {
     const anyRhombusAlive = game.enemies.some((entry) => entry.alive && entry.typeId === "rhombus");
     if (!anyRhombusAlive && game.wave >= 30) onRhombusDefeated();
+  }
+  if (wasSolarTyrantBoss) {
+    const spawned = spawnSolarTyrantShards(enemy);
+    if (spawned > 0) {
+      setStatus(`Solar Tyrant split into ${spawned} Solar Shards. Destroy both!`, true);
+    }
+  }
+  if (wasSolarShard) {
+    const anySolarShardsAlive = game.enemies.some((entry) => entry.alive && entry.typeId === SOLAR_SHARD_TYPE_ID);
+    const solarTyrantAlive = game.enemies.some((entry) => entry.alive && entry.typeId === "star");
+    if (!solarTyrantAlive && !anySolarShardsAlive) onSolarTyrantDefeated();
   }
 }
 
@@ -10258,6 +10416,7 @@ function update(dt) {
 
   for (const tower of game.towers) tower.update(dt);
   for (const enemy of game.enemies) enemy.update(dt);
+  stabilizeSolarShardSpacing();
   for (const ally of game.allies) ally.update(dt);
   updateAllyEnemyCollisions();
   for (const projectile of game.projectiles) projectile.update(dt);
