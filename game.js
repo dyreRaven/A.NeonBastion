@@ -159,8 +159,13 @@ const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const MULTIPLAYER_CHAT_BADGE_MAX = 99;
 const MULTIPLAYER_CHAT_STICKY_BOTTOM_THRESHOLD = 32;
+const MULTIPLAYER_CHAT_MIN_INTERVAL_MS = 700;
+const MULTIPLAYER_CHAT_BURST_WINDOW_MS = 6000;
+const MULTIPLAYER_CHAT_BURST_LIMIT = 5;
+const MULTIPLAYER_CHAT_DUPLICATE_WINDOW_MS = 4500;
+const MULTIPLAYER_CHAT_REMOTE_COOLDOWN_MS = 9000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-48";
+const BUILD_ID = "2026-02-20-49";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -174,6 +179,7 @@ const audioSystem = {
   musicGain: null,
   compressor: null,
   shotCooldownUntil: 0,
+  notificationCooldownUntil: 0,
   glassNoiseBuffer: null,
   bossPulseTimer: null,
   bossMusicStartTimeout: null,
@@ -473,6 +479,51 @@ const audioSystem = {
       click.start(now);
       click.stop(now + 0.02);
     }
+  },
+
+  playNotification() {
+    const ctx = this.ensure();
+    if (!ctx || ctx.state !== "running" || !this.sfxGain || !this.sfxEnabled) return;
+
+    const now = ctx.currentTime;
+    if (now < this.notificationCooldownUntil) return;
+    this.notificationCooldownUntil = now + 0.12;
+
+    const baseFreq = 920 + Math.random() * 70;
+    const ping = ctx.createOscillator();
+    ping.type = "triangle";
+    ping.frequency.setValueAtTime(baseFreq, now);
+    ping.frequency.exponentialRampToValueAtTime(baseFreq * 1.48, now + 0.056);
+
+    const pingHigh = ctx.createBiquadFilter();
+    pingHigh.type = "highpass";
+    pingHigh.frequency.setValueAtTime(420, now);
+
+    const pingGain = ctx.createGain();
+    pingGain.gain.setValueAtTime(0.0001, now);
+    pingGain.gain.exponentialRampToValueAtTime(0.08, now + 0.008);
+    pingGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+
+    ping.connect(pingHigh);
+    pingHigh.connect(pingGain);
+    pingGain.connect(this.sfxGain);
+    ping.start(now);
+    ping.stop(now + 0.12);
+
+    const chime = ctx.createOscillator();
+    chime.type = "sine";
+    chime.frequency.setValueAtTime(baseFreq * 1.56, now + 0.01);
+    chime.frequency.exponentialRampToValueAtTime(baseFreq * 2.08, now + 0.1);
+
+    const chimeGain = ctx.createGain();
+    chimeGain.gain.setValueAtTime(0.0001, now + 0.01);
+    chimeGain.gain.exponentialRampToValueAtTime(0.038, now + 0.028);
+    chimeGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+    chime.connect(chimeGain);
+    chimeGain.connect(this.sfxGain);
+    chime.start(now + 0.01);
+    chime.stop(now + 0.14);
   },
 
   playEnemyShatter(radius = 1, isBoss = false) {
@@ -3767,6 +3818,10 @@ const multiplayer = {
   chatRevision: 0,
   renderedChatRevision: -1,
   unreadChatCount: 0,
+  chatSendTimestamps: [],
+  chatLastSentAt: 0,
+  chatLastSentText: "",
+  peerChatRateState: new Map(),
 };
 
 function sanitizeRoomCode(rawCode) {
@@ -3870,15 +3925,87 @@ function formatMultiplayerChatTimestamp(rawTime) {
   return `${hours}:${minutes}`;
 }
 
-function canUseInMatchChat() {
+function canUseMultiplayerChat() {
   return (
-    game.started &&
-    !game.menuOpen &&
+    isMultiplayerActive() &&
     !game.exitConfirmOpen &&
     !game.levelClearOpen &&
-    !game.defeatOpen &&
-    isMultiplayerActive()
+    !game.defeatOpen
   );
+}
+
+function pruneMultiplayerChatTimestamps(list, now, windowMs = MULTIPLAYER_CHAT_BURST_WINDOW_MS) {
+  if (!Array.isArray(list) || list.length === 0) return;
+  while (list.length > 0 && now - list[0] > windowMs) list.shift();
+}
+
+function validateOutgoingMultiplayerChat(text) {
+  const now = Date.now();
+  const sinceLast = now - (Number.isFinite(multiplayer.chatLastSentAt) ? multiplayer.chatLastSentAt : 0);
+  if (sinceLast < MULTIPLAYER_CHAT_MIN_INTERVAL_MS) {
+    return { ok: false, message: "Chat cooldown active. Slow down." };
+  }
+
+  pruneMultiplayerChatTimestamps(multiplayer.chatSendTimestamps, now);
+  if (multiplayer.chatSendTimestamps.length >= MULTIPLAYER_CHAT_BURST_LIMIT) {
+    return { ok: false, message: "Too many messages. Wait a moment." };
+  }
+
+  if (
+    multiplayer.chatLastSentText &&
+    text === multiplayer.chatLastSentText &&
+    sinceLast < MULTIPLAYER_CHAT_DUPLICATE_WINDOW_MS
+  ) {
+    return { ok: false, message: "Please avoid repeating the same message." };
+  }
+
+  multiplayer.chatSendTimestamps.push(now);
+  multiplayer.chatLastSentAt = now;
+  multiplayer.chatLastSentText = text;
+  return { ok: true, message: "" };
+}
+
+function getMultiplayerPeerChatRateState(peerId) {
+  const safePeerId = typeof peerId === "string" ? peerId : "";
+  if (!safePeerId) return null;
+  let state = multiplayer.peerChatRateState.get(safePeerId);
+  if (state) return state;
+  state = {
+    timestamps: [],
+    cooldownUntil: 0,
+    lastText: "",
+    lastAt: 0,
+  };
+  multiplayer.peerChatRateState.set(safePeerId, state);
+  return state;
+}
+
+function shouldAcceptIncomingMultiplayerChat(peerId, text) {
+  const state = getMultiplayerPeerChatRateState(peerId);
+  if (!state) return true;
+
+  const now = Date.now();
+  if (state.cooldownUntil > now) return false;
+  pruneMultiplayerChatTimestamps(state.timestamps, now);
+
+  if (
+    state.lastText &&
+    text === state.lastText &&
+    now - state.lastAt < MULTIPLAYER_CHAT_DUPLICATE_WINDOW_MS
+  ) {
+    return false;
+  }
+
+  if (state.timestamps.length >= MULTIPLAYER_CHAT_BURST_LIMIT) {
+    state.cooldownUntil = now + MULTIPLAYER_CHAT_REMOTE_COOLDOWN_MS;
+    state.timestamps.length = 0;
+    return false;
+  }
+
+  state.timestamps.push(now);
+  state.lastText = text;
+  state.lastAt = now;
+  return true;
 }
 
 function updateMultiplayerChatToggleNotification() {
@@ -3976,6 +4103,7 @@ function pushMultiplayerChatEntry(entry) {
   if (!fromMe && !panelVisible) {
     multiplayer.unreadChatCount = Math.max(0, Math.floor(multiplayer.unreadChatCount || 0)) + 1;
     updateMultiplayerChatToggleNotification();
+    audioSystem.playNotification();
   }
   renderMultiplayerChat(true, fromMe);
 }
@@ -3989,8 +4117,21 @@ function clearMultiplayerChatHistory() {
   renderMultiplayerChat(true, true);
 }
 
+function removeMultiplayerChatEntriesForPeer(peerId) {
+  if (typeof peerId !== "string" || !peerId) return;
+  if (!Array.isArray(multiplayer.chatHistory) || multiplayer.chatHistory.length === 0) return;
+
+  const nextHistory = multiplayer.chatHistory.filter((entry) => entry?.fromPeer !== peerId);
+  if (nextHistory.length === multiplayer.chatHistory.length) return;
+
+  multiplayer.chatHistory = nextHistory;
+  multiplayer.chatPinnedToBottom = true;
+  multiplayer.chatRevision += 1;
+  renderMultiplayerChat(true, true);
+}
+
 function openChatPanel(focusInput = true) {
-  if (!chatPanelEl || !canUseInMatchChat()) return;
+  if (!chatPanelEl || !canUseMultiplayerChat()) return;
   multiplayer.chatOpen = true;
   chatPanelEl.hidden = false;
   resetMultiplayerUnreadChat();
@@ -4019,6 +4160,11 @@ function sendMultiplayerChatFromInput() {
   if (!chatInputEl || !isMultiplayerActive()) return;
   const text = sanitizeMultiplayerChatText(chatInputEl.value);
   if (!text) return;
+  const validation = validateOutgoingMultiplayerChat(text);
+  if (!validation.ok) {
+    setStatus(validation.message, true);
+    return;
+  }
   chatInputEl.value = "";
 
   const name = getLocalMultiplayerDisplayName();
@@ -4328,6 +4474,10 @@ function leaveMultiplayerSession(announce = true) {
   multiplayer.chatPinnedToBottom = true;
   multiplayer.chatRevision = 0;
   multiplayer.renderedChatRevision = -1;
+  multiplayer.chatSendTimestamps = [];
+  multiplayer.chatLastSentAt = 0;
+  multiplayer.chatLastSentText = "";
+  multiplayer.peerChatRateState.clear();
   clearMultiplayerChatHistory();
   refreshMultiplayerPanel();
 }
@@ -4342,6 +4492,7 @@ function onMultiplayerMessage(message) {
     const fromPeer = typeof message.from === "string" ? message.from : "";
     const text = sanitizeMultiplayerChatText(message.text || "");
     if (!text) return;
+    if (!shouldAcceptIncomingMultiplayerChat(fromPeer, text)) return;
     pushMultiplayerChatEntry({
       fromPeer,
       name: message.name || getMultiplayerDisplayNameForPeer(fromPeer, "Player"),
@@ -4375,6 +4526,8 @@ function onMultiplayerMessage(message) {
       const wasKnown = multiplayer.peers.has(message.from) || multiplayer.roster.has(message.from);
       multiplayer.peers.delete(message.from);
       removeMultiplayerRosterPlayer(message.from);
+      removeMultiplayerChatEntriesForPeer(message.from);
+      multiplayer.peerChatRateState.delete(message.from);
       multiplayer.connected = multiplayer.peers.size > 0;
       if (wasKnown) appendMultiplayerLog(`${playerName} left your room.`);
       refreshMultiplayerPanel();
@@ -4533,6 +4686,8 @@ function openMultiplayerConnection(roomCode, role, serverUrl) {
         multiplayer.peers.delete(peerId);
         if (isMultiplayerHost()) multiplayer.connected = multiplayer.peers.size > 0;
         removeMultiplayerRosterPlayer(peerId);
+        removeMultiplayerChatEntriesForPeer(peerId);
+        multiplayer.peerChatRateState.delete(peerId);
         if (typeof packet.hostPeerId === "string" && packet.hostPeerId) multiplayer.hostId = packet.hostPeerId;
         if (Array.isArray(packet.players)) setMultiplayerRosterFromPacket(packet.players, packet.hostPeerId || multiplayer.hostId);
         if (knownBefore) appendMultiplayerLog(`${playerName} left the room.`);
@@ -4780,6 +4935,19 @@ function createAccountId() {
   return `acct_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeAccountId(rawId, fallback = "") {
+  const raw = typeof rawId === "string" ? rawId.trim() : "";
+  if (!raw) return fallback;
+  const safe = raw
+    .replace(/[^A-Za-z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+  if (safe.length >= 4) return safe;
+  if (safe.length > 0) return `acct_${safe}`;
+  return fallback;
+}
+
 function normalizeTowerIds(rawIds, unlockedSet, validTowerIds, maxCount = Infinity, unlockedSpawnerSet = null) {
   const set = new Set();
   if (!Array.isArray(rawIds)) return set;
@@ -4883,8 +5051,7 @@ function createAccountRecord(name = "Commander", seed = null) {
 
   const shardValue = Number(seed?.shards);
   const levelValue = Number(seed?.maxLevelUnlocked);
-  const seededId = typeof seed?.id === "string" ? seed.id.trim() : "";
-  const safeId = /^[A-Za-z0-9_-]{4,80}$/.test(seededId) ? seededId : "";
+  const safeId = normalizeAccountId(seed?.id);
   const passwordHash = normalizeStoredPasswordHash(seed?.passwordHash);
   return {
     id: safeId || createAccountId(),
@@ -4909,6 +5076,7 @@ function defaultProgressData(seed = null) {
   const account = createAccountRecord("Commander", seed);
   return {
     currentAccountId: account.id,
+    lastAuthenticatedAccountId: account.id,
     accounts: [account],
   };
 }
@@ -4945,11 +5113,14 @@ function normalizeProgressData(rawData) {
 
   if (accounts.length === 0) return defaultProgressData();
 
-  let currentAccountId = typeof rawData.currentAccountId === "string" ? rawData.currentAccountId : "";
+  let currentAccountId = normalizeAccountId(rawData.currentAccountId);
   if (!accounts.some((account) => account.id === currentAccountId)) currentAccountId = accounts[0].id;
+  let lastAuthenticatedAccountId = normalizeAccountId(rawData.lastAuthenticatedAccountId);
+  if (!accounts.some((account) => account.id === lastAuthenticatedAccountId)) lastAuthenticatedAccountId = currentAccountId;
 
   return {
     currentAccountId,
+    lastAuthenticatedAccountId,
     accounts,
   };
 }
@@ -5052,6 +5223,9 @@ function savePlayerProgress() {
   }
 
   progressData.currentAccountId = current.id;
+  if (!progressData.lastAuthenticatedAccountId || !progressData.accounts.some((account) => account.id === progressData.lastAuthenticatedAccountId)) {
+    progressData.lastAuthenticatedAccountId = current.id;
+  }
   persistProgressData();
 }
 
@@ -5080,6 +5254,11 @@ function loadPlayerProgress() {
   const current = getCurrentAccountRecord();
   if (!current) {
     progressData = defaultProgressData();
+  } else if (
+    progressData.lastAuthenticatedAccountId &&
+    progressData.accounts.some((account) => account.id === progressData.lastAuthenticatedAccountId)
+  ) {
+    progressData.currentAccountId = progressData.lastAuthenticatedAccountId;
   }
 
   applyAccountToGame(getCurrentAccountRecord());
@@ -9222,8 +9401,12 @@ function deleteAccountById(accountId) {
     const fallback = createAccountRecord("Commander");
     progressData.accounts = [fallback];
     progressData.currentAccountId = fallback.id;
+    progressData.lastAuthenticatedAccountId = fallback.id;
   } else if (deletingActive) {
     progressData.currentAccountId = progressData.accounts[0].id;
+    progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
+  } else if (removed.id === progressData.lastAuthenticatedAccountId) {
+    progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
   }
 
   if (deletingActive) {
@@ -9248,6 +9431,7 @@ function switchToAccount(accountId, quiet = false) {
   if (!account) return;
 
   progressData.currentAccountId = account.id;
+  progressData.lastAuthenticatedAccountId = account.id;
   applyAccountToGame(account);
   savePlayerProgress();
   renderMapPreview();
@@ -9299,6 +9483,7 @@ function createAccountFromInput() {
   });
   progressData.accounts.push(account);
   progressData.currentAccountId = account.id;
+  progressData.lastAuthenticatedAccountId = account.id;
   applyAccountToGame(account);
   savePlayerProgress();
   renderAccountMenu();
@@ -9892,31 +10077,48 @@ function stepGameSpeed(delta) {
   applyGameSpeedStep(game.speedStepIndex + dir, true);
 }
 
+function isCompactRoundHudMode() {
+  if (!game.started || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return false;
+  const narrowViewport = window.innerWidth <= 980;
+  const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  return narrowViewport || (coarsePointer && window.innerWidth <= 1280);
+}
+
 function updateHud() {
   const selectedTower = updateShopButtons();
   const placement = getTowerPlacementStats(game.selectedTowerType);
   const selectedCapInfo = getTowerCapBreakdown(game.selectedTowerType);
-  moneyEl.textContent = `Credits: ${game.money}`;
-  if (shardsEl) shardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
+  const compactRoundHud = isCompactRoundHudMode();
+  moneyEl.textContent = compactRoundHud ? `C: ${game.money}` : `Credits: ${game.money}`;
+  if (shardsEl) shardsEl.innerHTML = compactRoundHud ? `S: ${game.shards}` : `${formatShardWordHtml("Shards")}: ${game.shards}`;
   if (menuShardsEl) menuShardsEl.innerHTML = `${formatShardWordHtml("Shards")}: ${game.shards}`;
   if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
-  if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
-  livesEl.textContent = `Core HP: ${game.lives}`;
-  waveEl.textContent = `Wave: ${game.wave}`;
-  buildBtn.textContent = `Build ${selectedTower.name} (${placement.placed}/${placement.cap}, +${selectedCapInfo.upgradeLevel}) - ${selectedTower.cost}`;
-  sellBtn.textContent = "Sell - 40%";
-  laneBtn.textContent = game.editingLane ? "Lane Edit: On" : "Lane Edit";
+  if (multiplayerPlayersHudEl) {
+    const rosterText = getMultiplayerHudRosterText();
+    multiplayerPlayersHudEl.textContent = compactRoundHud ? rosterText.replace(/^Players:\s*/i, "P: ") : rosterText;
+  }
+  livesEl.textContent = compactRoundHud ? `HP: ${game.lives}` : `Core HP: ${game.lives}`;
+  waveEl.textContent = compactRoundHud ? `W: ${game.wave}` : `Wave: ${game.wave}`;
+  buildBtn.textContent = compactRoundHud
+    ? `Build ${selectedTower.cost}`
+    : `Build ${selectedTower.name} (${placement.placed}/${placement.cap}, +${selectedCapInfo.upgradeLevel}) - ${selectedTower.cost}`;
+  sellBtn.textContent = compactRoundHud ? "Sell" : "Sell - 40%";
+  laneBtn.textContent = compactRoundHud ? (game.editingLane ? "Lane On" : "Lane") : game.editingLane ? "Lane Edit: On" : "Lane Edit";
   if (loadoutBtn) loadoutBtn.textContent = `Loadout ${game.activeLoadout.size}/${getCurrentLoadoutSlotLimit()}`;
   if (unlockBtn) unlockBtn.textContent = "Unlock Shop";
-  menuBtn.textContent = game.menuOpen ? "Menu: Open" : "Menu";
-  startWaveBtn.textContent = game.levelOneDefeated ? "Level One Complete" : "Start Wave";
-  if (pauseBtn) pauseBtn.textContent = game.paused ? "Resume" : "Pause";
+  menuBtn.textContent = compactRoundHud ? "Menu" : game.menuOpen ? "Menu: Open" : "Menu";
+  startWaveBtn.textContent = compactRoundHud ? (game.levelOneDefeated ? "Done" : "Wave") : game.levelOneDefeated ? "Level One Complete" : "Start Wave";
+  if (pauseBtn) pauseBtn.textContent = compactRoundHud ? (game.paused ? "Play" : "Pause") : game.paused ? "Resume" : "Pause";
   if (speedValueEl) speedValueEl.textContent = formatSpeedLabel(game.speedMultiplier);
   if (autoWaveBtn) {
-    autoWaveBtn.textContent = game.autoWaveEnabled
-      ? `Auto: On (${game.inWave ? "Wave" : `${Math.max(0, Math.ceil(game.autoWaveCountdown))}s`})`
-      : "Auto: Off";
+    autoWaveBtn.textContent = compactRoundHud
+      ? game.autoWaveEnabled
+        ? `Auto ${game.inWave ? "W" : `${Math.max(0, Math.ceil(game.autoWaveCountdown))}s`}`
+        : "Auto Off"
+      : game.autoWaveEnabled
+        ? `Auto: On (${game.inWave ? "Wave" : `${Math.max(0, Math.ceil(game.autoWaveCountdown))}s`})`
+        : "Auto: Off";
     autoWaveBtn.classList.toggle("active", game.autoWaveEnabled);
   }
   if (pauseBtn) pauseBtn.classList.toggle("active", game.paused);
@@ -9927,7 +10129,7 @@ function updateHud() {
 
   if (speedControlEl) speedControlEl.hidden = !game.started || game.menuOpen;
   if (autoWaveBtn) autoWaveBtn.hidden = !game.started || game.menuOpen;
-  const chatVisible = canUseInMatchChat();
+  const chatVisible = canUseMultiplayerChat();
   if (chatToggleBtn) chatToggleBtn.hidden = !chatVisible;
   updateMultiplayerChatToggleNotification();
   if (chatPanelEl) {
@@ -11053,6 +11255,12 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (canUseMultiplayerChat() && (event.key === "t" || event.key === "T" || event.key === "/" || event.key === "?")) {
+    event.preventDefault();
+    openChatPanel(true);
+    return;
+  }
+
   if (!game.started || game.menuOpen) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -11070,12 +11278,6 @@ window.addEventListener("keydown", (event) => {
       event.preventDefault();
       if (game.started) openMultiplayerMenu();
     }
-    return;
-  }
-
-  if (isMultiplayerActive() && (event.key === "t" || event.key === "T" || event.key === "/" || event.key === "?")) {
-    event.preventDefault();
-    openChatPanel(true);
     return;
   }
 
