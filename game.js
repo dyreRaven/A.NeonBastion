@@ -1,114 +1,132 @@
-const canvas = document.getElementById("game");
+const $id = (id) => document.getElementById(id);
 
-const moneyEl = document.getElementById("money");
-const shardsEl = document.getElementById("shards");
-const livesEl = document.getElementById("lives");
-const waveEl = document.getElementById("wave");
-const multiplayerPlayersHudEl = document.getElementById("multiplayerPlayersHud");
-const statusEl = document.getElementById("status");
-const buildBtn = document.getElementById("buildBtn");
-const sellBtn = document.getElementById("sellBtn");
-const laneBtn = document.getElementById("laneBtn");
-const loadoutBtn = document.getElementById("loadoutBtn");
-const unlockBtn = document.getElementById("unlockBtn");
-const menuBtn = document.getElementById("menuBtn");
-const startWaveBtn = document.getElementById("startWaveBtn");
-const pauseBtn = document.getElementById("pauseBtn");
-const autoWaveBtn = document.getElementById("autoWaveBtn");
-const shopEl = document.getElementById("shop");
-const menuScreenEl = document.getElementById("menuScreen");
-const menuCardEl = document.getElementById("menuCard");
-const buildStampEl = document.getElementById("buildStamp");
-const exitConfirmEl = document.getElementById("exitConfirm");
-const confirmExitBtn = document.getElementById("confirmExitBtn");
-const cancelExitBtn = document.getElementById("cancelExitBtn");
-const levelClearPanelEl = document.getElementById("levelClearPanel");
-const levelClearMenuBtn = document.getElementById("levelClearMenuBtn");
-const levelClearTitleEl = document.getElementById("levelClearTitle");
-const levelClearTextEl = document.getElementById("levelClearText");
-const defeatPanelEl = document.getElementById("defeatPanel");
-const defeatMenuBtn = document.getElementById("defeatMenuBtn");
-const playBtn = document.getElementById("playBtn");
-const mapPrevBtn = document.getElementById("mapPrevBtn");
-const mapNextBtn = document.getElementById("mapNextBtn");
-const mapPreviewEl = document.getElementById("mapPreview");
-const mapPreviewIndexEl = document.getElementById("mapPreviewIndex");
-const mapPreviewNameEl = document.getElementById("mapPreviewName");
-const mapPreviewDescEl = document.getElementById("mapPreviewDesc");
-const mapPreviewLockEl = document.getElementById("mapPreviewLock");
-const openAccountBtn = document.getElementById("openAccountBtn");
-const openUnlockShopBtn = document.getElementById("openUnlockShopBtn");
-const openCreatureFromUnlockBtn = document.getElementById("openCreatureFromUnlockBtn");
-const openLoadoutBtn = document.getElementById("openLoadoutBtn");
-const openMultiplayerBtn = document.getElementById("openMultiplayerBtn");
-const closeAccountBtn = document.getElementById("closeAccountBtn");
-const closeUnlockShopBtn = document.getElementById("closeUnlockShopBtn");
-const closeCreatureShopBtn = document.getElementById("closeCreatureShopBtn");
-const closeLoadoutBtn = document.getElementById("closeLoadoutBtn");
-const closeMultiplayerBtn = document.getElementById("closeMultiplayerBtn");
-const menuAccountEl = document.getElementById("menuAccountList");
-const menuAccountCurrentEl = document.getElementById("menuAccountCurrent");
-const accountCreateUsernameInputEl = document.getElementById("accountCreateUsernameInput");
-const accountCreatePasswordInputEl = document.getElementById("accountCreatePasswordInput");
-const accountCreatePasswordConfirmInputEl = document.getElementById("accountCreatePasswordConfirmInput");
-const accountLoginUsernameInputEl = document.getElementById("accountLoginUsernameInput");
-const accountLoginPasswordInputEl = document.getElementById("accountLoginPasswordInput");
-const createAccountBtn = document.getElementById("createAccountBtn");
-const loginAccountBtn = document.getElementById("loginAccountBtn");
-const menuShopEl = document.getElementById("menuShop");
-const menuShardsEl = document.getElementById("menuShards");
-const menuCreatureShopEl = document.getElementById("menuCreatureShop");
-const menuCreatureSummaryEl = document.getElementById("menuCreatureSummary");
-const menuLoadoutEl = document.getElementById("menuLoadout");
-const menuLoadoutCountEl = document.getElementById("menuLoadoutCount");
-const menuLoadoutSearchEl = document.getElementById("menuLoadoutSearch");
-const menuMultiplayerStateEl = document.getElementById("menuMultiplayerState");
-const menuMultiplayerHintEl = document.getElementById("menuMultiplayerHint");
-const multiplayerServerInputEl = document.getElementById("multiplayerServerInput");
-const multiplayerRoomInputEl = document.getElementById("multiplayerRoomInput");
-const hostMultiplayerBtn = document.getElementById("hostMultiplayerBtn");
-const joinMultiplayerBtn = document.getElementById("joinMultiplayerBtn");
-const leaveMultiplayerBtn = document.getElementById("leaveMultiplayerBtn");
-const menuMultiplayerLogEl = document.getElementById("menuMultiplayerLog");
-const menuMultiplayerPlayersEl = document.getElementById("menuMultiplayerPlayers");
-const menuMultiplayerPlayerCountEl = document.getElementById("menuMultiplayerPlayerCount");
-const bossBarWrapEl = document.getElementById("bossBarWrap");
-const bossNameEl = document.getElementById("bossName");
-const bossHpEl = document.getElementById("bossHp");
-const bossBarFillEl = document.getElementById("bossBarFill");
-const bossBarSplitEl = document.getElementById("bossBarSplit");
-const bossBarFillLeftEl = document.getElementById("bossBarFillLeft");
-const bossBarFillRightEl = document.getElementById("bossBarFillRight");
-const commandToggleBtn = document.getElementById("commandToggleBtn");
-const commandConsoleEl = document.getElementById("commandConsole");
-const commandCloseBtn = document.getElementById("commandCloseBtn");
-const commandInputEl = document.getElementById("commandInput");
-const commandRunBtn = document.getElementById("commandRunBtn");
-const chatToggleBtn = document.getElementById("chatToggleBtn");
-const chatPanelEl = document.getElementById("chatPanel");
-const chatCloseBtn = document.getElementById("chatCloseBtn");
-const chatMessagesEl = document.getElementById("chatMessages");
-const chatInputEl = document.getElementById("chatInput");
-const chatSendBtn = document.getElementById("chatSendBtn");
-const settingsToggleBtn = document.getElementById("settingsToggleBtn");
-const settingsPanelEl = document.getElementById("settingsPanel");
-const settingsPanelTitleEl = document.getElementById("settingsPanelTitle");
-const settingsPageHintEl = document.getElementById("settingsPageHint");
-const settingsPrevPageBtn = document.getElementById("settingsPrevPageBtn");
-const settingsNextPageBtn = document.getElementById("settingsNextPageBtn");
-const settingsPageTogglesEl = document.getElementById("settingsPageToggles");
-const settingsPageHotkeysEl = document.getElementById("settingsPageHotkeys");
-const settingsCloseBtn = document.getElementById("settingsCloseBtn");
-const settingMusicBtn = document.getElementById("settingMusicBtn");
-const settingSfxBtn = document.getElementById("settingSfxBtn");
-const settingShotBtn = document.getElementById("settingShotBtn");
-const settingShatterBtn = document.getElementById("settingShatterBtn");
-const settingExplosionBtn = document.getElementById("settingExplosionBtn");
-const settingEnemyRingsBtn = document.getElementById("settingEnemyRingsBtn");
-const speedControlEl = document.getElementById("speedControl");
-const speedDownBtn = document.getElementById("speedDownBtn");
-const speedValueEl = document.getElementById("speedValue");
-const speedUpBtn = document.getElementById("speedUpBtn");
+// Battlefield and HUD.
+const canvas = $id("game");
+const moneyEl = $id("money");
+const shardsEl = $id("shards");
+const livesEl = $id("lives");
+const waveEl = $id("wave");
+const multiplayerPlayersHudEl = $id("multiplayerPlayersHud");
+const statusEl = $id("status");
+const bossBarWrapEl = $id("bossBarWrap");
+const bossNameEl = $id("bossName");
+const bossHpEl = $id("bossHp");
+const bossBarFillEl = $id("bossBarFill");
+const bossBarSplitEl = $id("bossBarSplit");
+const bossBarFillLeftEl = $id("bossBarFillLeft");
+const bossBarFillRightEl = $id("bossBarFillRight");
+
+// In-match controls.
+const buildBtn = $id("buildBtn");
+const sellBtn = $id("sellBtn");
+const laneBtn = $id("laneBtn");
+const loadoutBtn = $id("loadoutBtn");
+const unlockBtn = $id("unlockBtn");
+const menuBtn = $id("menuBtn");
+const startWaveBtn = $id("startWaveBtn");
+const pauseBtn = $id("pauseBtn");
+const autoWaveBtn = $id("autoWaveBtn");
+const shopEl = $id("shop");
+const speedControlEl = $id("speedControl");
+const speedDownBtn = $id("speedDownBtn");
+const speedValueEl = $id("speedValue");
+const speedUpBtn = $id("speedUpBtn");
+
+// Menu shell and map flow.
+const menuScreenEl = $id("menuScreen");
+const menuCardEl = $id("menuCard");
+const buildStampEl = $id("buildStamp");
+const playBtn = $id("playBtn");
+const mapPrevBtn = $id("mapPrevBtn");
+const mapNextBtn = $id("mapNextBtn");
+const mapPreviewEl = $id("mapPreview");
+const mapPreviewIndexEl = $id("mapPreviewIndex");
+const mapPreviewNameEl = $id("mapPreviewName");
+const mapPreviewDescEl = $id("mapPreviewDesc");
+const mapPreviewLockEl = $id("mapPreviewLock");
+
+// Modal overlays.
+const exitConfirmEl = $id("exitConfirm");
+const confirmExitBtn = $id("confirmExitBtn");
+const cancelExitBtn = $id("cancelExitBtn");
+const levelClearPanelEl = $id("levelClearPanel");
+const levelClearMenuBtn = $id("levelClearMenuBtn");
+const levelClearTitleEl = $id("levelClearTitle");
+const levelClearTextEl = $id("levelClearText");
+const defeatPanelEl = $id("defeatPanel");
+const defeatMenuBtn = $id("defeatMenuBtn");
+
+// Menu navigation buttons.
+const openAccountBtn = $id("openAccountBtn");
+const openUnlockShopBtn = $id("openUnlockShopBtn");
+const openCreatureFromUnlockBtn = $id("openCreatureFromUnlockBtn");
+const openLoadoutBtn = $id("openLoadoutBtn");
+const openMultiplayerBtn = $id("openMultiplayerBtn");
+const closeAccountBtn = $id("closeAccountBtn");
+const closeUnlockShopBtn = $id("closeUnlockShopBtn");
+const closeCreatureShopBtn = $id("closeCreatureShopBtn");
+const closeLoadoutBtn = $id("closeLoadoutBtn");
+const closeMultiplayerBtn = $id("closeMultiplayerBtn");
+
+// Account menu.
+const menuAccountEl = $id("menuAccountList");
+const menuAccountCurrentEl = $id("menuAccountCurrent");
+const accountCreateUsernameInputEl = $id("accountCreateUsernameInput");
+const accountCreatePasswordInputEl = $id("accountCreatePasswordInput");
+const accountCreatePasswordConfirmInputEl = $id("accountCreatePasswordConfirmInput");
+const accountLoginUsernameInputEl = $id("accountLoginUsernameInput");
+const accountLoginPasswordInputEl = $id("accountLoginPasswordInput");
+const createAccountBtn = $id("createAccountBtn");
+const loginAccountBtn = $id("loginAccountBtn");
+
+// Unlock/loadout menu.
+const menuShopEl = $id("menuShop");
+const menuShardsEl = $id("menuShards");
+const menuCreatureShopEl = $id("menuCreatureShop");
+const menuCreatureSummaryEl = $id("menuCreatureSummary");
+const menuLoadoutEl = $id("menuLoadout");
+const menuLoadoutCountEl = $id("menuLoadoutCount");
+const menuLoadoutSearchEl = $id("menuLoadoutSearch");
+
+// Multiplayer menu and chat.
+const menuMultiplayerStateEl = $id("menuMultiplayerState");
+const menuMultiplayerHintEl = $id("menuMultiplayerHint");
+const multiplayerServerInputEl = $id("multiplayerServerInput");
+const multiplayerRoomInputEl = $id("multiplayerRoomInput");
+const hostMultiplayerBtn = $id("hostMultiplayerBtn");
+const joinMultiplayerBtn = $id("joinMultiplayerBtn");
+const leaveMultiplayerBtn = $id("leaveMultiplayerBtn");
+const menuMultiplayerLogEl = $id("menuMultiplayerLog");
+const menuMultiplayerPlayersEl = $id("menuMultiplayerPlayers");
+const menuMultiplayerPlayerCountEl = $id("menuMultiplayerPlayerCount");
+const chatToggleBtn = $id("chatToggleBtn");
+const chatPanelEl = $id("chatPanel");
+const chatCloseBtn = $id("chatCloseBtn");
+const chatMessagesEl = $id("chatMessages");
+const chatInputEl = $id("chatInput");
+const chatSendBtn = $id("chatSendBtn");
+
+// Command and settings panels.
+const commandToggleBtn = $id("commandToggleBtn");
+const commandConsoleEl = $id("commandConsole");
+const commandCloseBtn = $id("commandCloseBtn");
+const commandInputEl = $id("commandInput");
+const commandRunBtn = $id("commandRunBtn");
+const settingsToggleBtn = $id("settingsToggleBtn");
+const settingsPanelEl = $id("settingsPanel");
+const settingsPanelTitleEl = $id("settingsPanelTitle");
+const settingsPageHintEl = $id("settingsPageHint");
+const settingsPrevPageBtn = $id("settingsPrevPageBtn");
+const settingsNextPageBtn = $id("settingsNextPageBtn");
+const settingsPageTogglesEl = $id("settingsPageToggles");
+const settingsPageHotkeysEl = $id("settingsPageHotkeys");
+const settingsCloseBtn = $id("settingsCloseBtn");
+const settingMusicBtn = $id("settingMusicBtn");
+const settingSfxBtn = $id("settingSfxBtn");
+const settingShotBtn = $id("settingShotBtn");
+const settingShatterBtn = $id("settingShatterBtn");
+const settingExplosionBtn = $id("settingExplosionBtn");
+const settingEnemyRingsBtn = $id("settingEnemyRingsBtn");
 
 if (!window.THREE) {
   statusEl.textContent = "3D engine failed to load. Check vendor/three.min.js.";
@@ -134,7 +152,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-34";
+const BUILD_ID = "2026-02-20-35";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -965,6 +983,8 @@ const SPAWNER_TOWER_PLACE_CAPS = {
   colossus: 1,
   leviathan: 1,
   monolith: 1,
+  pyramidion: 1,
+  diamondarchon: 1,
   icosahedron: 1,
   star: 1,
   rhombus: 1,
@@ -1354,6 +1374,34 @@ const ENEMY_TYPES = {
     colorB: "#f2ddff",
     hoverHeight: 1.24,
   },
+  pyramidion: {
+    name: "Pyramidion",
+    hp: 1420,
+    speed: 4.95,
+    reward: 110,
+    radius: 1.52,
+    coreDamage: 10,
+    hpGrowth: 0.36,
+    speedGrowth: 0.009,
+    rewardGrowth: 4.4,
+    colorA: "#ff7d55",
+    colorB: "#ffe3ab",
+    hoverHeight: 1.36,
+  },
+  diamondarchon: {
+    name: "Diamond Archon",
+    hp: 2280,
+    speed: 2.42,
+    reward: 146,
+    radius: 1.94,
+    coreDamage: 14,
+    hpGrowth: 0.5,
+    speedGrowth: 0.006,
+    rewardGrowth: 5.2,
+    colorA: "#63e5ff",
+    colorB: "#e9fcff",
+    hoverHeight: 1.48,
+  },
   icosahedron: {
     name: "Icosahedron",
     hp: 1120,
@@ -1458,6 +1506,8 @@ const CREATURE_SPAWNER_UNLOCKS = {
   colossus: { killRequirement: 90, towerCost: 720, spawnInterval: 5.8 },
   leviathan: { killRequirement: 70, towerCost: 860, spawnInterval: 6.6 },
   monolith: { killRequirement: 80, towerCost: 1220, spawnInterval: 7.8 },
+  pyramidion: { killRequirement: 34, towerCost: 1450, spawnInterval: 7.2 },
+  diamondarchon: { killRequirement: 14, towerCost: 1820, spawnInterval: 8.8 },
   trapiziod: { killRequirement: 42, towerCost: 1360, spawnInterval: 6.9 },
   cross: { killRequirement: 44, towerCost: 1320, spawnInterval: 6.6 },
   icosahedron: { killRequirement: 6, towerCost: 1620, spawnInterval: 8.4 },
@@ -1548,32 +1598,49 @@ function getSpawnerCooldownUpgradeMaxLevel(towerTypeId) {
   return isSpawnerTowerId(towerTypeId) ? SPAWNER_COOLDOWN_UPGRADE_MAX_LEVEL : 0;
 }
 
+// Upgrade level helpers.
+function clampUpgradeLevel(rawLevel, maxLevel) {
+  if (!Number.isFinite(maxLevel) || maxLevel <= 0) return 0;
+  const numericLevel = Number(rawLevel);
+  if (!Number.isFinite(numericLevel)) return 0;
+  return Math.max(0, Math.min(maxLevel, Math.floor(numericLevel)));
+}
+
+function readUpgradeLevel(rawUpgradeMap, towerTypeId, maxLevel) {
+  return clampUpgradeLevel(rawUpgradeMap?.[towerTypeId], maxLevel);
+}
+
+function normalizeUpgradeMap(rawUpgrades, knownTowerIds, getMaxLevelForTower) {
+  const normalized = {};
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+
+  for (const towerTypeId of knownTowerIds) {
+    const maxLevel = getMaxLevelForTower(towerTypeId);
+    const level = clampUpgradeLevel(rawUpgrades[towerTypeId], maxLevel);
+    if (level > 0) normalized[towerTypeId] = level;
+  }
+
+  return normalized;
+}
+
 function getTowerDamageUpgradeLevel(towerTypeId) {
   const maxLevel = getTowerDamageUpgradeMaxLevel(towerTypeId);
-  const rawLevel = Number(game.towerDamageUpgrades?.[towerTypeId] || 0);
-  if (!Number.isFinite(rawLevel)) return 0;
-  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+  return readUpgradeLevel(game.towerDamageUpgrades, towerTypeId, maxLevel);
 }
 
 function getTowerAttackSpeedUpgradeLevel(towerTypeId) {
   const maxLevel = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
-  const rawLevel = Number(game.towerAttackSpeedUpgrades?.[towerTypeId] || 0);
-  if (!Number.isFinite(rawLevel)) return 0;
-  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+  return readUpgradeLevel(game.towerAttackSpeedUpgrades, towerTypeId, maxLevel);
 }
 
 function getTowerRangeUpgradeLevel(towerTypeId) {
   const maxLevel = getTowerRangeUpgradeMaxLevel(towerTypeId);
-  const rawLevel = Number(game.towerRangeUpgrades?.[towerTypeId] || 0);
-  if (!Number.isFinite(rawLevel)) return 0;
-  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+  return readUpgradeLevel(game.towerRangeUpgrades, towerTypeId, maxLevel);
 }
 
 function getSpawnerCooldownUpgradeLevel(towerTypeId) {
   const maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
-  const rawLevel = Number(game.spawnerCooldownUpgrades?.[towerTypeId] || 0);
-  if (!Number.isFinite(rawLevel)) return 0;
-  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+  return readUpgradeLevel(game.spawnerCooldownUpgrades, towerTypeId, maxLevel);
 }
 
 function getTowerDamageMultiplier(towerTypeId) {
@@ -1674,9 +1741,7 @@ function getTowerCapUpgradeMaxLevel(towerTypeId) {
 
 function getTowerCapUpgradeLevel(towerTypeId) {
   const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
-  const rawLevel = Number(game.towerCapUpgrades?.[towerTypeId] || 0);
-  if (!Number.isFinite(rawLevel)) return 0;
-  return Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
+  return readUpgradeLevel(game.towerCapUpgrades, towerTypeId, maxLevel);
 }
 
 function getTowerPlaceCap(towerTypeId) {
@@ -1696,80 +1761,31 @@ function getTowerCapUpgradeCost(towerTypeId, nextLevel) {
 }
 
 function normalizeTowerCapUpgrades(rawUpgrades) {
-  const normalized = {};
   const knownTowerIds = getAllTowerTypeIds();
-  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
-  for (const towerTypeId of knownTowerIds) {
-    const maxLevel = getTowerCapUpgradeMaxLevel(towerTypeId);
-    if (maxLevel <= 0) continue;
-    const rawLevel = Number(rawUpgrades[towerTypeId]);
-    if (!Number.isFinite(rawLevel)) continue;
-    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
-    if (level > 0) normalized[towerTypeId] = level;
-  }
-  return normalized;
+  return normalizeUpgradeMap(rawUpgrades, knownTowerIds, getTowerCapUpgradeMaxLevel);
 }
 
 function normalizeTowerDamageUpgrades(rawUpgrades) {
-  const normalized = {};
   const knownTowerIds = Object.keys(TOWER_TYPES);
-  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
-  for (const towerTypeId of knownTowerIds) {
-    const maxLevel = getTowerDamageUpgradeMaxLevel(towerTypeId);
-    if (maxLevel <= 0) continue;
-    const rawLevel = Number(rawUpgrades[towerTypeId]);
-    if (!Number.isFinite(rawLevel)) continue;
-    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
-    if (level > 0) normalized[towerTypeId] = level;
-  }
-  return normalized;
+  return normalizeUpgradeMap(rawUpgrades, knownTowerIds, getTowerDamageUpgradeMaxLevel);
 }
 
 function normalizeTowerAttackSpeedUpgrades(rawUpgrades) {
-  const normalized = {};
   const knownTowerIds = Object.keys(TOWER_TYPES);
-  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
-  for (const towerTypeId of knownTowerIds) {
-    const maxLevel = getTowerAttackSpeedUpgradeMaxLevel(towerTypeId);
-    if (maxLevel <= 0) continue;
-    const rawLevel = Number(rawUpgrades[towerTypeId]);
-    if (!Number.isFinite(rawLevel)) continue;
-    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
-    if (level > 0) normalized[towerTypeId] = level;
-  }
-  return normalized;
+  return normalizeUpgradeMap(rawUpgrades, knownTowerIds, getTowerAttackSpeedUpgradeMaxLevel);
 }
 
 function normalizeTowerRangeUpgrades(rawUpgrades) {
-  const normalized = {};
   const knownTowerIds = Object.keys(TOWER_TYPES);
-  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
-  for (const towerTypeId of knownTowerIds) {
-    const maxLevel = getTowerRangeUpgradeMaxLevel(towerTypeId);
-    if (maxLevel <= 0) continue;
-    const rawLevel = Number(rawUpgrades[towerTypeId]);
-    if (!Number.isFinite(rawLevel)) continue;
-    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
-    if (level > 0) normalized[towerTypeId] = level;
-  }
-  return normalized;
+  return normalizeUpgradeMap(rawUpgrades, knownTowerIds, getTowerRangeUpgradeMaxLevel);
 }
 
 function normalizeSpawnerCooldownUpgrades(rawUpgrades) {
-  const normalized = {};
-  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
-  for (const enemyTypeId of CREATURE_SHOP_ENEMY_IDS) {
-    const towerTypeId = spawnerTowerIdForEnemy(enemyTypeId);
-    const maxLevel = getSpawnerCooldownUpgradeMaxLevel(towerTypeId);
-    if (maxLevel <= 0) continue;
-    const rawLevel = Number(rawUpgrades[towerTypeId]);
-    if (!Number.isFinite(rawLevel)) continue;
-    const level = Math.max(0, Math.min(maxLevel, Math.floor(rawLevel)));
-    if (level > 0) normalized[towerTypeId] = level;
-  }
-  return normalized;
+  const spawnerTowerIds = CREATURE_SHOP_ENEMY_IDS.map(spawnerTowerIdForEnemy);
+  return normalizeUpgradeMap(rawUpgrades, spawnerTowerIds, getSpawnerCooldownUpgradeMaxLevel);
 }
 
+// Tower placement cap helpers.
 function countPlacedTowersByType(towerTypeId) {
   let count = 0;
   for (const tower of game.towers) {
@@ -1902,6 +1918,8 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
     { id: "monolith", weight: moonLevel && wave >= 21 ? Math.min((effectiveWave - 22) * 2.4, 11) : 0 },
     { id: "trapiziod", weight: emberLevel && effectiveWave >= 8 ? Math.min((effectiveWave - 7) * 3.3, 18) : 0 },
     { id: "cross", weight: emberLevel && effectiveWave >= 10 ? Math.min((effectiveWave - 9) * 3.1, 17) : 0 },
+    { id: "pyramidion", weight: emberLevel && effectiveWave >= 14 ? Math.min((effectiveWave - 13) * 2.8, 16) : 0 },
+    { id: "diamondarchon", weight: emberLevel && effectiveWave >= 18 ? Math.min((effectiveWave - 17) * 2.4, 12) : 0 },
   ].filter((entry) => entry.weight > 0);
 }
 
@@ -1922,10 +1940,17 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
     let forcedType = null;
     const slot = i + 1;
 
-    if (level >= 3 && effectiveWave >= 10 && slot % 10 === 0) forcedType = Math.random() < 0.58 ? "trapiziod" : "cross";
+    if (level >= 3 && effectiveWave >= 18 && slot % 16 === 0) forcedType = Math.random() < 0.65 ? "diamondarchon" : "monolith";
+    else if (level >= 3 && effectiveWave >= 12 && slot % 10 === 0) {
+      const emberRoll = Math.random();
+      if (emberRoll < 0.45) forcedType = "trapiziod";
+      else if (emberRoll < 0.82) forcedType = "cross";
+      else forcedType = "pyramidion";
+    }
     else if (level >= 2 && wave >= 21 && slot % 19 === 0) forcedType = Math.random() < 0.7 ? "monolith" : "leviathan";
     else if (effectiveWave >= 12 && slot % 17 === 0) {
-      if (level >= 2 && wave >= 21 && Math.random() < 0.35) forcedType = "monolith";
+      if (level >= 3 && effectiveWave >= 16 && Math.random() < 0.28) forcedType = "pyramidion";
+      else if (level >= 2 && wave >= 21 && Math.random() < 0.35) forcedType = "monolith";
       else forcedType = Math.random() < 0.55 ? "leviathan" : "colossus";
     }
     else if (effectiveWave >= 9 && slot % 13 === 0) forcedType = Math.random() < 0.5 ? "colossus" : "warden";
@@ -1945,8 +1970,14 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
     queue[0] = "crawler";
   }
 
-  // Ensure Monolith is always seen immediately once Moon reaches its unlock wave.
-  if (level >= 2 && wave >= 21 && queue.length > 0) {
+  // Ensure late-game elites are seen immediately once their wave tier unlocks.
+  if (level >= 3 && wave >= 18 && queue.length > 0) {
+    queue[0] = "pyramidion";
+    if (queue.length > 5) {
+      const secondIndex = Math.min(queue.length - 1, Math.max(2, Math.floor(queue.length * 0.42)));
+      queue[secondIndex] = wave >= 24 ? "diamondarchon" : "monolith";
+    }
+  } else if (level >= 2 && wave >= 21 && queue.length > 0) {
     queue[0] = "monolith";
     if (queue.length > 5) {
       const secondIndex = Math.min(queue.length - 1, Math.max(2, Math.floor(queue.length * 0.45)));
@@ -1984,7 +2015,8 @@ function createEnemyStats(typeId, wave, level = game.currentLevel) {
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 3) {
     if (wave === 40) return "Ember threat: Solar Tyrant apex boss detected. Massive HP, extremely slow advance.";
-    if (wave >= 21) return "Ember threat: Monolith command cores entering the rift lane.";
+    if (wave >= 24) return "Ember threat: Diamond Archon elites and Monolith command cores breaching the rift.";
+    if (wave >= 18) return "Ember threat: Pyramidion spearheads carving through frontline defenses.";
     if (wave >= 10) return "Ember threat: Trapiziod and Cross assault frames cutting through the rift.";
     if (wave >= 9) return "Ember threat: Colossus and Warden heat-shield column advancing.";
     if (wave >= 7) return "Ember threat: Prism assault casters with Raider and Specter support.";
@@ -4336,6 +4368,8 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     colossus: 1.22,
     leviathan: 1.3,
     monolith: 1.48,
+    pyramidion: 1.56,
+    diamondarchon: 1.7,
     icosahedron: 1.5,
     trapiziod: 1.46,
     cross: 1.52,
@@ -4477,6 +4511,8 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       coreY: 0.1,
     },
     monolith: { shape: "cube", sizeX: 2.35, sizeY: 2.35, sizeZ: 2.35, ringRadius: 0, coreRadius: 0.3, coreY: 0.3 },
+    pyramidion: { shape: "triangle", size: 1.44, ringRadius: 0, coreRadius: 0.23, coreY: 0.16 },
+    diamondarchon: { shape: "rhombus", radius: 2.32, ringRadius: 0, coreRadius: 0.28, coreY: 0.18 },
     icosahedron: {
       shape: "icosa",
       radius: 1.95,
@@ -5359,7 +5395,13 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   let symbolGeometry = null;
   let symbolObject = null;
   let symbolY = 0.67;
-  if (enemyTypeId === "blink" || enemyTypeId === "skitter" || enemyTypeId === "minion" || enemyTypeId === "raider") {
+  if (
+    enemyTypeId === "blink" ||
+    enemyTypeId === "skitter" ||
+    enemyTypeId === "minion" ||
+    enemyTypeId === "raider" ||
+    enemyTypeId === "pyramidion"
+  ) {
     symbolGeometry = new THREE.TetrahedronGeometry(0.54);
     symbolY = 0.73;
   } else if (enemyTypeId === "bulwark" || enemyTypeId === "warden" || enemyTypeId === "monolith") {
@@ -5408,7 +5450,7 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     miniStar.group.position.y = -miniStar.minY * miniScale + 0.02;
     symbolObject = miniStar.group;
     symbolY = 0.42;
-  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
+  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus" || enemyTypeId === "diamondarchon") {
     symbolGeometry = new THREE.OctahedronGeometry(0.58, 0);
   } else {
     symbolGeometry = new THREE.SphereGeometry(0.5, 20, 20);
@@ -5419,14 +5461,20 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
   group.add(symbolPivot);
 
   const symbol = symbolObject || cast(new THREE.Mesh(symbolGeometry, symbolMat));
-  if (enemyTypeId === "blink" || enemyTypeId === "skitter" || enemyTypeId === "minion" || enemyTypeId === "raider") {
+  if (
+    enemyTypeId === "blink" ||
+    enemyTypeId === "skitter" ||
+    enemyTypeId === "minion" ||
+    enemyTypeId === "raider" ||
+    enemyTypeId === "pyramidion"
+  ) {
     symbol.rotation.y = Math.PI / 3;
   } else if (enemyTypeId === "trapiziod") {
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "cross") {
     symbol.rotation.x = Math.PI / 2;
     symbol.rotation.z = Math.PI / 10;
-  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
+  } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus" || enemyTypeId === "diamondarchon") {
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "icosahedron") {
     symbol.rotation.y = Math.PI / 10;
@@ -5458,6 +5506,8 @@ function getEnemySpinSpeed(typeId) {
   if (typeId === "icosahedron") return 1.25;
   if (typeId === "trapiziod") return 1.34;
   if (typeId === "cross") return 1.42;
+  if (typeId === "pyramidion") return 1.3;
+  if (typeId === "diamondarchon") return 0.94;
   if (typeId === "star") return 0.48;
   if (typeId === "rhombus") return 1.05;
   if (typeId === "rhombusMinus") return 1.22;
