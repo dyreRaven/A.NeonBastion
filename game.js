@@ -170,7 +170,7 @@ const MOBILE_PERF_LOW_FPS_THRESHOLD = 44;
 const MOBILE_PERF_SAMPLE_WINDOW_SEC = 3;
 const MOBILE_PERF_LOW_WINDOW_STREAK_REQUIRED = 2;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-52";
+const BUILD_ID = "2026-02-20-53";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;

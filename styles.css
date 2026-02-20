@@ -2751,6 +2751,27 @@ canvas {
       rgba(5, 14, 25, 0.56);
   }
 
+  body.mobile-round-layout:not(.menu-active) .shell {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+  }
+
+  body.mobile-round-layout:not(.menu-active) .arena-wrap {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100dvh;
+  }
+
+  body.mobile-round-layout:not(.menu-active) canvas {
+    width: 100vw;
+    height: 100dvh;
+  }
+
   body.mobile-round-layout:not(.menu-active) .hud-top {
     gap: 0.04rem;
   }
