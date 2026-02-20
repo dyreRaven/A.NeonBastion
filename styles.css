@@ -1827,6 +1827,33 @@ button.active {
   letter-spacing: 0.05em;
   border-color: rgba(132, 232, 187, 0.5);
   background: linear-gradient(180deg, rgba(88, 190, 145, 0.34), rgba(20, 66, 50, 0.52));
+  overflow: visible;
+}
+
+.chat-toggle-btn.has-unread {
+  border-color: rgba(255, 223, 148, 0.78);
+  box-shadow: 0 0 0 1px rgba(255, 198, 98, 0.24), 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.chat-toggle-btn.has-unread::after {
+  content: attr(data-unread);
+  position: absolute;
+  top: -0.36rem;
+  right: -0.3rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.18rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 232, 186, 0.86);
+  background: linear-gradient(165deg, rgba(255, 188, 88, 0.96), rgba(204, 82, 34, 0.92));
+  color: #fff9eb;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1rem;
+  text-align: center;
+  letter-spacing: 0.01em;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.36);
+  pointer-events: none;
 }
 
 .auto-wave-toggle-btn {

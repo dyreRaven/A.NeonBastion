@@ -151,12 +151,16 @@ const SHATTER_GROUND_DRAG = 8.5;
 const HEALTH_BAR_SHOW_TIME = 1.5;
 const GAME_SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
+const MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL = 0.16;
+const MULTIPLAYER_STATE_FLOAT_PRECISION = 1000;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
+const MULTIPLAYER_CHAT_BADGE_MAX = 99;
+const MULTIPLAYER_CHAT_STICKY_BOTTOM_THRESHOLD = 32;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-43";
+const BUILD_ID = "2026-02-20-48";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3752,11 +3756,17 @@ const multiplayer = {
   connecting: false,
   intentionalClose: false,
   snapshotTimer: 0,
+  clientHudTimer: 0,
+  hudDirty: true,
   lastLaneSignature: "",
   lastStatusLine: "",
   lastShopSignature: "",
   chatOpen: false,
   chatHistory: [],
+  chatPinnedToBottom: true,
+  chatRevision: 0,
+  renderedChatRevision: -1,
+  unreadChatCount: 0,
 };
 
 function sanitizeRoomCode(rawCode) {
@@ -3816,6 +3826,19 @@ function isMultiplayerActive() {
   return multiplayer.role !== "solo" && !!multiplayer.roomCode;
 }
 
+function markMultiplayerHudDirty() {
+  multiplayer.hudDirty = true;
+}
+
+function refreshClientHudIfNeeded(dt = 0, force = false) {
+  if (!isMultiplayerClient() || !isMultiplayerActive()) return;
+  multiplayer.clientHudTimer -= Number.isFinite(dt) ? dt : 0;
+  if (!force && !multiplayer.hudDirty && multiplayer.clientHudTimer > 0) return;
+  updateHud();
+  multiplayer.clientHudTimer = MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL;
+  multiplayer.hudDirty = false;
+}
+
 function getMultiplayerLabel() {
   if (!multiplayer.supported) return "Unavailable";
   if (multiplayer.connecting) return "Connecting";
@@ -3858,10 +3881,45 @@ function canUseInMatchChat() {
   );
 }
 
-function renderMultiplayerChat() {
+function updateMultiplayerChatToggleNotification() {
+  if (!chatToggleBtn) return;
+  const unread = Math.max(0, Math.floor(multiplayer.unreadChatCount || 0));
+  if (unread > 0) {
+    const badgeText = unread > MULTIPLAYER_CHAT_BADGE_MAX ? `${MULTIPLAYER_CHAT_BADGE_MAX}+` : String(unread);
+    chatToggleBtn.classList.add("has-unread");
+    chatToggleBtn.dataset.unread = badgeText;
+    const unit = unread === 1 ? "message" : "messages";
+    chatToggleBtn.setAttribute("aria-label", `Open multiplayer chat, ${badgeText} unread ${unit}`);
+  } else {
+    chatToggleBtn.classList.remove("has-unread");
+    delete chatToggleBtn.dataset.unread;
+    chatToggleBtn.setAttribute("aria-label", "Open multiplayer chat");
+  }
+}
+
+function resetMultiplayerUnreadChat() {
+  multiplayer.unreadChatCount = 0;
+  updateMultiplayerChatToggleNotification();
+}
+
+function isMultiplayerChatNearBottom() {
+  if (!chatMessagesEl) return true;
+  const distanceFromBottom = chatMessagesEl.scrollHeight - chatMessagesEl.clientHeight - chatMessagesEl.scrollTop;
+  return distanceFromBottom <= MULTIPLAYER_CHAT_STICKY_BOTTOM_THRESHOLD;
+}
+
+function renderMultiplayerChat(force = false, forcePinToBottom = false) {
   if (!chatMessagesEl) return;
+  if (!force && multiplayer.renderedChatRevision === multiplayer.chatRevision) return;
+
+  const previousScrollTop = chatMessagesEl.scrollTop;
+  const shouldPinToBottom = forcePinToBottom || multiplayer.chatPinnedToBottom;
+
   if (!Array.isArray(multiplayer.chatHistory) || multiplayer.chatHistory.length === 0) {
     chatMessagesEl.innerHTML = `<div class="chat-empty">No messages yet.</div>`;
+    chatMessagesEl.scrollTop = 0;
+    multiplayer.chatPinnedToBottom = true;
+    multiplayer.renderedChatRevision = multiplayer.chatRevision;
     return;
   }
 
@@ -3881,7 +3939,17 @@ function renderMultiplayerChat() {
   });
 
   chatMessagesEl.innerHTML = rows.join("");
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  multiplayer.renderedChatRevision = multiplayer.chatRevision;
+
+  if (shouldPinToBottom) {
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    multiplayer.chatPinnedToBottom = true;
+    return;
+  }
+
+  const maxScrollTop = Math.max(0, chatMessagesEl.scrollHeight - chatMessagesEl.clientHeight);
+  chatMessagesEl.scrollTop = Math.max(0, Math.min(previousScrollTop, maxScrollTop));
+  multiplayer.chatPinnedToBottom = isMultiplayerChatNearBottom();
 }
 
 function pushMultiplayerChatEntry(entry) {
@@ -3902,20 +3970,32 @@ function pushMultiplayerChatEntry(entry) {
     multiplayer.chatHistory.splice(0, multiplayer.chatHistory.length - MULTIPLAYER_CHAT_HISTORY_LIMIT);
   }
 
-  renderMultiplayerChat();
+  multiplayer.chatRevision += 1;
+  const fromMe = fromPeer && fromPeer === multiplayer.peerId;
+  const panelVisible = !!chatPanelEl && !chatPanelEl.hidden && multiplayer.chatOpen;
+  if (!fromMe && !panelVisible) {
+    multiplayer.unreadChatCount = Math.max(0, Math.floor(multiplayer.unreadChatCount || 0)) + 1;
+    updateMultiplayerChatToggleNotification();
+  }
+  renderMultiplayerChat(true, fromMe);
 }
 
 function clearMultiplayerChatHistory() {
   multiplayer.chatHistory = [];
+  multiplayer.chatPinnedToBottom = true;
+  multiplayer.chatRevision += 1;
+  resetMultiplayerUnreadChat();
   if (chatInputEl) chatInputEl.value = "";
-  renderMultiplayerChat();
+  renderMultiplayerChat(true, true);
 }
 
 function openChatPanel(focusInput = true) {
   if (!chatPanelEl || !canUseInMatchChat()) return;
   multiplayer.chatOpen = true;
   chatPanelEl.hidden = false;
-  renderMultiplayerChat();
+  resetMultiplayerUnreadChat();
+  multiplayer.chatPinnedToBottom = true;
+  renderMultiplayerChat(true, true);
   if (focusInput && chatInputEl) {
     chatInputEl.focus();
     chatInputEl.select();
@@ -3925,6 +4005,7 @@ function openChatPanel(focusInput = true) {
 function closeChatPanel() {
   if (!chatPanelEl) return;
   multiplayer.chatOpen = false;
+  multiplayer.chatPinnedToBottom = true;
   chatPanelEl.hidden = true;
 }
 
@@ -4239,9 +4320,14 @@ function leaveMultiplayerSession(announce = true) {
   multiplayer.peers.clear();
   multiplayer.roster.clear();
   multiplayer.snapshotTimer = 0;
+  multiplayer.clientHudTimer = 0;
+  multiplayer.hudDirty = true;
   multiplayer.lastLaneSignature = "";
   multiplayer.lastShopSignature = "";
   multiplayer.chatOpen = false;
+  multiplayer.chatPinnedToBottom = true;
+  multiplayer.chatRevision = 0;
+  multiplayer.renderedChatRevision = -1;
   clearMultiplayerChatHistory();
   refreshMultiplayerPanel();
 }
@@ -4540,6 +4626,8 @@ async function hostMultiplayerSession() {
   }
   multiplayer.connected = multiplayer.peers.size > 0;
   multiplayer.snapshotTimer = 0;
+  multiplayer.clientHudTimer = 0;
+  multiplayer.hudDirty = true;
   multiplayer.lastLaneSignature = serializeLaneSignature();
   if (multiplayerRoomInputEl) multiplayerRoomInputEl.value = roomCode;
   appendMultiplayerLog(`Room created: ${roomCode}`);
@@ -4595,6 +4683,8 @@ async function joinMultiplayerSession() {
     multiplayer.connected = true;
   }
   multiplayer.snapshotTimer = 0;
+  multiplayer.clientHudTimer = 0;
+  multiplayer.hudDirty = true;
   multiplayer.lastLaneSignature = "";
   clearActiveCombatState();
   resetTowersForNewLevel();
@@ -7080,6 +7170,7 @@ class NetworkProjectile {
     this.color = state?.color || "#9fd8ff";
     this.radius = Math.max(0.04, Number.isFinite(state?.radius) ? state.radius : 0.14);
     this.speed = Number.isFinite(state?.speed) ? state.speed : 12;
+    this.packetAge = 0;
     this.renderPosition = new THREE.Vector3();
     this.targetPosition = new THREE.Vector3();
     this.direction = new THREE.Vector3(0, 0, 1);
@@ -7126,6 +7217,7 @@ class NetworkProjectile {
       this.alive = false;
       return;
     }
+    this.packetAge = 0;
 
     const nextColor = state.color || this.color;
     if (nextColor !== this.color) {
@@ -7143,8 +7235,9 @@ class NetworkProjectile {
     const z = Number.isFinite(state.z) ? state.z : this.targetPosition.z;
     this.targetPosition.set(x, y, z);
 
-    if (snap) this.renderPosition.copy(this.targetPosition);
-    else this.renderPosition.lerp(this.targetPosition, 0.82);
+    if (snap || this.renderPosition.distanceToSquared(this.targetPosition) > 169) {
+      this.renderPosition.copy(this.targetPosition);
+    }
     this.group.position.copy(this.renderPosition);
 
     const dx = Number.isFinite(state.dirX) ? state.dirX : this.direction.x;
@@ -7155,15 +7248,26 @@ class NetworkProjectile {
 
     this.desiredQuat.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
     if (snap) this.group.quaternion.copy(this.desiredQuat);
-    else this.group.quaternion.slerp(this.desiredQuat, 0.68);
 
     const stretch = 1 + Math.min(this.speed * 0.03, 1.8);
     this.streak.scale.z = stretch;
     this.alive = state.alive !== false;
   }
 
-  update() {
-    this.alive = false;
+  update(dt) {
+    if (!this.alive) return;
+    const step = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    this.packetAge += step;
+    if (this.packetAge > MULTIPLAYER_SNAPSHOT_INTERVAL * 3.5) {
+      this.alive = false;
+      return;
+    }
+
+    const posBlend = 1 - Math.exp(-24 * step);
+    const rotBlend = 1 - Math.exp(-26 * step);
+    this.renderPosition.lerp(this.targetPosition, posBlend);
+    this.group.position.copy(this.renderPosition);
+    this.group.quaternion.slerp(this.desiredQuat, rotBlend);
   }
 
   dispose() {
@@ -7171,14 +7275,19 @@ class NetworkProjectile {
   }
 }
 
+function quantizeNetNumber(value, precision = MULTIPLAYER_STATE_FLOAT_PRECISION) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * precision) / precision;
+}
+
 function serializeTowerState(tower) {
   return {
     towerTypeId: tower.towerTypeId,
     cellX: tower.cellX,
     cellY: tower.cellY,
-    cooldown: tower.cooldown,
-    turretYaw: tower.turret ? tower.turret.rotation.y : 0,
-    spinYaw: tower.spinNode ? tower.spinNode.rotation.y : 0,
+    cooldown: quantizeNetNumber(tower.cooldown),
+    turretYaw: quantizeNetNumber(tower.turret ? tower.turret.rotation.y : 0),
+    spinYaw: quantizeNetNumber(tower.spinNode ? tower.spinNode.rotation.y : 0),
     trapDurability: tower.isTrap ? tower.trapDurability : undefined,
   };
 }
@@ -7187,46 +7296,56 @@ function serializeEnemyState(enemy) {
   return {
     typeId: enemy.typeId,
     name: enemy.name,
-    speed: enemy.speed,
+    speed: quantizeNetNumber(enemy.speed),
     hp: enemy.hp,
     maxHp: enemy.maxHp,
     reward: enemy.reward,
-    radius: enemy.radius,
+    radius: quantizeNetNumber(enemy.radius),
     coreDamage: enemy.coreDamage,
-    hoverHeight: enemy.hoverHeight,
+    hoverHeight: quantizeNetNumber(enemy.hoverHeight),
     colorA: enemy.colorA,
     colorB: enemy.colorB,
-    x: enemy.x,
-    z: enemy.z,
-    currentY: enemy.currentY,
+    x: quantizeNetNumber(enemy.x),
+    z: quantizeNetNumber(enemy.z),
+    currentY: quantizeNetNumber(enemy.currentY),
     pathIndex: enemy.pathIndex,
     reachedEnd: enemy.reachedEnd,
-    progressScore: enemy.progressScore,
-    headingX: enemy.headingX,
-    headingZ: enemy.headingZ,
-    quaternion: [enemy.mesh.quaternion.x, enemy.mesh.quaternion.y, enemy.mesh.quaternion.z, enemy.mesh.quaternion.w],
-    spinYaw: enemy.spinNode ? enemy.spinNode.rotation.y : 0,
-    healthBarVisibleUntil: enemy.healthBarVisibleUntil,
+    progressScore: quantizeNetNumber(enemy.progressScore),
+    headingX: quantizeNetNumber(enemy.headingX),
+    headingZ: quantizeNetNumber(enemy.headingZ),
+    quaternion: [
+      quantizeNetNumber(enemy.mesh.quaternion.x),
+      quantizeNetNumber(enemy.mesh.quaternion.y),
+      quantizeNetNumber(enemy.mesh.quaternion.z),
+      quantizeNetNumber(enemy.mesh.quaternion.w),
+    ],
+    spinYaw: quantizeNetNumber(enemy.spinNode ? enemy.spinNode.rotation.y : 0),
+    healthBarVisibleUntil: quantizeNetNumber(enemy.healthBarVisibleUntil),
   };
 }
 
 function serializeAllyState(ally) {
   return {
     typeId: ally.typeId,
-    speed: ally.speed,
+    speed: quantizeNetNumber(ally.speed),
     hp: ally.hp,
     maxHp: ally.maxHp,
-    radius: ally.radius,
-    hoverHeight: ally.hoverHeight,
-    x: ally.x,
-    z: ally.z,
-    currentY: ally.currentY,
+    radius: quantizeNetNumber(ally.radius),
+    hoverHeight: quantizeNetNumber(ally.hoverHeight),
+    x: quantizeNetNumber(ally.x),
+    z: quantizeNetNumber(ally.z),
+    currentY: quantizeNetNumber(ally.currentY),
     pathIndex: ally.pathIndex,
     reachedStart: ally.reachedStart,
-    headingX: ally.headingX,
-    headingZ: ally.headingZ,
-    quaternion: [ally.mesh.quaternion.x, ally.mesh.quaternion.y, ally.mesh.quaternion.z, ally.mesh.quaternion.w],
-    spinYaw: ally.spinNode ? ally.spinNode.rotation.y : 0,
+    headingX: quantizeNetNumber(ally.headingX),
+    headingZ: quantizeNetNumber(ally.headingZ),
+    quaternion: [
+      quantizeNetNumber(ally.mesh.quaternion.x),
+      quantizeNetNumber(ally.mesh.quaternion.y),
+      quantizeNetNumber(ally.mesh.quaternion.z),
+      quantizeNetNumber(ally.mesh.quaternion.w),
+    ],
+    spinYaw: quantizeNetNumber(ally.spinNode ? ally.spinNode.rotation.y : 0),
   };
 }
 
@@ -7236,14 +7355,14 @@ function serializeProjectileState(projectile) {
   if (!position) return null;
   const direction = projectile.direction || PROJECTILE_FORWARD;
   return {
-    x: Number.isFinite(position.x) ? position.x : 0,
-    y: Number.isFinite(position.y) ? position.y : 0,
-    z: Number.isFinite(position.z) ? position.z : 0,
-    dirX: Number.isFinite(direction.x) ? direction.x : 0,
-    dirY: Number.isFinite(direction.y) ? direction.y : 0,
-    dirZ: Number.isFinite(direction.z) ? direction.z : 1,
-    speed: Number.isFinite(projectile.speed) ? projectile.speed : 0,
-    radius: Number.isFinite(projectile.radius) ? projectile.radius : 0.12,
+    x: quantizeNetNumber(Number.isFinite(position.x) ? position.x : 0),
+    y: quantizeNetNumber(Number.isFinite(position.y) ? position.y : 0),
+    z: quantizeNetNumber(Number.isFinite(position.z) ? position.z : 0),
+    dirX: quantizeNetNumber(Number.isFinite(direction.x) ? direction.x : 0),
+    dirY: quantizeNetNumber(Number.isFinite(direction.y) ? direction.y : 0),
+    dirZ: quantizeNetNumber(Number.isFinite(direction.z) ? direction.z : 1),
+    speed: quantizeNetNumber(Number.isFinite(projectile.speed) ? projectile.speed : 0),
+    radius: quantizeNetNumber(Number.isFinite(projectile.radius) ? projectile.radius : 0.12),
     color: projectile.color || "#9fd8ff",
     alive: projectile.alive !== false,
   };
@@ -7252,12 +7371,9 @@ function serializeProjectileState(projectile) {
 function buildMultiplayerSnapshot() {
   return {
     started: game.started,
-    menuOpen: game.menuOpen,
-    menuView: game.menuView,
     currentLevel: game.currentLevel,
     maxLevelUnlocked: game.maxLevelUnlocked,
     maxLoadoutSlots: getCurrentLoadoutSlotLimit(),
-    menuSelectedLevel: game.menuSelectedLevel,
     money: game.money,
     shards: game.shards,
     lives: game.lives,
@@ -7265,19 +7381,19 @@ function buildMultiplayerSnapshot() {
     inWave: game.inWave,
     waveCreditsEarned: game.waveCreditsEarned,
     spawnLeft: game.spawnLeft,
-    spawnTimer: game.spawnTimer,
+    spawnTimer: quantizeNetNumber(game.spawnTimer),
     selectedTowerType: game.selectedTowerType,
     placing: game.placing,
     selling: game.selling,
     editingLane: game.editingLane,
     paused: game.paused,
     autoWaveEnabled: game.autoWaveEnabled,
-    autoWaveCountdown: game.autoWaveCountdown,
+    autoWaveCountdown: quantizeNetNumber(game.autoWaveCountdown),
     over: game.over,
     levelOneDefeated: game.levelOneDefeated,
     speedStepIndex: game.speedStepIndex,
-    speedMultiplier: game.speedMultiplier,
-    time: game.time,
+    speedMultiplier: quantizeNetNumber(game.speedMultiplier),
+    time: quantizeNetNumber(game.time),
     accountName: game.accountName,
     multiplayerHostId: multiplayer.hostId || multiplayer.peerId,
     multiplayerPlayers: getMultiplayerRosterPayload(),
@@ -7364,6 +7480,8 @@ function createEnemyFromNetworkState(state) {
 function syncEnemiesFromMultiplayer(states) {
   const next = [];
   const list = Array.isArray(states) ? states : [];
+  const clientReplica = isMultiplayerClient() && isMultiplayerActive();
+  const incomingQuat = new THREE.Quaternion();
   for (let i = 0; i < list.length; i += 1) {
     const state = list[i];
     if (!state || typeof state.typeId !== "string") continue;
@@ -7381,9 +7499,20 @@ function syncEnemiesFromMultiplayer(states) {
     enemy.reward = Math.max(1, Number.isFinite(state.reward) ? state.reward : enemy.reward);
     enemy.radius = Number.isFinite(state.radius) ? state.radius : enemy.radius;
     enemy.coreDamage = Math.max(1, Number.isFinite(state.coreDamage) ? state.coreDamage : enemy.coreDamage);
-    enemy.x = Number.isFinite(state.x) ? state.x : enemy.x;
-    enemy.z = Number.isFinite(state.z) ? state.z : enemy.z;
-    enemy.currentY = Number.isFinite(state.currentY) ? state.currentY : getLaneSurfaceY(enemy.x, enemy.z) + enemy.baseYOffset;
+    const syncWeight = clientReplica ? 0.55 : 1;
+    const firstSync = needsRebuild || !enemy.__mpSynced;
+    const nextX = Number.isFinite(state.x) ? state.x : enemy.x;
+    const nextZ = Number.isFinite(state.z) ? state.z : enemy.z;
+    const nextY = Number.isFinite(state.currentY) ? state.currentY : getLaneSurfaceY(nextX, nextZ) + enemy.baseYOffset;
+    if (firstSync || syncWeight >= 1) {
+      enemy.x = nextX;
+      enemy.z = nextZ;
+      enemy.currentY = nextY;
+    } else {
+      enemy.x += (nextX - enemy.x) * syncWeight;
+      enemy.z += (nextZ - enemy.z) * syncWeight;
+      enemy.currentY += (nextY - enemy.currentY) * syncWeight;
+    }
     enemy.pathIndex = Number.isFinite(state.pathIndex) ? Math.max(0, Math.floor(state.pathIndex)) : enemy.pathIndex;
     enemy.reachedEnd = !!state.reachedEnd;
     enemy.progressScore = Number.isFinite(state.progressScore) ? state.progressScore : enemy.progressScore;
@@ -7394,10 +7523,19 @@ function syncEnemiesFromMultiplayer(states) {
     enemy.mesh.position.set(enemy.x, enemy.currentY, enemy.z);
     const q = state.quaternion;
     if (Array.isArray(q) && q.length === 4) {
-      enemy.mesh.quaternion.set(q[0], q[1], q[2], q[3]);
+      if (firstSync || !clientReplica) {
+        enemy.mesh.quaternion.set(q[0], q[1], q[2], q[3]);
+      } else {
+        incomingQuat.set(q[0], q[1], q[2], q[3]);
+        enemy.mesh.quaternion.slerp(incomingQuat, syncWeight);
+      }
     }
-    if (enemy.spinNode && Number.isFinite(state.spinYaw)) enemy.spinNode.rotation.y = state.spinYaw;
-    enemy.updateHealthBar();
+    if (enemy.spinNode && Number.isFinite(state.spinYaw)) {
+      if (firstSync || !clientReplica) enemy.spinNode.rotation.y = state.spinYaw;
+      else enemy.spinNode.rotation.y += shortestAngleDelta(enemy.spinNode.rotation.y, state.spinYaw) * syncWeight;
+    }
+    if (!clientReplica || enemy.healthBarRoot?.visible) enemy.updateHealthBar();
+    enemy.__mpSynced = true;
     next.push(enemy);
   }
 
@@ -7417,6 +7555,8 @@ function createAllyFromNetworkState(state) {
 function syncAlliesFromMultiplayer(states) {
   const next = [];
   const list = Array.isArray(states) ? states : [];
+  const clientReplica = isMultiplayerClient() && isMultiplayerActive();
+  const incomingQuat = new THREE.Quaternion();
   for (let i = 0; i < list.length; i += 1) {
     const state = list[i];
     if (!state || typeof state.typeId !== "string") continue;
@@ -7433,9 +7573,20 @@ function syncAlliesFromMultiplayer(states) {
     ally.hp = Math.max(0, Number.isFinite(state.hp) ? state.hp : ally.hp);
     ally.radius = Number.isFinite(state.radius) ? state.radius : ally.radius;
     ally.hoverHeight = Number.isFinite(state.hoverHeight) ? state.hoverHeight : ally.hoverHeight;
-    ally.x = Number.isFinite(state.x) ? state.x : ally.x;
-    ally.z = Number.isFinite(state.z) ? state.z : ally.z;
-    ally.currentY = Number.isFinite(state.currentY) ? state.currentY : getLaneSurfaceY(ally.x, ally.z) + ally.baseYOffset;
+    const syncWeight = clientReplica ? 0.55 : 1;
+    const firstSync = needsRebuild || !ally.__mpSynced;
+    const nextX = Number.isFinite(state.x) ? state.x : ally.x;
+    const nextZ = Number.isFinite(state.z) ? state.z : ally.z;
+    const nextY = Number.isFinite(state.currentY) ? state.currentY : getLaneSurfaceY(nextX, nextZ) + ally.baseYOffset;
+    if (firstSync || syncWeight >= 1) {
+      ally.x = nextX;
+      ally.z = nextZ;
+      ally.currentY = nextY;
+    } else {
+      ally.x += (nextX - ally.x) * syncWeight;
+      ally.z += (nextZ - ally.z) * syncWeight;
+      ally.currentY += (nextY - ally.currentY) * syncWeight;
+    }
     ally.pathIndex = Number.isFinite(state.pathIndex) ? Math.max(0, Math.floor(state.pathIndex)) : ally.pathIndex;
     ally.reachedStart = !!state.reachedStart;
     ally.headingX = Number.isFinite(state.headingX) ? state.headingX : ally.headingX;
@@ -7444,9 +7595,18 @@ function syncAlliesFromMultiplayer(states) {
     ally.mesh.position.set(ally.x, ally.currentY, ally.z);
     const q = state.quaternion;
     if (Array.isArray(q) && q.length === 4) {
-      ally.mesh.quaternion.set(q[0], q[1], q[2], q[3]);
+      if (firstSync || !clientReplica) {
+        ally.mesh.quaternion.set(q[0], q[1], q[2], q[3]);
+      } else {
+        incomingQuat.set(q[0], q[1], q[2], q[3]);
+        ally.mesh.quaternion.slerp(incomingQuat, syncWeight);
+      }
     }
-    if (ally.spinNode && Number.isFinite(state.spinYaw)) ally.spinNode.rotation.y = state.spinYaw;
+    if (ally.spinNode && Number.isFinite(state.spinYaw)) {
+      if (firstSync || !clientReplica) ally.spinNode.rotation.y = state.spinYaw;
+      else ally.spinNode.rotation.y += shortestAngleDelta(ally.spinNode.rotation.y, state.spinYaw) * syncWeight;
+    }
+    ally.__mpSynced = true;
     next.push(ally);
   }
 
@@ -7484,6 +7644,38 @@ function syncProjectilesFromMultiplayer(states) {
 
 function applyMultiplayerSnapshot(snapshot) {
   if (!isMultiplayerClient() || !snapshot || typeof snapshot !== "object") return;
+  const snapshotStarted = !!snapshot.started;
+  const wasStarted = !!game.started;
+
+  if (typeof snapshot.multiplayerHostId === "string" && snapshot.multiplayerHostId) multiplayer.hostId = snapshot.multiplayerHostId;
+  if (Array.isArray(snapshot.multiplayerPlayers)) {
+    setMultiplayerRosterFromPacket(snapshot.multiplayerPlayers, snapshot.multiplayerHostId || multiplayer.hostId);
+  }
+  upsertMultiplayerRosterPlayer(multiplayer.peerId, getLocalMultiplayerDisplayName(), isMultiplayerHost() ? "host" : "client");
+
+  if (!snapshotStarted) {
+    if (wasStarted) {
+      exitCurrentRunToMenu();
+      if (!game.menuOpen) {
+        game.menuOpen = true;
+        if (menuScreenEl) menuScreenEl.hidden = false;
+        document.body.classList.add("menu-active");
+      }
+      setStatus("Host returned to the multiplayer menu.");
+    }
+    game.started = false;
+    syncMusicState();
+    markMultiplayerHudDirty();
+    return;
+  }
+
+  game.started = true;
+  if (!wasStarted) {
+    game.menuOpen = false;
+    if (menuScreenEl) menuScreenEl.hidden = true;
+    document.body.classList.remove("menu-active");
+  }
+
   const level = Math.max(1, Math.floor(snapshot.currentLevel || 1));
   const laneCells = Array.isArray(snapshot.laneCells) ? snapshot.laneCells.filter((key) => typeof key === "string") : [];
   const laneSignature = laneCells.slice().sort().join("|");
@@ -7504,14 +7696,10 @@ function applyMultiplayerSnapshot(snapshot) {
     multiplayer.lastLaneSignature = serializeLaneSignature();
   }
 
-  game.started = !!snapshot.started;
-  game.menuOpen = !!snapshot.menuOpen;
-  game.menuView = typeof snapshot.menuView === "string" ? snapshot.menuView : game.menuView;
   game.maxLevelUnlocked = Math.max(1, Math.floor(snapshot.maxLevelUnlocked || game.maxLevelUnlocked || 1));
   game.maxLoadoutSlots = clampLoadoutSlotLimit(
     Number(snapshot.maxLoadoutSlots || game.maxLoadoutSlots || BASE_LOADOUT_SLOTS)
   );
-  game.menuSelectedLevel = clampMenuSelectedLevel(snapshot.menuSelectedLevel || game.menuSelectedLevel || 1);
   game.money = Math.max(0, Math.floor(snapshot.money || 0));
   game.shards = Math.max(0, Math.floor(snapshot.shards || 0));
   game.lives = Math.max(0, Math.floor(snapshot.lives || 0));
@@ -7520,10 +7708,6 @@ function applyMultiplayerSnapshot(snapshot) {
   game.waveCreditsEarned = Math.max(0, Math.floor(snapshot.waveCreditsEarned || 0));
   game.spawnLeft = Math.max(0, Math.floor(snapshot.spawnLeft || 0));
   game.spawnTimer = Number.isFinite(snapshot.spawnTimer) ? snapshot.spawnTimer : 0;
-  game.selectedTowerType = typeof snapshot.selectedTowerType === "string" ? snapshot.selectedTowerType : game.selectedTowerType;
-  game.placing = !!snapshot.placing;
-  game.selling = !!snapshot.selling;
-  game.editingLane = !!snapshot.editingLane;
   game.paused = !!snapshot.paused;
   game.autoWaveEnabled = !!snapshot.autoWaveEnabled;
   game.autoWaveCountdown = Number.isFinite(snapshot.autoWaveCountdown) ? snapshot.autoWaveCountdown : game.autoWaveInterval;
@@ -7535,12 +7719,12 @@ function applyMultiplayerSnapshot(snapshot) {
   game.speedMultiplier = Number.isFinite(snapshot.speedMultiplier)
     ? Math.max(0.5, Math.min(2, snapshot.speedMultiplier))
     : GAME_SPEED_STEPS[game.speedStepIndex];
-  game.time = Number.isFinite(snapshot.time) ? snapshot.time : game.time;
-  if (typeof snapshot.multiplayerHostId === "string" && snapshot.multiplayerHostId) multiplayer.hostId = snapshot.multiplayerHostId;
-  if (Array.isArray(snapshot.multiplayerPlayers)) {
-    setMultiplayerRosterFromPacket(snapshot.multiplayerPlayers, snapshot.multiplayerHostId || multiplayer.hostId);
+  if (Number.isFinite(snapshot.time)) {
+    const incomingTime = snapshot.time;
+    const drift = incomingTime - game.time;
+    if (!Number.isFinite(game.time) || Math.abs(drift) > 0.6) game.time = incomingTime;
+    else game.time += drift * 0.2;
   }
-  upsertMultiplayerRosterPlayer(multiplayer.peerId, getLocalMultiplayerDisplayName(), isMultiplayerHost() ? "host" : "client");
 
   if (Array.isArray(snapshot.unlockedTowers)) {
     game.unlockedTowers = new Set(snapshot.unlockedTowers.filter((id) => Object.prototype.hasOwnProperty.call(TOWER_TYPES, id)));
@@ -7567,15 +7751,6 @@ function applyMultiplayerSnapshot(snapshot) {
       game.maxLoadoutSlots,
       game.unlockedSpawnerTowers
     );
-  }
-
-  if (game.menuOpen) {
-    if (menuScreenEl) menuScreenEl.hidden = false;
-    document.body.classList.add("menu-active");
-    setMenuView(game.menuView || "home");
-  } else {
-    if (menuScreenEl) menuScreenEl.hidden = true;
-    document.body.classList.remove("menu-active");
   }
 
   syncTowersFromMultiplayer(snapshot.towers);
@@ -7625,7 +7800,7 @@ function applyMultiplayerSnapshot(snapshot) {
     renderLoadoutMenu();
   }
   syncMusicState();
-  updateHud();
+  markMultiplayerHudDirty();
 }
 
 function handleIncomingMultiplayerAction(action, payload = {}, fromPeer = "") {
@@ -7633,9 +7808,7 @@ function handleIncomingMultiplayerAction(action, payload = {}, fromPeer = "") {
   if (typeof action !== "string") return;
 
   if (action === "startLevel") {
-    const level = Math.max(1, Math.floor(payload.level || game.menuSelectedLevel || 1));
-    startGameFromMenu(level);
-    sendMultiplayerSnapshot(true);
+    // Host-only control: ignore remote attempts to start from the menu.
     return;
   }
 
@@ -7643,44 +7816,13 @@ function handleIncomingMultiplayerAction(action, payload = {}, fromPeer = "") {
     return;
   }
 
-  if (action === "setPlacing") {
-    const desired = !!payload.value;
-    if (desired !== game.placing) toggleBuildMode();
-    sendMultiplayerSnapshot(true);
-    return;
-  }
-
-  if (action === "setSelling") {
-    const desired = !!payload.value;
-    if (desired !== game.selling) toggleSellMode();
-    sendMultiplayerSnapshot(true);
-    return;
-  }
-
-  if (action === "setLaneEditing") {
-    const desired = !!payload.value;
-    if (desired !== game.editingLane) toggleLaneEditMode();
-    sendMultiplayerSnapshot(true);
-    return;
-  }
-
-  if (action === "selectTowerForBuild") {
-    const towerTypeId = typeof payload.towerTypeId === "string" ? payload.towerTypeId : "";
-    if (!isTowerSelectable(towerTypeId)) return;
-    game.selectedTowerType = towerTypeId;
-    game.placing = true;
-    game.selling = false;
-    game.editingLane = false;
-    updateHud();
-    sendMultiplayerSnapshot(true);
+  if (action === "setPlacing" || action === "setSelling" || action === "setLaneEditing" || action === "selectTowerForBuild") {
+    // Client-side selection/mode state is local per player and not authoritative.
     return;
   }
 
   if (action === "upgradeTowerPlacementCap") {
-    const towerTypeId = typeof payload.towerTypeId === "string" ? payload.towerTypeId : "";
-    if (!isTowerSelectable(towerTypeId)) return;
-    tryPurchaseLoadoutUpgrade(towerTypeId, "placementCap");
-    sendMultiplayerSnapshot(true);
+    // Prevent non-host peers from spending host shards.
     return;
   }
 
@@ -8078,6 +8220,7 @@ function cycleMenuLevel(step) {
 }
 
 function getMenuPlayButtonLabel() {
+  if (isMultiplayerClient() && isMultiplayerActive()) return "Host Starts Match";
   const selectedLevel = clampMenuSelectedLevel(game.menuSelectedLevel || getHighestUnlockedLevel());
   return isLevelUnlocked(selectedLevel) ? `Start Level ${selectedLevel}` : `Level ${selectedLevel} Locked`;
 }
@@ -8470,9 +8613,14 @@ function updateShopButtons() {
       const capLevel = getTowerCapUpgradeLevel(typeId);
       const capMax = getTowerCapUpgradeMaxLevel(typeId);
       const capAtMax = capLevel >= capMax;
+      const hostOnlyCapUpgrade = isMultiplayerClient() && isMultiplayerActive();
       if (!placement.atCap) {
         capUpgradeButton.hidden = true;
         capUpgradeButton.disabled = false;
+      } else if (hostOnlyCapUpgrade) {
+        capUpgradeButton.hidden = false;
+        capUpgradeButton.disabled = true;
+        capUpgradeButton.textContent = "Host Upgrades Only";
       } else if (capAtMax) {
         capUpgradeButton.hidden = false;
         capUpgradeButton.disabled = true;
@@ -8521,12 +8669,6 @@ function renderShop() {
   const buttons = shopEl.querySelectorAll(".shop-item");
   for (const button of buttons) {
     const selectTowerFromShopCard = () => {
-      if (isMultiplayerClient() && isMultiplayerActive()) {
-        const towerTypeId = button.dataset.towerType;
-        sendMultiplayerAction("selectTowerForBuild", { towerTypeId });
-        setStatus("Tower selection sent to host.");
-        return;
-      }
       game.selectedTowerType = button.dataset.towerType;
       game.placing = true;
       game.selling = false;
@@ -8578,8 +8720,7 @@ function renderShop() {
       const towerTypeId = button.dataset.shopCapUpgrade;
       if (!towerTypeId) return;
       if (isMultiplayerClient() && isMultiplayerActive()) {
-        sendMultiplayerAction("upgradeTowerPlacementCap", { towerTypeId });
-        setStatus("Placement cap upgrade sent to host.");
+        setStatus("Only the host can spend shards on upgrades.", true);
         return;
       }
       tryPurchaseLoadoutUpgrade(towerTypeId, "placementCap");
@@ -9788,6 +9929,7 @@ function updateHud() {
   if (autoWaveBtn) autoWaveBtn.hidden = !game.started || game.menuOpen;
   const chatVisible = canUseInMatchChat();
   if (chatToggleBtn) chatToggleBtn.hidden = !chatVisible;
+  updateMultiplayerChatToggleNotification();
   if (chatPanelEl) {
     if (!chatVisible) {
       chatPanelEl.hidden = true;
@@ -9863,10 +10005,6 @@ function toggleAutoWave() {
 }
 
 function toggleSellMode() {
-  if (isMultiplayerClient() && isMultiplayerActive()) {
-    sendMultiplayerAction("setSelling", { value: !game.selling });
-    return;
-  }
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
   game.selling = !game.selling;
@@ -9926,10 +10064,6 @@ function editLaneAtCell(cellX, cellY) {
 }
 
 function toggleLaneEditMode() {
-  if (isMultiplayerClient() && isMultiplayerActive()) {
-    sendMultiplayerAction("setLaneEditing", { value: !game.editingLane });
-    return;
-  }
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
   if (!game.editingLane && (game.inWave || game.enemies.length > 0 || game.allies.length > 0)) {
@@ -10145,13 +10279,9 @@ function onPointerDown(event) {
 
   if (event.button === 2) {
     if (game.placing) {
-      if (isMultiplayerClient() && isMultiplayerActive()) {
-        sendMultiplayerAction("setPlacing", { value: false });
-      } else {
-        game.placing = false;
-        setStatus("Build mode off.");
-        updateHud();
-      }
+      game.placing = false;
+      setStatus("Build mode off.");
+      updateHud();
     }
     return;
   }
@@ -10188,10 +10318,6 @@ function onPointerDown(event) {
 }
 
 function toggleBuildMode() {
-  if (isMultiplayerClient() && isMultiplayerActive()) {
-    sendMultiplayerAction("setPlacing", { value: !game.placing });
-    return;
-  }
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
   game.placing = !game.placing;
@@ -10350,12 +10476,102 @@ function updateDebris(dt) {
   game.debris = aliveDebris;
 }
 
+function updateClientReplicaEnemy(enemy, dt) {
+  if (!enemy || !enemy.mesh || !enemy.alive) {
+    if (enemy?.healthBarRoot?.visible) enemy.updateHealthBar();
+    return;
+  }
+
+  const headingX = Number.isFinite(enemy.headingX) ? enemy.headingX : 0;
+  const headingZ = Number.isFinite(enemy.headingZ) ? enemy.headingZ : 0;
+  const headingLength = Math.hypot(headingX, headingZ);
+  const moveDirX = headingLength > 1e-6 ? headingX / headingLength : 0;
+  const moveDirZ = headingLength > 1e-6 ? headingZ / headingLength : 0;
+  const speed = Number.isFinite(enemy.speed) ? enemy.speed : 0;
+  const prevX = enemy.x;
+  const prevZ = enemy.z;
+
+  enemy.x += moveDirX * speed * dt;
+  enemy.z += moveDirZ * speed * dt;
+  const bob = Math.sin(game.time * 4 + enemy.animSeed) * (Number.isFinite(enemy.bobAmplitude) ? enemy.bobAmplitude : 0);
+  enemy.currentY = getLaneSurfaceY(enemy.x, enemy.z) + (Number.isFinite(enemy.baseYOffset) ? enemy.baseYOffset : 0) + bob;
+  enemy.mesh.position.set(enemy.x, enemy.currentY, enemy.z);
+
+  const movedX = enemy.x - prevX;
+  const movedZ = enemy.z - prevZ;
+  const movedDistance = Math.hypot(movedX, movedZ);
+  if (movedDistance > 1e-5 && enemy.rollAxis && enemy.rollQuat) {
+    const invMove = 1 / movedDistance;
+    enemy.rollAxis.set(movedZ * invMove, 0, -movedX * invMove);
+    const rollRadius = Math.max(0.05, Number.isFinite(enemy.rollRadius) ? enemy.rollRadius : enemy.radius || 1);
+    enemy.rollQuat.setFromAxisAngle(enemy.rollAxis, movedDistance / rollRadius);
+    enemy.mesh.quaternion.premultiply(enemy.rollQuat);
+    enemy.mesh.quaternion.normalize();
+  }
+
+  if (enemy.spinNode) enemy.spinNode.rotation.y += dt * getEnemySpinSpeed(enemy.typeId);
+  if (enemy.healthBarRoot?.visible) enemy.updateHealthBar();
+}
+
+function updateClientReplicaAlly(ally, dt) {
+  if (!ally || !ally.mesh || !ally.alive) return;
+  const headingX = Number.isFinite(ally.headingX) ? ally.headingX : 0;
+  const headingZ = Number.isFinite(ally.headingZ) ? ally.headingZ : 0;
+  const headingLength = Math.hypot(headingX, headingZ);
+  const moveDirX = headingLength > 1e-6 ? headingX / headingLength : 0;
+  const moveDirZ = headingLength > 1e-6 ? headingZ / headingLength : 0;
+  const speed = Number.isFinite(ally.speed) ? ally.speed : 0;
+  const prevX = ally.x;
+  const prevZ = ally.z;
+
+  ally.x += moveDirX * speed * dt;
+  ally.z += moveDirZ * speed * dt;
+  const bob = Math.sin(game.time * 4 + ally.animSeed) * (Number.isFinite(ally.bobAmplitude) ? ally.bobAmplitude : 0);
+  ally.currentY = getLaneSurfaceY(ally.x, ally.z) + (Number.isFinite(ally.baseYOffset) ? ally.baseYOffset : 0) + bob;
+  ally.mesh.position.set(ally.x, ally.currentY, ally.z);
+
+  const movedX = ally.x - prevX;
+  const movedZ = ally.z - prevZ;
+  const movedDistance = Math.hypot(movedX, movedZ);
+  if (movedDistance > 1e-5 && ally.rollAxis && ally.rollQuat) {
+    const invMove = 1 / movedDistance;
+    ally.rollAxis.set(movedZ * invMove, 0, -movedX * invMove);
+    const rollRadius = Math.max(0.05, Number.isFinite(ally.rollRadius) ? ally.rollRadius : ally.radius || 1);
+    ally.rollQuat.setFromAxisAngle(ally.rollAxis, movedDistance / rollRadius);
+    ally.mesh.quaternion.premultiply(ally.rollQuat);
+    ally.mesh.quaternion.normalize();
+  }
+
+  if (ally.spinNode) ally.spinNode.rotation.y += dt * getEnemySpinSpeed(ally.typeId);
+}
+
+function updateClientReplicaMotion(dt) {
+  if (!isMultiplayerClient() || !isMultiplayerActive()) return;
+  if (!Number.isFinite(dt) || dt <= 0) return;
+
+  for (const enemy of game.enemies) updateClientReplicaEnemy(enemy, dt);
+  for (const ally of game.allies) updateClientReplicaAlly(ally, dt);
+
+  const nextProjectiles = [];
+  for (const projectile of game.projectiles) {
+    if (!projectile || typeof projectile.update !== "function") continue;
+    projectile.update(dt);
+    if (projectile.alive !== false) nextProjectiles.push(projectile);
+    else if (typeof projectile.dispose === "function") projectile.dispose();
+  }
+  game.projectiles = nextProjectiles;
+}
+
 function update(dt) {
   updateMultiplayerNetwork(dt);
 
   if (isMultiplayerClient() && isMultiplayerActive()) {
+    if (game.started && !game.menuOpen && !game.exitConfirmOpen && !game.levelClearOpen && !game.defeatOpen && !game.over && !game.paused) {
+      game.time += dt;
+      updateClientReplicaMotion(dt);
+    }
     syncMusicState();
-    updateHud();
+    refreshClientHudIfNeeded(dt);
     return;
   }
 
@@ -10478,11 +10694,7 @@ function update(dt) {
 
 function startGameFromMenu(preferredLevel = null) {
   if (isMultiplayerClient() && isMultiplayerActive()) {
-    const requestedLevel = Number.isFinite(preferredLevel)
-      ? Math.max(1, Math.floor(preferredLevel))
-      : clampMenuSelectedLevel(game.menuSelectedLevel || getHighestUnlockedLevel());
-    sendMultiplayerAction("startLevel", { level: requestedLevel });
-    setStatus(`Start request sent to host for Level ${requestedLevel}.`);
+    setStatus("Only the host can start the multiplayer match from menu.", true);
     return;
   }
   audioSystem.unlock();
@@ -10589,6 +10801,15 @@ if (commandRunBtn) commandRunBtn.addEventListener("click", runConsoleCommandFrom
 if (chatToggleBtn) chatToggleBtn.addEventListener("click", toggleChatPanel);
 if (chatCloseBtn) chatCloseBtn.addEventListener("click", closeChatPanel);
 if (chatSendBtn) chatSendBtn.addEventListener("click", sendMultiplayerChatFromInput);
+if (chatMessagesEl) {
+  chatMessagesEl.addEventListener(
+    "scroll",
+    () => {
+      multiplayer.chatPinnedToBottom = isMultiplayerChatNearBottom();
+    },
+    { passive: true }
+  );
+}
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
 if (loginAccountBtn) loginAccountBtn.addEventListener("click", loginAccountFromInput);
 if (mapPrevBtn) mapPrevBtn.addEventListener("click", () => cycleMenuLevel(-1));
