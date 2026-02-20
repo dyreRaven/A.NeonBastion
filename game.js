@@ -194,7 +194,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-70";
+const BUILD_ID = "2026-02-20-71";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5528,6 +5528,19 @@ function isCloudRateLimitError(error) {
   return false;
 }
 
+function isCloudEmailNotConfirmedError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  if (code.includes("email_not_confirmed")) return true;
+  if (message.includes("email not confirmed")) return true;
+  return false;
+}
+
+function getAuthUserFromAuthResult(result) {
+  const user = result?.data?.user || result?.data?.session?.user || null;
+  return user && user.id ? user : null;
+}
+
 function formatCloudErrorMessage(error, fallback = "Cloud request failed.") {
   if (isCloudRateLimitError(error)) {
     return "Email rate limit exceeded. Wait 60-120 seconds, then try again (or use Login if the account was already created).";
@@ -5738,12 +5751,69 @@ async function createCloudAccountFromInput(username, password, confirmPassword) 
   const email = sanitizeAccountUsername(username);
   setAccountStatus(`Creating cloud account for ${email}...`);
   try {
+    // Prevent redundant signup emails: if this account already exists and password is correct,
+    // sign in directly without triggering another email send.
+    try {
+      const existingLogin = await cloudAuth.client.auth.signInWithPassword({
+        email,
+        password,
+      });
+      const existingUser = getAuthUserFromAuthResult(existingLogin);
+      if (existingUser) {
+        const cloudReady = await syncCloudSessionUser(existingUser, true);
+        clearAccountAuthInputs();
+        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
+        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+        if (cloudAuth.profileTableMissing) {
+          setAccountStatus(`Account exists for ${email}, logged in, but table setup is missing. Run supabase_setup.sql.`, true);
+        } else if (!cloudReady) {
+          setAccountStatus(`Account exists for ${email}. Logged in, cloud sync pending.`);
+        } else {
+          setAccountStatus(`Account exists for ${email}. Logged in.`);
+        }
+        return;
+      }
+      if (existingLogin?.error && isCloudEmailNotConfirmedError(existingLogin.error)) {
+        setAccountStatus(`Account exists for ${email}, but email is not confirmed yet. Check your inbox, then use Login.`, true);
+        return;
+      }
+    } catch (_) {}
+
     const { data, error } = await cloudAuth.client.auth.signUp({
       email,
       password,
     });
     if (error) {
-      if (isCloudRateLimitError(error)) startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
+      if (isCloudRateLimitError(error)) {
+        // If signup is throttled, account may still already exist; retry login without sending email.
+        try {
+          const retryLogin = await cloudAuth.client.auth.signInWithPassword({
+            email,
+            password,
+          });
+          const retryUser = getAuthUserFromAuthResult(retryLogin);
+          if (retryUser) {
+            const cloudReady = await syncCloudSessionUser(retryUser, true);
+            clearAccountAuthInputs();
+            if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
+            if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
+            if (cloudAuth.profileTableMissing) {
+              setAccountStatus(`Signup throttled, but account login succeeded for ${email}. Run supabase_setup.sql.`, true);
+            } else if (!cloudReady) {
+              setAccountStatus(`Signup throttled, but login succeeded for ${email}. Cloud sync pending.`);
+            } else {
+              setAccountStatus(`Signup throttled, but login succeeded for ${email}.`);
+            }
+            return;
+          }
+          if (retryLogin?.error && isCloudEmailNotConfirmedError(retryLogin.error)) {
+            setAccountStatus(`Account exists for ${email}, but email is not confirmed yet. Check your inbox, then use Login.`, true);
+            startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
+            return;
+          }
+        } catch (_) {}
+        startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
+      }
       setAccountStatus(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, true);
       return;
     }
