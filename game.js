@@ -200,7 +200,7 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-80";
+const BUILD_ID = "2026-02-20-81";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -13448,10 +13448,18 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
 
   game.selectedTowerType = towerTypeId;
   game.money -= selectedTower.cost;
-  game.towers.push(new Tower(targetCellX, targetCellY, towerTypeId));
+  const placedTower = new Tower(targetCellX, targetCellY, towerTypeId);
+  game.towers.push(placedTower);
   const updatedPlacement = getTowerPlacementStats(towerTypeId);
   const placedLabel = isTrapTowerId(towerTypeId) ? "trap armed" : "tower deployed";
   const requiresAreaTarget = !!selectedTower.manualAreaTargeting;
+  const autoBeginBombardTargeting = !placedByPeer && isBombarderTower(placedTower);
+
+  if (autoBeginBombardTargeting) {
+    beginBombarderTargetingMode(placedTower);
+    return true;
+  }
+
   if (placedByPeer) {
     setStatus(
       `${selectedTower.name} ${placedLabel} by ${placedByPeer}. (${updatedPlacement.placed}/${updatedPlacement.cap})${
