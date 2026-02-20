@@ -191,7 +191,7 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_iLYt3mzB52HD7sJRV6ki0Q_dAeYvZcK
 const SUPABASE_PROGRESS_TABLE = "player_profiles";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-68";
+const BUILD_ID = "2026-02-20-69";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -5507,7 +5507,22 @@ function isCloudProfilesTableMissing(error) {
   return false;
 }
 
+function isCloudRateLimitError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const status = Number(error?.status || error?.statusCode);
+  const message = String(error?.message || "").toLowerCase();
+  if (status === 429) return true;
+  if (code.includes("rate_limit")) return true;
+  if (code.includes("over_email_send_rate_limit")) return true;
+  if (message.includes("rate limit")) return true;
+  if (message.includes("too many requests")) return true;
+  return false;
+}
+
 function formatCloudErrorMessage(error, fallback = "Cloud request failed.") {
+  if (isCloudRateLimitError(error)) {
+    return "Email rate limit exceeded. Wait 60-120 seconds, then try again (or use Login if the account was already created).";
+  }
   const message = String(error?.message || "").trim();
   if (message) return message;
   return fallback;
@@ -5923,7 +5938,7 @@ function sanitizeAccountName(name, maxLength = ACCOUNT_DISPLAY_NAME_MAX_LENGTH) 
     .slice(0, Math.max(1, Math.floor(Number(maxLength) || ACCOUNT_DISPLAY_NAME_MAX_LENGTH)));
 }
 
-const MIN_ACCOUNT_PASSWORD_LENGTH = 4;
+const MIN_ACCOUNT_PASSWORD_LENGTH = 6;
 
 function sanitizeAccountUsername(username) {
   return sanitizeAccountName(username, ACCOUNT_USERNAME_MAX_LENGTH).replace(/\s+/g, "");
