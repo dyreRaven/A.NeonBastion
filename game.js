@@ -79,6 +79,12 @@ const commandConsoleEl = document.getElementById("commandConsole");
 const commandCloseBtn = document.getElementById("commandCloseBtn");
 const commandInputEl = document.getElementById("commandInput");
 const commandRunBtn = document.getElementById("commandRunBtn");
+const chatToggleBtn = document.getElementById("chatToggleBtn");
+const chatPanelEl = document.getElementById("chatPanel");
+const chatCloseBtn = document.getElementById("chatCloseBtn");
+const chatMessagesEl = document.getElementById("chatMessages");
+const chatInputEl = document.getElementById("chatInput");
+const chatSendBtn = document.getElementById("chatSendBtn");
 const settingsToggleBtn = document.getElementById("settingsToggleBtn");
 const settingsPanelEl = document.getElementById("settingsPanel");
 const settingsCloseBtn = document.getElementById("settingsCloseBtn");
@@ -112,8 +118,10 @@ const GAME_SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
+const MULTIPLAYER_CHAT_LIMIT = 140;
+const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-19-26";
+const BUILD_ID = "2026-02-19-27";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3036,6 +3044,8 @@ const multiplayer = {
   lastLaneSignature: "",
   lastStatusLine: "",
   lastShopSignature: "",
+  chatOpen: false,
+  chatHistory: [],
 };
 
 function sanitizeRoomCode(rawCode) {
@@ -3109,6 +3119,133 @@ function getMultiplayerLogTimestamp() {
   const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
+}
+
+function sanitizeMultiplayerChatText(rawText) {
+  return String(rawText || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MULTIPLAYER_CHAT_LIMIT);
+}
+
+function formatMultiplayerChatTimestamp(rawTime) {
+  const date = new Date(Number.isFinite(rawTime) ? rawTime : Date.now());
+  if (!Number.isFinite(date.getTime())) return "--:--";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function canUseInMatchChat() {
+  return (
+    game.started &&
+    !game.menuOpen &&
+    !game.exitConfirmOpen &&
+    !game.levelClearOpen &&
+    !game.defeatOpen &&
+    isMultiplayerActive()
+  );
+}
+
+function renderMultiplayerChat() {
+  if (!chatMessagesEl) return;
+  if (!Array.isArray(multiplayer.chatHistory) || multiplayer.chatHistory.length === 0) {
+    chatMessagesEl.innerHTML = `<div class="chat-empty">No messages yet.</div>`;
+    return;
+  }
+
+  const rows = multiplayer.chatHistory.map((entry) => {
+    const mine = entry.fromPeer && entry.fromPeer === multiplayer.peerId;
+    const rowClass = mine ? "chat-msg you" : "chat-msg";
+    const playerName = sanitizeMultiplayerDisplayName(entry.name || getMultiplayerDisplayNameForPeer(entry.fromPeer, "Player"));
+    return `
+      <div class="${rowClass}">
+        <div class="chat-msg-head">
+          <span class="chat-msg-name">${escapeHtml(playerName)}</span>
+          <span class="chat-msg-time">${escapeHtml(formatMultiplayerChatTimestamp(entry.sentAt))}</span>
+        </div>
+        <div class="chat-msg-text">${escapeHtml(entry.text || "")}</div>
+      </div>
+    `;
+  });
+
+  chatMessagesEl.innerHTML = rows.join("");
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+}
+
+function pushMultiplayerChatEntry(entry) {
+  const text = sanitizeMultiplayerChatText(entry?.text || "");
+  if (!text) return;
+  const fromPeer = typeof entry?.fromPeer === "string" ? entry.fromPeer : "";
+  const name = sanitizeMultiplayerDisplayName(entry?.name || getMultiplayerDisplayNameForPeer(fromPeer, "Player"));
+  const sentAt = Number.isFinite(entry?.sentAt) ? entry.sentAt : Date.now();
+
+  multiplayer.chatHistory.push({
+    fromPeer,
+    name,
+    text,
+    sentAt,
+  });
+
+  if (multiplayer.chatHistory.length > MULTIPLAYER_CHAT_HISTORY_LIMIT) {
+    multiplayer.chatHistory.splice(0, multiplayer.chatHistory.length - MULTIPLAYER_CHAT_HISTORY_LIMIT);
+  }
+
+  renderMultiplayerChat();
+}
+
+function clearMultiplayerChatHistory() {
+  multiplayer.chatHistory = [];
+  if (chatInputEl) chatInputEl.value = "";
+  renderMultiplayerChat();
+}
+
+function openChatPanel(focusInput = true) {
+  if (!chatPanelEl || !canUseInMatchChat()) return;
+  multiplayer.chatOpen = true;
+  chatPanelEl.hidden = false;
+  renderMultiplayerChat();
+  if (focusInput && chatInputEl) {
+    chatInputEl.focus();
+    chatInputEl.select();
+  }
+}
+
+function closeChatPanel() {
+  if (!chatPanelEl) return;
+  multiplayer.chatOpen = false;
+  chatPanelEl.hidden = true;
+}
+
+function toggleChatPanel() {
+  if (!chatPanelEl) return;
+  if (chatPanelEl.hidden) openChatPanel(true);
+  else closeChatPanel();
+}
+
+function sendMultiplayerChatFromInput() {
+  if (!chatInputEl || !isMultiplayerActive()) return;
+  const text = sanitizeMultiplayerChatText(chatInputEl.value);
+  if (!text) return;
+  chatInputEl.value = "";
+
+  const name = getLocalMultiplayerDisplayName();
+  const sentAt = Date.now();
+  pushMultiplayerChatEntry({
+    fromPeer: multiplayer.peerId,
+    name,
+    text,
+    sentAt,
+  });
+
+  postMultiplayerMessage({
+    type: "chat",
+    name,
+    text,
+    sentAt,
+  });
+
+  if (chatInputEl) chatInputEl.focus();
 }
 
 function appendMultiplayerLog(message) {
@@ -3393,6 +3530,8 @@ function leaveMultiplayerSession(announce = true) {
   multiplayer.snapshotTimer = 0;
   multiplayer.lastLaneSignature = "";
   multiplayer.lastShopSignature = "";
+  multiplayer.chatOpen = false;
+  clearMultiplayerChatHistory();
   refreshMultiplayerPanel();
 }
 
@@ -3401,6 +3540,19 @@ function onMultiplayerMessage(message) {
   if (!isMultiplayerActive()) return;
   if (message.roomCode !== multiplayer.roomCode) return;
   if (message.from === multiplayer.peerId) return;
+
+  if (message.type === "chat") {
+    const fromPeer = typeof message.from === "string" ? message.from : "";
+    const text = sanitizeMultiplayerChatText(message.text || "");
+    if (!text) return;
+    pushMultiplayerChatEntry({
+      fromPeer,
+      name: message.name || getMultiplayerDisplayNameForPeer(fromPeer, "Player"),
+      text,
+      sentAt: Number.isFinite(message.sentAt) ? message.sentAt : Date.now(),
+    });
+    return;
+  }
 
   if (isMultiplayerHost()) {
     if (message.type === "hello") {
@@ -8225,6 +8377,17 @@ function updateHud() {
 
   if (speedControlEl) speedControlEl.hidden = !game.started || game.menuOpen;
   if (autoWaveBtn) autoWaveBtn.hidden = !game.started || game.menuOpen;
+  const chatVisible = canUseInMatchChat();
+  if (chatToggleBtn) chatToggleBtn.hidden = !chatVisible;
+  if (chatPanelEl) {
+    if (!chatVisible) {
+      chatPanelEl.hidden = true;
+      multiplayer.chatOpen = false;
+    } else {
+      chatPanelEl.hidden = !multiplayer.chatOpen;
+      if (multiplayer.chatOpen) renderMultiplayerChat();
+    }
+  }
   const lockMetaMenusDuringRun = game.started && !game.over;
   if (openUnlockShopBtn) openUnlockShopBtn.disabled = lockMetaMenusDuringRun;
   if (openLoadoutBtn) openLoadoutBtn.disabled = lockMetaMenusDuringRun;
@@ -8942,6 +9105,9 @@ if (settingShatterBtn) settingShatterBtn.addEventListener("click", toggleSetting
 if (commandToggleBtn) commandToggleBtn.addEventListener("click", toggleCommandConsole);
 if (commandCloseBtn) commandCloseBtn.addEventListener("click", closeCommandConsole);
 if (commandRunBtn) commandRunBtn.addEventListener("click", runConsoleCommandFromInput);
+if (chatToggleBtn) chatToggleBtn.addEventListener("click", toggleChatPanel);
+if (chatCloseBtn) chatCloseBtn.addEventListener("click", closeChatPanel);
+if (chatSendBtn) chatSendBtn.addEventListener("click", sendMultiplayerChatFromInput);
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
 if (mapPrevBtn) mapPrevBtn.addEventListener("click", () => cycleMenuLevel(-1));
 if (mapNextBtn) mapNextBtn.addEventListener("click", () => cycleMenuLevel(1));
@@ -8953,6 +9119,18 @@ if (commandInputEl) {
     } else if (event.key === "Escape") {
       event.preventDefault();
       closeCommandConsole();
+    }
+  });
+}
+if (chatInputEl) {
+  chatInputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      sendMultiplayerChatFromInput();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeChatPanel();
+      updateHud();
     }
   });
 }
@@ -9045,6 +9223,14 @@ canvas.addEventListener("pointerleave", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (chatInputEl && document.activeElement === chatInputEl) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeChatPanel();
+      updateHud();
+    }
+    return;
+  }
   if (accountNameInputEl && document.activeElement === accountNameInputEl) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -9107,6 +9293,13 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (chatPanelEl && !chatPanelEl.hidden && event.key === "Escape") {
+    event.preventDefault();
+    closeChatPanel();
+    updateHud();
+    return;
+  }
+
   if (game.exitConfirmOpen) {
     const key = event.key.toLowerCase();
     if (event.key === "Escape" || key === "n") {
@@ -9146,6 +9339,12 @@ window.addEventListener("keydown", (event) => {
       event.preventDefault();
       if (game.started) openMultiplayerMenu();
     }
+    return;
+  }
+
+  if (isMultiplayerActive() && (event.key === "t" || event.key === "T" || event.key === "/" || event.key === "?")) {
+    event.preventDefault();
+    openChatPanel(true);
     return;
   }
 
