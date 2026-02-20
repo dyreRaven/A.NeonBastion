@@ -152,7 +152,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-36";
+const BUILD_ID = "2026-02-20-37";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -4511,7 +4511,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       coreY: 0.1,
     },
     monolith: { shape: "cube", sizeX: 2.35, sizeY: 2.35, sizeZ: 2.35, ringRadius: 0, coreRadius: 0.3, coreY: 0.3 },
-    pyramidion: { shape: "triangle", size: 1.44, ringRadius: 0, coreRadius: 0.23, coreY: 0.16 },
+    pyramidion: { shape: "pyramid", baseRadius: 1.06, height: 2.12, sides: 8, ringRadius: 0, coreRadius: 0.24, coreY: 0.22 },
     diamondarchon: { shape: "rhombus", radius: 2.32, ringRadius: 0, coreRadius: 0.28, coreY: 0.18 },
     icosahedron: {
       shape: "icosa",
@@ -4591,6 +4591,32 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     body = cast(new THREE.Mesh(new THREE.TetrahedronGeometry(setup.size), bodyMat));
     body.rotation.y = Math.PI / 3;
     group.add(body);
+  } else if (setup.shape === "pyramid") {
+    const sides = Math.max(5, Math.floor(setup.sides || 8));
+    const baseRadius = Math.max(0.35, setup.baseRadius || 1.04);
+    const height = Math.max(0.6, setup.height || 1.96);
+
+    body = cast(new THREE.Mesh(new THREE.ConeGeometry(baseRadius, height, sides), bodyMat));
+    body.position.y = height * 0.08;
+    body.rotation.y = Math.PI / sides;
+    group.add(body);
+
+    const baseCollar = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(baseRadius * 0.92, baseRadius * 1.06, height * 0.12, sides),
+        darkMat
+      )
+    );
+    baseCollar.position.y = -height * 0.44;
+    group.add(baseCollar);
+
+    for (let i = 0; i < sides; i += 2) {
+      const angle = (i / sides) * Math.PI * 2 + Math.PI / sides;
+      const rib = cast(new THREE.Mesh(new THREE.BoxGeometry(baseRadius * 0.22, height * 0.42, 0.08), darkMat));
+      rib.position.set(Math.cos(angle) * baseRadius * 0.62, -height * 0.08, Math.sin(angle) * baseRadius * 0.62);
+      rib.rotation.y = angle;
+      group.add(rib);
+    }
   } else if (setup.shape === "cube") {
     body = cast(new THREE.Mesh(new THREE.BoxGeometry(setup.sizeX, setup.sizeY, setup.sizeZ), bodyMat));
     group.add(body);
@@ -5399,11 +5425,13 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     enemyTypeId === "blink" ||
     enemyTypeId === "skitter" ||
     enemyTypeId === "minion" ||
-    enemyTypeId === "raider" ||
-    enemyTypeId === "pyramidion"
+    enemyTypeId === "raider"
   ) {
     symbolGeometry = new THREE.TetrahedronGeometry(0.54);
     symbolY = 0.73;
+  } else if (enemyTypeId === "pyramidion") {
+    symbolGeometry = new THREE.ConeGeometry(0.46, 0.78, 8);
+    symbolY = 0.74;
   } else if (enemyTypeId === "bulwark" || enemyTypeId === "warden" || enemyTypeId === "monolith") {
     symbolGeometry = new THREE.BoxGeometry(0.74, 0.74, 0.74);
   } else if (enemyTypeId === "specter" || enemyTypeId === "colossus") {
@@ -5465,10 +5493,11 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     enemyTypeId === "blink" ||
     enemyTypeId === "skitter" ||
     enemyTypeId === "minion" ||
-    enemyTypeId === "raider" ||
-    enemyTypeId === "pyramidion"
+    enemyTypeId === "raider"
   ) {
     symbol.rotation.y = Math.PI / 3;
+  } else if (enemyTypeId === "pyramidion") {
+    symbol.rotation.y = Math.PI / 8;
   } else if (enemyTypeId === "trapiziod") {
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "cross") {
@@ -5516,10 +5545,6 @@ function getEnemySpinSpeed(typeId) {
   if (typeId === "colossus" || typeId === "leviathan") return 1.55;
   if (typeId === "warden") return 2.1;
   return 2.8;
-}
-
-function enemyKeepsUpright(typeId) {
-  return typeId === "pyramidion";
 }
 
 class Enemy {
@@ -5629,10 +5654,7 @@ class Enemy {
     const movedX = this.x - prevX;
     const movedZ = this.z - prevZ;
     const movedDistance = Math.hypot(movedX, movedZ);
-    if (enemyKeepsUpright(this.typeId)) {
-      const yaw = Math.atan2(this.headingX, this.headingZ);
-      this.mesh.rotation.set(0, yaw, 0);
-    } else if (movedDistance > 1e-5) {
+    if (movedDistance > 1e-5) {
       const invMove = 1 / movedDistance;
       this.rollAxis.set(movedZ * invMove, 0, -movedX * invMove);
       this.rollQuat.setFromAxisAngle(this.rollAxis, movedDistance / this.rollRadius);
@@ -5981,10 +6003,7 @@ class AllyMinion {
     const movedX = this.x - prevX;
     const movedZ = this.z - prevZ;
     const movedDistance = Math.hypot(movedX, movedZ);
-    if (enemyKeepsUpright(this.typeId)) {
-      const yaw = Math.atan2(this.headingX, this.headingZ);
-      this.mesh.rotation.set(0, yaw, 0);
-    } else if (movedDistance > 1e-5) {
+    if (movedDistance > 1e-5) {
       const invMove = 1 / movedDistance;
       this.rollAxis.set(movedZ * invMove, 0, -movedX * invMove);
       this.rollQuat.setFromAxisAngle(this.rollAxis, movedDistance / this.rollRadius);
