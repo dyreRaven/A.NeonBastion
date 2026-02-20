@@ -156,7 +156,7 @@ const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
 const MULTIPLAYER_CHAT_LIMIT = 140;
 const MULTIPLAYER_CHAT_HISTORY_LIMIT = 64;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-41";
+const BUILD_ID = "2026-02-20-42";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -9473,9 +9473,33 @@ function acknowledgeLevelClearToMenu() {
   openMenuShop();
 }
 
+function exitCurrentRunToMenu() {
+  clearActiveCombatState();
+  resetTowersForNewLevel();
+  game.started = false;
+  game.over = false;
+  game.levelOneDefeated = false;
+  game.autoWaveEnabled = false;
+  game.autoWaveCountdown = game.autoWaveInterval;
+  game.paused = false;
+  game.editingLane = false;
+  game.placing = false;
+  game.selling = false;
+  game.hoverCell = null;
+  game.wave = 0;
+  game.waveCreditsEarned = 0;
+  const menuLevel = Number.isFinite(game.currentLevel) ? game.currentLevel : (game.menuSelectedLevel || 1);
+  game.menuSelectedLevel = clampMenuSelectedLevel(menuLevel);
+  resetLaneToLevelDefaults(game.menuSelectedLevel);
+  rebuildWorld();
+}
+
 function confirmExitToMenu() {
   closeExitConfirm();
+  exitCurrentRunToMenu();
   openMenuShop();
+  setStatus("Map exited. You can change loadout and shops.");
+  if (isMultiplayerHost() && isMultiplayerActive()) sendMultiplayerSnapshot(true);
 }
 
 function toggleMenuHome() {
