@@ -4797,6 +4797,103 @@ function createTowerAreaMarker(colorHex = "#ff3a3a") {
   return marker;
 }
 
+let bombarderRangeMarker = null;
+
+function ensureBombarderRangeMarker() {
+  if (bombarderRangeMarker && bombarderRangeMarker.group) return bombarderRangeMarker;
+
+  const group = new THREE.Group();
+
+  const maxFill = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 96),
+    new THREE.MeshBasicMaterial({
+      color: "#ffb370",
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  maxFill.rotation.x = -Math.PI / 2;
+  maxFill.position.y = 0.03;
+  group.add(maxFill);
+
+  const maxRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.97, 1, 96),
+    new THREE.MeshBasicMaterial({
+      color: "#ffbe83",
+      transparent: true,
+      opacity: 0.62,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  maxRing.rotation.x = -Math.PI / 2;
+  maxRing.position.y = 0.05;
+  group.add(maxRing);
+
+  const minFill = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 80),
+    new THREE.MeshBasicMaterial({
+      color: "#ff5f5f",
+      transparent: true,
+      opacity: 0.14,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  minFill.rotation.x = -Math.PI / 2;
+  minFill.position.y = 0.07;
+  group.add(minFill);
+
+  const minRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1, 88),
+    new THREE.MeshBasicMaterial({
+      color: "#ff8b8b",
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  minRing.rotation.x = -Math.PI / 2;
+  minRing.position.y = 0.09;
+  group.add(minRing);
+
+  group.visible = false;
+  scene.add(group);
+
+  bombarderRangeMarker = { group, maxFill, maxRing, minFill, minRing };
+  return bombarderRangeMarker;
+}
+
+function setBombarderRangeMarkerState(tower) {
+  const marker = ensureBombarderRangeMarker();
+  if (!tower || !isBombarderTower(tower)) {
+    marker.group.visible = false;
+    return;
+  }
+
+  const maxRange = Math.max(1.2, tower.range || 1.2);
+  const minRange = Math.max(0, tower.minRange || 0);
+
+  marker.group.position.set(tower.x, tower.y + 0.04, tower.z);
+  marker.maxFill.scale.set(maxRange, maxRange, 1);
+  marker.maxRing.scale.set(maxRange, maxRange, 1);
+
+  if (minRange > 0.05) {
+    marker.minFill.visible = true;
+    marker.minRing.visible = true;
+    marker.minFill.scale.set(minRange, minRange, 1);
+    marker.minRing.scale.set(minRange, minRange, 1);
+  } else {
+    marker.minFill.visible = false;
+    marker.minRing.visible = false;
+  }
+
+  marker.group.visible = true;
+}
+
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
 const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -15331,10 +15428,12 @@ function getActiveBombarderTargetingTower() {
   const tower = game.bombarderTargetingTower;
   if (!isBombarderTower(tower)) {
     game.bombarderTargetingTower = null;
+    setBombarderRangeMarkerState(null);
     return null;
   }
   if (tower.destroyed || !game.towers.includes(tower)) {
     game.bombarderTargetingTower = null;
+    setBombarderRangeMarkerState(null);
     return null;
   }
   return tower;
@@ -15343,6 +15442,7 @@ function getActiveBombarderTargetingTower() {
 function clearBombarderTargetingMode(announce = false) {
   const hadMode = !!game.bombarderTargetingTower;
   game.bombarderTargetingTower = null;
+  setBombarderRangeMarkerState(null);
   if (hadMode && announce) setStatus("Bombard targeting cancelled.");
   return hadMode;
 }
@@ -15395,6 +15495,7 @@ function applyBombarderTargetCell(tower, cellX, cellY, announce = true, assigned
 function beginBombarderTargetingMode(tower) {
   if (!isBombarderTower(tower)) return false;
   game.bombarderTargetingTower = tower;
+  setBombarderRangeMarkerState(tower);
   game.placing = false;
   game.selling = false;
   game.editingLane = false;
@@ -15659,6 +15760,7 @@ function toggleBuildMode() {
 
 function updatePlacementPreview() {
   const activeBombarder = getActiveBombarderTargetingTower();
+  setBombarderRangeMarkerState(activeBombarder);
   if (
     game.paused ||
     game.menuOpen ||
@@ -16165,6 +16267,8 @@ function loop(now) {
     updatePlacementPreview();
     updateMapEffects(effectDt);
     if (!rendererContextLost) renderer.render(scene, camera);
+  } else {
+    setBombarderRangeMarkerState(null);
   }
   requestAnimationFrame(loop);
 }
