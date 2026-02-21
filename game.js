@@ -9098,88 +9098,88 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       recoilBlock.position.set(0, 0.42, -0.24);
       turret.add(recoilBlock);
     } else if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
-      head.scale.set(1.04, 1.08, 1.24);
-      barrel.scale.set(1.24, 1.14, 0.74);
-      barrel.position.set(0, 0.46, 1.02);
-      railL.position.set(-0.22, 0.64, 0.96);
-      railL.scale.set(1, 1.34, 0.72);
-      railR.position.set(0.22, 0.64, 0.96);
-      railR.scale.set(1, 1.34, 0.72);
-      tail.scale.set(1.16, 1.08, 1.34);
+      head.scale.set(0.86, 1.06, 1.08);
+      barrel.scale.set(1.08, 1.18, 1.42);
+      barrel.position.set(0, 0.47, 1.34);
+      railL.position.set(-0.18, 0.64, 1.22);
+      railL.scale.set(0.88, 1.28, 1.12);
+      railR.position.set(0.18, 0.64, 1.22);
+      railR.scale.set(0.88, 1.28, 1.12);
+      tail.scale.set(0.9, 1.02, 1.22);
       tail.position.set(0, 0.3, -0.5);
       beacon.position.set(0, 0.92, 0.06);
 
-      const armoredDeck = cast(new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.36, 1.58), darkMat));
+      const armoredDeck = cast(new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.34, 1.72), darkMat));
       armoredDeck.position.set(0, 0.28, 0.58);
       turret.add(armoredDeck);
 
-      const skirtL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.56, 1.36), darkMat));
-      skirtL.position.set(-0.52, 0.36, 1.0);
+      const skirtL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 1.46), darkMat));
+      skirtL.position.set(-0.4, 0.34, 1.04);
       turret.add(skirtL);
-      const skirtR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.56, 1.36), darkMat));
-      skirtR.position.set(0.52, 0.36, 1.0);
+      const skirtR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.5, 1.46), darkMat));
+      skirtR.position.set(0.4, 0.34, 1.04);
       turret.add(skirtR);
 
-      const turretCollar = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.54, 0.24, 14), bodyMat));
+      const turretCollar = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.48, 0.22, 14), bodyMat));
       turretCollar.position.set(0, 0.54, 0.5);
       turret.add(turretCollar);
 
-      const trunnion = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.02, 12), coreMat));
+      const trunnion = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.82, 12), coreMat));
       trunnion.rotation.z = Math.PI / 2;
       trunnion.position.set(0, 0.58, 0.58);
       turret.add(trunnion);
 
-      const recoilHousing = cast(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.38, 0.56), darkMat));
-      recoilHousing.position.set(0, 0.44, -0.12);
+      const recoilHousing = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.34, 0.54), darkMat));
+      recoilHousing.position.set(0, 0.42, -0.1);
       turret.add(recoilHousing);
 
       const barrelRig = new THREE.Group();
-      barrelRig.position.set(0, 0.68, 0.72);
+      barrelRig.position.set(0, 0.68, 0.9);
       barrelRig.rotation.x = -0.24;
       turret.add(barrelRig);
 
-      const breech = cast(new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.38, 0.52), darkMat));
+      const breech = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.34, 0.5), darkMat));
       breech.position.set(0, -0.06, -0.16);
       barrelRig.add(breech);
 
-      const recoilSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.54, 14), bodyMat));
+      const recoilSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.7, 14), bodyMat));
       recoilSleeve.rotation.x = Math.PI / 2;
-      recoilSleeve.position.set(0, 0.02, 0.18);
+      recoilSleeve.position.set(0, 0.03, 0.34);
       barrelRig.add(recoilSleeve);
 
-      const barrelCore = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 1.94, 14), coreMat));
+      const barrelCore = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 2.56, 14), coreMat));
       barrelCore.rotation.x = Math.PI / 2;
-      barrelCore.position.set(0, 0.06, 1.04);
+      barrelCore.position.set(0, 0.08, 1.42);
       barrelRig.add(barrelCore);
 
-      const barrelJacket = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 1.24, 14), darkMat));
+      const barrelJacket = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 1.68, 14), darkMat));
       barrelJacket.rotation.x = Math.PI / 2;
-      barrelJacket.position.set(0, 0.06, 1.66);
+      barrelJacket.position.set(0, 0.08, 2.18);
       barrelRig.add(barrelJacket);
 
-      const muzzleRing = cast(new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.05, 10, 24), glowMat));
+      const muzzleRing = cast(new THREE.Mesh(new THREE.TorusGeometry(0.44, 0.05, 10, 24), glowMat));
       muzzleRing.rotation.x = Math.PI / 2;
-      muzzleRing.position.set(0, 0.06, 2.2);
+      muzzleRing.position.set(0, 0.08, 2.96);
       barrelRig.add(muzzleRing);
 
-      const muzzleCrown = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.29, 0.34, 12), coreMat));
+      const muzzleCrown = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.36, 0.44, 12), coreMat));
       muzzleCrown.rotation.x = Math.PI / 2;
-      muzzleCrown.position.set(0, 0.06, 2.18);
+      muzzleCrown.position.set(0, 0.08, 2.96);
       barrelRig.add(muzzleCrown);
 
-      const muzzleVentL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.34), glowMat));
-      muzzleVentL.position.set(-0.24, 0.06, 2.18);
+      const muzzleVentL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.42), glowMat));
+      muzzleVentL.position.set(-0.3, 0.08, 2.96);
       barrelRig.add(muzzleVentL);
-      const muzzleVentR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.34), glowMat));
-      muzzleVentR.position.set(0.24, 0.06, 2.18);
+      const muzzleVentR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.42), glowMat));
+      muzzleVentR.position.set(0.3, 0.08, 2.96);
       barrelRig.add(muzzleVentR);
 
-      const stabilizerL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 1.28), darkMat));
-      stabilizerL.position.set(-0.34, 0.2, 0.98);
+      const stabilizerL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.26, 1.42), darkMat));
+      stabilizerL.position.set(-0.28, 0.2, 1.2);
       stabilizerL.rotation.x = -0.08;
       turret.add(stabilizerL);
-      const stabilizerR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 1.28), darkMat));
-      stabilizerR.position.set(0.34, 0.2, 0.98);
+      const stabilizerR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.26, 1.42), darkMat));
+      stabilizerR.position.set(0.28, 0.2, 1.2);
       stabilizerR.rotation.x = -0.08;
       turret.add(stabilizerR);
 
@@ -9188,8 +9188,8 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(serviceHatch);
 
       if (towerTypeId === "deluxeBombarder") {
-        turret.scale.set(1.92, 1.34, 1.92);
-        turret.position.y = 2.28;
+        turret.scale.set(1.66, 1.3, 1.94);
+        turret.position.y = 2.3;
       }
     } else if (towerTypeId === "sentinel") {
       head.scale.set(0.98, 0.9, 1.1);
@@ -9250,7 +9250,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle.position.set(0, 0.42, 2.6);
     if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
     if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
-    if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") muzzle.position.set(0, 1.3, 2.98);
+    if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") muzzle.position.set(0, 1.34, 3.82);
     if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
     if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
     turret.add(muzzle);
@@ -10446,9 +10446,6 @@ class Tower {
       const origin = new THREE.Vector3();
       if (this.muzzle) this.muzzle.getWorldPosition(origin);
       else origin.set(this.x, this.y + 1.1, this.z);
-      const muzzleDir = new THREE.Vector3(splashX - origin.x, splashY - origin.y, splashZ - origin.z);
-      if (muzzleDir.lengthSq() > 1e-6) muzzleDir.normalize();
-      else muzzleDir.set(0, 0, 1);
 
       this.cooldown = this.fireInterval;
       const now = game.time;
@@ -10459,15 +10456,6 @@ class Tower {
         }
         audioSystem.playTowerShot(this.damage * 1.04);
         audioSystem.playBombarderShot(this.damage, this.splashRadius);
-      }
-
-      const muzzleFxDue =
-        game.explosionParticlesEnabled && (!this.bombardFxLite || now >= this.nextBombardMuzzleFxAt);
-      if (muzzleFxDue) {
-        if (this.bombardFxLite && this.bombardMuzzleFxInterval > 0) {
-          this.nextBombardMuzzleFxAt = now + this.bombardMuzzleFxInterval;
-        }
-        game.debris.push(new BombardMuzzleFireEffect(origin, muzzleDir, this.projectileColor, this.projectileRadius));
       }
 
       const impactSfxDue = !this.bombardFxLite || now >= this.nextBombardImpactSfxAt;
@@ -10533,14 +10521,10 @@ class Tower {
       const origin = new THREE.Vector3();
       if (this.muzzle) this.muzzle.getWorldPosition(origin);
       else origin.set(this.x, this.y + 1.1, this.z);
-      const muzzleDir = new THREE.Vector3(this.areaTargetX - origin.x, this.areaTargetY - origin.y, this.areaTargetZ - origin.z);
-      if (muzzleDir.lengthSq() > 1e-6) muzzleDir.normalize();
-      else muzzleDir.set(0, 0, 1);
 
       this.cooldown = this.fireInterval;
       audioSystem.playTowerShot(this.damage * 1.08);
       audioSystem.playBombarderShot(this.damage, this.splashRadius);
-      game.debris.push(new BombardMuzzleFireEffect(origin, muzzleDir, this.projectileColor, this.projectileRadius));
       game.projectiles.push(
         new BombardProjectile(
           origin,
