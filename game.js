@@ -1450,7 +1450,7 @@ const TOWER_TYPES = {
   bombarder: {
     name: "Bombarder",
     cost: 980,
-    range: 16.8,
+    range: 25.2,
     damage: 428,
     fireInterval: 2.35,
     turnSpeed: 2.4,
@@ -1466,7 +1466,7 @@ const TOWER_TYPES = {
   deluxeBombarder: {
     name: "Deluxe Bombarder",
     cost: 1780,
-    range: 16.4,
+    range: 24.6,
     damage: 472,
     fireInterval: 0.12,
     turnSpeed: 3.4,
@@ -8946,6 +8946,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   let turret = null;
   let muzzle = null;
   let spinNode = null;
+  let barrelRig = null;
 
   function cast(mesh) {
     mesh.castShadow = true;
@@ -9133,7 +9134,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       recoilHousing.position.set(0, 0.42, -0.1);
       turret.add(recoilHousing);
 
-      const barrelRig = new THREE.Group();
+      barrelRig = new THREE.Group();
       barrelRig.position.set(0, 0.68, 0.9);
       barrelRig.rotation.x = -0.24;
       turret.add(barrelRig);
@@ -9506,7 +9507,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   mastLight.position.y = 2.08;
   group.add(mastLight);
 
-  return { group, turret, muzzle, spinNode };
+  return { group, turret, muzzle, spinNode, barrelRig };
 }
 
 function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
@@ -10343,6 +10344,8 @@ class Tower {
     this.turret = meshData.turret;
     this.muzzle = meshData.muzzle;
     this.spinNode = meshData.spinNode;
+    this.barrelRig = meshData.barrelRig || null;
+    this.barrelAimOrigin = this.barrelRig ? new THREE.Vector3() : null;
     if (!this.isTrap && this.meshScale !== 1) {
       this.mesh.scale.set(this.meshScale, this.meshScale, this.meshScale);
     }
@@ -10354,6 +10357,26 @@ class Tower {
       this.areaMarker.scale.set(1, 1, 1);
       this.areaMarker.visible = false;
     }
+  }
+
+  updateBombardBarrelAim(targetX, targetY, targetZ, dt) {
+    if (!this.barrelRig) return;
+    const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    if (safeDt <= 0) return;
+
+    const origin = this.barrelAimOrigin || new THREE.Vector3();
+    if (this.muzzle) this.muzzle.getWorldPosition(origin);
+    else origin.set(this.x, this.y + 1.34, this.z);
+
+    const dx = targetX - origin.x;
+    const dz = targetZ - origin.z;
+    const horizontalDistance = Math.hypot(dx, dz);
+    if (horizontalDistance < 1e-4) return;
+
+    const dy = targetY - origin.y;
+    const desiredPitch = THREE.MathUtils.clamp(-Math.atan2(dy, horizontalDistance), -0.45, 0.7);
+    const blend = 1 - Math.exp(-9 * safeDt);
+    this.barrelRig.rotation.x += (desiredPitch - this.barrelRig.rotation.x) * blend;
   }
 
   update(dt) {
@@ -10425,6 +10448,12 @@ class Tower {
         this.turret.rotation.y = nextYaw;
         aimError = Math.abs(shortestAngleDelta(nextYaw, desiredYaw));
       }
+      this.updateBombardBarrelAim(
+        target.x,
+        (Number.isFinite(target.currentY) ? target.currentY : target.y) + (Number.isFinite(target.aimOffsetY) ? target.aimOffsetY : 0),
+        target.z,
+        dt
+      );
 
       if (this.cooldown > 0) return;
       if (this.turret && aimError > 0.26) return;
@@ -10514,6 +10543,7 @@ class Tower {
         this.turret.rotation.y = nextYaw;
         aimError = Math.abs(shortestAngleDelta(nextYaw, desiredYaw));
       }
+      this.updateBombardBarrelAim(this.areaTargetX, this.areaTargetY, this.areaTargetZ, dt);
 
       if (!game.inWave) return;
       if (this.cooldown > 0) return;
