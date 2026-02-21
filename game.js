@@ -7695,9 +7695,9 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     pyramidion: { shape: "pyramid", baseRadius: 1.06, height: 2.12, sides: 8, ringRadius: 0, coreRadius: 0.24, coreY: 0.22 },
     diamondarchon: {
       shape: "diamondSigil",
-      radius: 1.42,
-      heightTop: 1.22,
-      heightBottom: 1.86,
+      radius: 1.78,
+      heightTop: 1.56,
+      heightBottom: 2.34,
       sides: 8,
       ringRadius: 0,
       coreRadius: 0.28,
