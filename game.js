@@ -4297,6 +4297,7 @@ const game = {
   spawnLeft: 0,
   spawnTimer: 0,
   spawnQueue: [],
+  waveSpawnTotal: 0,
   levelOneBossMinionTimer: 0,
   selectedTowerType: "pulse",
   unlockedTowers: new Set(BASE_UNLOCKED_TOWERS),
@@ -6246,8 +6247,14 @@ function isLikelyValidProgressPayload(payload) {
 }
 
 function serializeProgressSnapshotForCloud() {
+  // Keep auth lock/session device-local; cloud payload should only carry gameplay/account state.
   try {
-    return JSON.parse(JSON.stringify(progressData || defaultProgressData()));
+    const snapshot = JSON.parse(JSON.stringify(progressData || defaultProgressData()));
+    if (snapshot && typeof snapshot === "object") {
+      snapshot.requirePasswordOnStartup = false;
+      snapshot.cloudAuthSession = null;
+    }
+    return snapshot;
   } catch (_) {
     return defaultProgressData();
   }
@@ -6415,11 +6422,16 @@ async function loadCloudProgressForUser(user, quiet = false) {
     cloudAuth.profileTableMissing = false;
     const remoteProgress = data?.progress;
     if (!isLikelyValidProgressPayload(remoteProgress)) return false;
+    // Preserve per-device auth behavior when ingesting cloud-synced game progress.
+    const deviceRequirePasswordOnStartup = !!progressData.requirePasswordOnStartup;
+    const deviceCloudAuthSession = normalizePersistedCloudAuthSession(progressData.cloudAuthSession);
     const normalizedRemoteProgress = normalizeProgressData(remoteProgress);
     const remoteLooksFresh = isLikelyFreshDefaultProgress(normalizedRemoteProgress);
     const localLooksFresh = isLikelyFreshDefaultProgress(progressData);
     if (remoteLooksFresh && !localLooksFresh) return false;
     progressData = normalizedRemoteProgress;
+    progressData.requirePasswordOnStartup = deviceRequirePasswordOnStartup;
+    progressData.cloudAuthSession = deviceCloudAuthSession;
     const signedInEmail = sanitizeAccountUsername(user.email || data?.email || "");
     const cloudProfileName = sanitizeAccountName(data?.profile_name || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
     if (signedInEmail) {
@@ -10581,6 +10593,7 @@ function buildMultiplayerSnapshot() {
     inWave: game.inWave,
     waveCreditsEarned: game.waveCreditsEarned,
     spawnLeft: game.spawnLeft,
+    waveSpawnTotal: game.waveSpawnTotal,
     spawnTimer: quantizeNetNumber(game.spawnTimer),
     selectedTowerType: game.selectedTowerType,
     placing: game.placing,
@@ -10923,6 +10936,8 @@ function applyMultiplayerSnapshot(snapshot) {
   game.inWave = !!snapshot.inWave;
   game.waveCreditsEarned = Math.max(0, Math.floor(snapshot.waveCreditsEarned || 0));
   game.spawnLeft = Math.max(0, Math.floor(snapshot.spawnLeft || 0));
+  const snapshotWaveSpawnTotal = Number.isFinite(snapshot.waveSpawnTotal) ? snapshot.waveSpawnTotal : snapshot.spawnLeft;
+  game.waveSpawnTotal = Math.max(game.spawnLeft, Math.floor(snapshotWaveSpawnTotal || 0));
   game.spawnTimer = Number.isFinite(snapshot.spawnTimer) ? snapshot.spawnTimer : 0;
   game.paused = !!snapshot.paused;
   game.autoWaveEnabled = !!snapshot.autoWaveEnabled;
@@ -11305,6 +11320,7 @@ function completeCurrentLevel(nextLevel, shardReward, statusMessage, panelMessag
   game.autoWaveEnabled = false;
   game.spawnQueue = [];
   game.spawnLeft = 0;
+  game.waveSpawnTotal = 0;
   game.spawnTimer = 0;
   game.levelOneBossMinionTimer = 0;
   game.bossEnemy = null;
@@ -11486,6 +11502,7 @@ function clearActiveCombatState() {
   game.spawnerTypeSequenceState = Object.create(null);
   game.spawnQueue = [];
   game.spawnLeft = 0;
+  game.waveSpawnTotal = 0;
   game.spawnTimer = 0;
   game.levelOneBossMinionTimer = 0;
   game.bossEnemy = null;
@@ -14193,6 +14210,7 @@ function startWave() {
   const spawnCount = Math.max(1, Math.round(baseSpawnCount * profile.spawnMultiplier + profile.spawnFlatBonus));
   game.spawnQueue = buildWaveSpawnQueue(game.wave, spawnCount, game.currentLevel);
   game.spawnLeft = game.spawnQueue.length;
+  game.waveSpawnTotal = game.spawnLeft;
   game.spawnTimer = profile.spawnStartDelay;
   game.levelOneBossMinionTimer =
     game.currentLevel === 1 && game.wave === 20 ? LEVEL_ONE_BOSS_MINION_INITIAL_DELAY : 0;
@@ -14208,6 +14226,7 @@ function endWaveIfDone() {
   const living = game.enemies.some((enemy) => enemy.alive);
   if (game.spawnLeft <= 0 && !living) {
     game.inWave = false;
+    game.waveSpawnTotal = 0;
     syncMusicState();
     const bonusCredits = 30 + game.wave * 5;
     game.money += bonusCredits;
@@ -14657,14 +14676,25 @@ function update(dt) {
 
       const isEmberWave = game.currentLevel >= 3 && game.wave >= 12;
       if (isEmberWave) {
-        const emberSpreadFloor = game.wave >= 24 ? 0.3 : game.wave >= 18 ? 0.27 : 0.24;
+        const rawSpawnProgress = game.waveSpawnTotal > 0 ? 1 - game.spawnLeft / game.waveSpawnTotal : 0;
+        const spawnProgress = THREE.MathUtils.clamp(rawSpawnProgress, 0, 1);
+        const easedProgress = spawnProgress * spawnProgress * (3 - 2 * spawnProgress);
+        const spawnRampMultiplier = 1.65 - easedProgress * 0.95;
+        nextSpawnDelay = Math.max(profile.minSpawnInterval, nextSpawnDelay * spawnRampMultiplier);
+
+        const baseSpreadFloor = game.wave >= 24 ? 0.29 : game.wave >= 18 ? 0.26 : 0.23;
+        const earlySpreadBonus = game.wave >= 24 ? 0.17 : game.wave >= 18 ? 0.15 : 0.13;
+        const emberSpreadFloor = baseSpreadFloor + (1 - easedProgress) * earlySpreadBonus;
         nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor);
         if (spawnedType === "diamondarchon" || spawnedType === "monolith") {
-          nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor + 0.09);
+          const heavyUnitSpacing = 0.12 - easedProgress * 0.05;
+          nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor + heavyUnitSpacing);
         } else if (spawnedType === "pyramidion" || spawnedType === "trapiziod" || spawnedType === "cross") {
-          nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor + 0.05);
+          const eliteUnitSpacing = 0.08 - easedProgress * 0.03;
+          nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor + eliteUnitSpacing);
         }
-        nextSpawnDelay += Math.random() * 0.03;
+        const spreadJitter = Math.max(0.01, 0.05 - easedProgress * 0.03);
+        nextSpawnDelay += Math.random() * spreadJitter;
       }
       game.spawnTimer = nextSpawnDelay;
     }
@@ -14710,6 +14740,7 @@ function update(dt) {
         game.autoWaveEnabled = false;
         game.spawnQueue = [];
         game.spawnLeft = 0;
+        game.waveSpawnTotal = 0;
         game.spawnTimer = 0;
         game.levelOneBossMinionTimer = 0;
         setStatus("Defeat! Your core was destroyed.", true);
