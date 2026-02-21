@@ -1213,6 +1213,7 @@ const TOWER_UNLOCKS = {
   frost: { shardCost: 28 },
   quarry: { shardCost: 44 },
   bombarder: { shardCost: 50 },
+  deluxeBombarder: { shardCost: 86 },
   rift: { shardCost: 32 },
   volt: { shardCost: 36 },
   bastion: { shardCost: 48 },
@@ -1220,7 +1221,18 @@ const TOWER_UNLOCKS = {
   citadel: { shardCost: 72 },
 };
 
-const MENU_UNLOCK_TOWER_IDS = ["ion", "frost", "quarry", "bombarder", "rift", "volt", "bastion", "photon", "citadel"];
+const MENU_UNLOCK_TOWER_IDS = [
+  "ion",
+  "frost",
+  "quarry",
+  "bombarder",
+  "deluxeBombarder",
+  "rift",
+  "volt",
+  "bastion",
+  "photon",
+  "citadel",
+];
 const MENU_TRAP_UNLOCK_TOWER_IDS = ["spikes"];
 const BASE_LOADOUT_SLOTS = 6;
 const MAX_LOADOUT_SLOTS = 10;
@@ -1237,6 +1249,7 @@ const BASE_TOWER_PLACE_CAPS = {
   ion: 1,
   quarry: 1,
   bombarder: 1,
+  deluxeBombarder: 1,
   rift: 2,
   bastion: 1,
   photon: 2,
@@ -1448,6 +1461,25 @@ const TOWER_TYPES = {
     summary: "Manual splash siege",
     manualAreaTargeting: true,
     splashRadius: 2.8,
+  },
+  deluxeBombarder: {
+    name: "Deluxe Bombarder",
+    cost: 1780,
+    range: 16.4,
+    damage: 236,
+    fireInterval: 0.48,
+    turnSpeed: 3.4,
+    projectileSpeed: 20,
+    projectileRadius: 0.33,
+    projectileColor: "#ffd7ad",
+    bodyColor: "#e0a96f",
+    coreColor: "#4a2e16",
+    summary: "Rapid auto splash siege",
+    meshScale: 1.34,
+    autoBombard: true,
+    sprayRadius: 1.85,
+    splashRadius: 2.8,
+    footprint: 2,
   },
   rift: {
     name: "Rift",
@@ -2207,11 +2239,14 @@ function formatPlacementCapLine(towerTypeId, placement = null, includeMaxTag = t
 function applyTowerTypeConfigToPlacedTower(tower) {
   if (!tower || !tower.towerTypeId) return;
   const config = getTowerType(tower.towerTypeId);
+  const footprint = getTowerFootprintForConfig(config);
   if (!Number.isFinite(tower.spawnerSequenceId)) {
     tower.spawnerSequenceId = game.nextSpawnerSequenceId;
     game.nextSpawnerSequenceId += 1;
   }
   tower.name = config.name;
+  tower.footprintWidth = footprint.width;
+  tower.footprintHeight = footprint.height;
   tower.isSpawner = !!config.spawnerEnemyTypeId;
   tower.spawnEnemyTypeId = config.spawnerEnemyTypeId || null;
   tower.spawnInterval = config.spawnInterval || config.fireInterval;
@@ -2223,8 +2258,16 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   tower.projectileSpeed = config.projectileSpeed;
   tower.projectileRadius = config.projectileRadius;
   tower.projectileColor = config.projectileColor;
+  tower.meshScale = Number.isFinite(config.meshScale) ? Math.max(0.6, config.meshScale) : 1;
+  if (tower.mesh && !tower.isTrap) {
+    tower.mesh.scale.set(tower.meshScale, tower.meshScale, tower.meshScale);
+  }
+  tower.autoBombard = !!config.autoBombard;
+  tower.sprayRadius = tower.autoBombard ? Math.max(0.05, Number(config.sprayRadius || tower.sprayRadius || 1.2)) : 0;
   tower.manualAreaTargeting = !!config.manualAreaTargeting;
-  tower.splashRadius = tower.manualAreaTargeting ? Math.max(0.8, Number(config.splashRadius || tower.splashRadius || 1.4)) : 0;
+  tower.splashRadius =
+    tower.manualAreaTargeting || tower.autoBombard ? Math.max(0.8, Number(config.splashRadius || tower.splashRadius || 1.4)) : 0;
+  updateTowerWorldTransform(tower);
   if (tower.manualAreaTargeting) {
     if (!tower.areaMarker) tower.areaMarker = createTowerAreaMarker("#ff3a3a");
     if (tower.areaMarker) {
@@ -3229,6 +3272,78 @@ function getLaneSurfaceY(worldX, worldZ) {
   return getCellTopY(cellX, cellY);
 }
 
+function normalizeTowerFootprint(rawFootprint) {
+  if (Number.isFinite(rawFootprint)) {
+    const value = Math.max(1, Math.min(4, Math.floor(rawFootprint)));
+    return { width: value, height: value };
+  }
+  if (rawFootprint && typeof rawFootprint === "object") {
+    const width = Math.max(1, Math.min(4, Math.floor(rawFootprint.width || 1)));
+    const height = Math.max(1, Math.min(4, Math.floor(rawFootprint.height || 1)));
+    return { width, height };
+  }
+  return { width: 1, height: 1 };
+}
+
+function getTowerFootprintForType(towerTypeId) {
+  const baseTower = TOWER_TYPES[towerTypeId] || getSpawnerTowerType(towerTypeId);
+  return normalizeTowerFootprint(baseTower?.footprint);
+}
+
+function getTowerFootprintForConfig(config) {
+  return normalizeTowerFootprint(config?.footprint);
+}
+
+function getTowerFootprintForPlacedTower(tower) {
+  const width = Math.max(1, Math.floor(tower?.footprintWidth || 1));
+  const height = Math.max(1, Math.floor(tower?.footprintHeight || 1));
+  return { width, height };
+}
+
+function getTowerWorldPosition(cellX, cellY, footprintWidth = 1, footprintHeight = 1) {
+  return {
+    x: (cellX + (footprintWidth - 1) * 0.5 - HALF_COLS) * CELL_SIZE,
+    z: (cellY + (footprintHeight - 1) * 0.5 - HALF_ROWS) * CELL_SIZE,
+  };
+}
+
+function getTowerBaseY(cellX, cellY, footprintWidth = 1, footprintHeight = 1) {
+  let sum = 0;
+  let count = 0;
+  for (let dy = 0; dy < footprintHeight; dy += 1) {
+    for (let dx = 0; dx < footprintWidth; dx += 1) {
+      const testX = cellX + dx;
+      const testY = cellY + dy;
+      if (!inBounds(testX, testY)) continue;
+      sum += getCellTopY(testX, testY);
+      count += 1;
+    }
+  }
+  if (count <= 0) return getCellTopY(cellX, cellY);
+  return sum / count;
+}
+
+function updateTowerWorldTransform(tower) {
+  if (!tower) return;
+  const { width, height } = getTowerFootprintForPlacedTower(tower);
+  const world = getTowerWorldPosition(tower.cellX, tower.cellY, width, height);
+  tower.x = world.x;
+  tower.z = world.z;
+  tower.y = getTowerBaseY(tower.cellX, tower.cellY, width, height);
+  if (tower.mesh) tower.mesh.position.set(tower.x, tower.y + 0.02, tower.z);
+}
+
+function towerOccupiesCell(tower, cellX, cellY) {
+  if (!tower) return false;
+  const { width, height } = getTowerFootprintForPlacedTower(tower);
+  return (
+    cellX >= tower.cellX &&
+    cellX < tower.cellX + width &&
+    cellY >= tower.cellY &&
+    cellY < tower.cellY + height
+  );
+}
+
 function rebuildWorld() {
   const geometries = new Set();
   const materials = new Set();
@@ -3274,8 +3389,7 @@ function rebuildWorld() {
   buildMap();
 
   for (const tower of game.towers) {
-    tower.y = getCellTopY(tower.cellX, tower.cellY);
-    tower.mesh.position.y = tower.y + 0.02;
+    updateTowerWorldTransform(tower);
   }
 }
 
@@ -8847,6 +8961,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     towerTypeId === "ion" ||
     towerTypeId === "quarry" ||
     towerTypeId === "bombarder" ||
+    towerTypeId === "deluxeBombarder" ||
     towerTypeId === "sentinel" ||
     towerTypeId === "citadel"
   ) {
@@ -8924,7 +9039,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const recoilBlock = cast(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 0.36), coreMat));
       recoilBlock.position.set(0, 0.42, -0.24);
       turret.add(recoilBlock);
-    } else if (towerTypeId === "bombarder") {
+    } else if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
       head.scale.set(1.04, 1.08, 1.24);
       barrel.scale.set(1.24, 1.14, 0.74);
       barrel.position.set(0, 0.46, 1.02);
@@ -9072,7 +9187,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle.position.set(0, 0.42, 2.6);
     if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
     if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
-    if (towerTypeId === "bombarder") muzzle.position.set(0, 1.3, 2.98);
+    if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") muzzle.position.set(0, 1.3, 2.98);
     if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
     if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
     turret.add(muzzle);
@@ -10095,11 +10210,14 @@ class AllyMinion {
 class Tower {
   constructor(cellX, cellY, towerTypeId) {
     const config = getTowerType(towerTypeId);
-    const world = cellToWorld(cellX, cellY);
-    const baseY = getCellTopY(cellX, cellY);
+    const footprint = getTowerFootprintForConfig(config);
+    const world = getTowerWorldPosition(cellX, cellY, footprint.width, footprint.height);
+    const baseY = getTowerBaseY(cellX, cellY, footprint.width, footprint.height);
 
     this.cellX = cellX;
     this.cellY = cellY;
+    this.footprintWidth = footprint.width;
+    this.footprintHeight = footprint.height;
     this.x = world.x;
     this.y = baseY;
     this.z = world.z;
@@ -10123,11 +10241,15 @@ class Tower {
     this.projectileSpeed = config.projectileSpeed;
     this.projectileRadius = config.projectileRadius;
     this.projectileColor = config.projectileColor;
+    this.meshScale = Number.isFinite(config.meshScale) ? Math.max(0.6, config.meshScale) : 1;
     this.trapTriggerRadius = this.isTrap ? Math.max(0.5, Number(config.trapTriggerRadius || config.range || 1)) : 0;
     this.trapDurabilityMax = this.isTrap ? Math.max(1, Math.floor(config.trapDurability || 10)) : 0;
     this.trapDurability = this.trapDurabilityMax;
     this.manualAreaTargeting = !!config.manualAreaTargeting;
-    this.splashRadius = this.manualAreaTargeting ? Math.max(0.8, Number(config.splashRadius || 1.4)) : 0;
+    this.autoBombard = !!config.autoBombard;
+    this.sprayRadius = this.autoBombard ? Math.max(0.05, Number(config.sprayRadius || 1.2)) : 0;
+    this.splashRadius =
+      this.manualAreaTargeting || this.autoBombard ? Math.max(0.8, Number(config.splashRadius || 1.4)) : 0;
     this.hasAreaTarget = false;
     this.areaTargetCellX = this.cellX;
     this.areaTargetCellY = this.cellY;
@@ -10141,8 +10263,11 @@ class Tower {
     this.turret = meshData.turret;
     this.muzzle = meshData.muzzle;
     this.spinNode = meshData.spinNode;
+    if (!this.isTrap && this.meshScale !== 1) {
+      this.mesh.scale.set(this.meshScale, this.meshScale, this.meshScale);
+    }
 
-    this.mesh.position.set(this.x, this.y + 0.02, this.z);
+    updateTowerWorldTransform(this);
     scene.add(this.mesh);
     if (this.isTrap) this.setTrapDurability(this.trapDurability);
     if (this.areaMarker) {
@@ -10195,6 +10320,71 @@ class Tower {
       this.cooldown = this.fireInterval;
       const killed = target.applyDamage(this.damage);
       if (killed) handleEnemyDefeated(target);
+      return;
+    }
+
+    if (this.autoBombard) {
+      if (!game.inWave) return;
+      let target = null;
+      for (const enemy of game.enemies) {
+        if (!enemy.alive) continue;
+        const d = Math.hypot(enemy.x - this.x, enemy.z - this.z);
+        if (d > this.range) continue;
+        if (!target || enemy.progressScore > target.progressScore) {
+          target = enemy;
+        }
+      }
+      if (!target) return;
+
+      let aimError = 0;
+      if (this.turret) {
+        const dx = target.x - this.x;
+        const dz = target.z - this.z;
+        const desiredYaw = Math.atan2(dx, dz);
+        const nextYaw = rotateYawTowards(this.turret.rotation.y, desiredYaw, this.turnSpeed * dt);
+        this.turret.rotation.y = nextYaw;
+        aimError = Math.abs(shortestAngleDelta(nextYaw, desiredYaw));
+      }
+
+      if (this.cooldown > 0) return;
+      if (this.turret && aimError > 0.26) return;
+
+      let splashX = target.x + (Math.random() * 2 - 1) * this.sprayRadius;
+      let splashZ = target.z + (Math.random() * 2 - 1) * this.sprayRadius;
+      const spreadDx = splashX - this.x;
+      const spreadDz = splashZ - this.z;
+      const maxRange = Math.max(1.2, this.range || 1.2);
+      const distSq = spreadDx * spreadDx + spreadDz * spreadDz;
+      if (distSq > maxRange * maxRange) {
+        const dist = Math.sqrt(distSq);
+        const scale = maxRange / Math.max(1e-6, dist);
+        splashX = this.x + spreadDx * scale;
+        splashZ = this.z + spreadDz * scale;
+      }
+      const splashY = getLaneSurfaceY(splashX, splashZ) + 0.08;
+
+      const origin = new THREE.Vector3();
+      if (this.muzzle) this.muzzle.getWorldPosition(origin);
+      else origin.set(this.x, this.y + 1.1, this.z);
+      const muzzleDir = new THREE.Vector3(splashX - origin.x, splashY - origin.y, splashZ - origin.z);
+      if (muzzleDir.lengthSq() > 1e-6) muzzleDir.normalize();
+      else muzzleDir.set(0, 0, 1);
+
+      this.cooldown = this.fireInterval;
+      audioSystem.playTowerShot(this.damage * 1.04);
+      audioSystem.playBombarderShot(this.damage, this.splashRadius);
+      game.debris.push(new BombardMuzzleFireEffect(origin, muzzleDir, this.projectileColor, this.projectileRadius));
+      game.projectiles.push(
+        new BombardProjectile(
+          origin,
+          new THREE.Vector3(splashX, splashY, splashZ),
+          this.damage,
+          this.projectileSpeed,
+          this.projectileColor,
+          this.projectileRadius,
+          this.splashRadius
+        )
+      );
       return;
     }
 
@@ -14651,19 +14841,26 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
 }
 
 function canPlaceTower(cellX, cellY, towerTypeId = game.selectedTowerType) {
-  if (cellX < 0 || cellY < 0 || cellX >= COLS || cellY >= ROWS) return false;
-  const laneTile = pathCellSet.has(cellKey(cellX, cellY));
-  if (isTrapTowerId(towerTypeId)) {
-    if (!laneTile) return false;
-  } else if (laneTile) {
-    return false;
+  const { width, height } = getTowerFootprintForType(towerTypeId);
+  for (let dy = 0; dy < height; dy += 1) {
+    for (let dx = 0; dx < width; dx += 1) {
+      const testX = cellX + dx;
+      const testY = cellY + dy;
+      if (!inBounds(testX, testY)) return false;
+      const laneTile = pathCellSet.has(cellKey(testX, testY));
+      if (isTrapTowerId(towerTypeId)) {
+        if (!laneTile) return false;
+      } else if (laneTile) {
+        return false;
+      }
+      if (game.towers.some((tower) => towerOccupiesCell(tower, testX, testY))) return false;
+    }
   }
-  if (game.towers.some((tower) => tower.cellX === cellX && tower.cellY === cellY)) return false;
   return !getTowerPlacementStats(towerTypeId).atCap;
 }
 
 function getTowerAtCell(cellX, cellY) {
-  return game.towers.find((tower) => tower.cellX === cellX && tower.cellY === cellY) || null;
+  return game.towers.find((tower) => towerOccupiesCell(tower, cellX, cellY)) || null;
 }
 
 function isBombarderTower(tower) {
@@ -14993,8 +15190,13 @@ function updatePlacementPreview() {
     return;
   }
 
-  const world = cellToWorld(cellX, cellY);
-  const baseY = getCellTopY(cellX, cellY);
+  let world = cellToWorld(cellX, cellY);
+  let baseY = getCellTopY(cellX, cellY);
+  if (!activeBombarder && !game.editingLane && !game.selling) {
+    const footprint = getTowerFootprintForType(game.selectedTowerType);
+    world = getTowerWorldPosition(cellX, cellY, footprint.width, footprint.height);
+    baseY = getTowerBaseY(cellX, cellY, footprint.width, footprint.height);
+  }
   previewGroup.visible = true;
   previewGroup.position.set(world.x, baseY, world.z);
 
