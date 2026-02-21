@@ -1,12 +1,12 @@
 import { createServer } from "http";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
-import { extname, isAbsolute, normalize, relative, resolve } from "path";
+import { basename, extname, isAbsolute, normalize, relative, resolve } from "path";
 import { WebSocketServer } from "ws";
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
-const SERVER_BUILD_ID = "2026-02-20-42a";
+const SERVER_BUILD_ID = process.env.RENDER_GIT_COMMIT || "2026-02-21-a3691b1";
 const ROOM_CODE_LIMIT = 16;
 const PEER_ID_LIMIT = 48;
 const DISPLAY_NAME_LIMIT = 24;
@@ -256,7 +256,8 @@ async function resolveStaticFilePath(pathname) {
 
 function getCacheControlHeader(filePath) {
   const extension = extname(filePath).toLowerCase();
-  if (extension === ".html") return "no-cache";
+  if (extension === ".html") return "no-store";
+  if (basename(filePath).toLowerCase() === "sw.js") return "no-store";
   return "public, max-age=31536000, immutable";
 }
 
