@@ -584,6 +584,39 @@ body:not(.menu-active) .menu-screen {
   opacity: 0.82;
 }
 
+.menu-map-preview[data-map-theme="mars"] {
+  border-color: rgba(255, 189, 131, 0.44);
+  background:
+    radial-gradient(circle at 18% 88%, rgba(245, 132, 78, 0.28), transparent 38%),
+    radial-gradient(circle at 80% 18%, rgba(255, 214, 160, 0.2), transparent 34%),
+    linear-gradient(162deg, rgba(140, 74, 41, 0.6), rgba(81, 40, 24, 0.84) 49%, rgba(39, 19, 12, 0.95));
+}
+
+.menu-map-preview[data-map-theme="mars"]::before {
+  inset: -18% -20%;
+  background:
+    repeating-linear-gradient(
+      122deg,
+      rgba(255, 196, 138, 0.2) 0 2px,
+      rgba(255, 148, 92, 0.08) 2px 12px,
+      transparent 12px 24px
+    ),
+    linear-gradient(110deg, rgba(255, 218, 171, 0.12), transparent 42%);
+  mix-blend-mode: screen;
+  animation: menu-mars-dust-flow 7.8s linear infinite;
+}
+
+.menu-map-preview[data-map-theme="mars"]::after {
+  background:
+    radial-gradient(circle at 14% 30%, rgba(255, 226, 191, 0.28) 0 1.1px, transparent 1.5px),
+    radial-gradient(circle at 32% 52%, rgba(255, 198, 156, 0.24) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 55% 42%, rgba(255, 211, 174, 0.22) 0 0.9px, transparent 1.3px),
+    radial-gradient(circle at 76% 60%, rgba(255, 181, 138, 0.2) 0 1.1px, transparent 1.5px),
+    linear-gradient(180deg, rgba(255, 154, 97, 0.11), transparent 56%);
+  opacity: 0.76;
+  animation: menu-mars-dust-specks 5.4s linear infinite;
+}
+
 .menu-map-preview.swipe-out-left {
   animation: menu-swipe-out-left 150ms ease forwards;
 }
@@ -598,6 +631,27 @@ body:not(.menu-active) .menu-screen {
 
 .menu-map-preview.swipe-in-right {
   animation: menu-swipe-in-right 170ms ease forwards;
+}
+
+@keyframes menu-mars-dust-flow {
+  from {
+    transform: translate3d(-10%, 0, 0);
+  }
+  to {
+    transform: translate3d(10%, 0, 0);
+  }
+}
+
+@keyframes menu-mars-dust-specks {
+  from {
+    transform: translate3d(-6%, 0, 0);
+  }
+  50% {
+    transform: translate3d(4%, -1.5%, 0);
+  }
+  to {
+    transform: translate3d(10%, 0, 0);
+  }
 }
 
 @keyframes menu-swipe-out-left {
