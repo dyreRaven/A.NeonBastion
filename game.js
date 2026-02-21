@@ -64,12 +64,14 @@ const openCreatureFromUnlockBtn = $id("openCreatureFromUnlockBtn");
 const openTrapFromUnlockBtn = $id("openTrapFromUnlockBtn");
 const openLoadoutBtn = $id("openLoadoutBtn");
 const openMultiplayerBtn = $id("openMultiplayerBtn");
+const openGameUpgradesBtn = $id("openGameUpgradesBtn");
 const closeAccountBtn = $id("closeAccountBtn");
 const closeUnlockShopBtn = $id("closeUnlockShopBtn");
 const closeCreatureShopBtn = $id("closeCreatureShopBtn");
 const closeTrapShopBtn = $id("closeTrapShopBtn");
 const closeLoadoutBtn = $id("closeLoadoutBtn");
 const closeMultiplayerBtn = $id("closeMultiplayerBtn");
+const closeGameUpgradesBtn = $id("closeGameUpgradesBtn");
 
 // Account menu.
 const menuAccountEl = $id("menuAccountList");
@@ -97,6 +99,8 @@ const menuTrapSummaryEl = $id("menuTrapSummary");
 const menuLoadoutEl = $id("menuLoadout");
 const menuLoadoutCountEl = $id("menuLoadoutCount");
 const menuLoadoutSearchEl = $id("menuLoadoutSearch");
+const menuGameUpgradesEl = $id("menuGameUpgrades");
+const menuGameUpgradesSummaryEl = $id("menuGameUpgradesSummary");
 
 // Multiplayer menu and chat.
 const menuMultiplayerStateEl = $id("menuMultiplayerState");
@@ -166,7 +170,21 @@ const SHATTER_GRAVITY = -38;
 const SHATTER_AIR_DRAG = 1.75;
 const SHATTER_GROUND_DRAG = 8.5;
 const HEALTH_BAR_SHOW_TIME = 1.5;
-const GAME_SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const GAME_SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+const GAME_UPGRADE_KINDS = ["gameSpeed", "startingCredits", "shardPercent"];
+const GAME_UPGRADE_MAX_LEVELS = Object.freeze({
+  gameSpeed: 6,
+  startingCredits: 4,
+  shardPercent: 4,
+});
+const GAME_UPGRADE_COSTS = Object.freeze({
+  gameSpeed: [3200, 7800, 14600, 24800, 39200, 59000],
+  startingCredits: [2800, 7600, 16800, 32000],
+  shardPercent: [3600, 9800, 21200, 42000],
+});
+const STARTING_CREDITS_BONUS_STEP = 0.25;
+const SHARD_GAIN_RATE_BASE = 0.01;
+const SHARD_GAIN_RATE_STEP = 0.01;
 const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL = 0.16;
 const SOLO_HUD_REFRESH_INTERVAL_SEC = 0.12;
@@ -2098,6 +2116,52 @@ function normalizeTowerRangeUpgrades(rawUpgrades) {
 function normalizeSpawnerCooldownUpgrades(rawUpgrades) {
   const spawnerTowerIds = CREATURE_SHOP_ENEMY_IDS.map(spawnerTowerIdForEnemy);
   return normalizeUpgradeMap(rawUpgrades, spawnerTowerIds, getSpawnerCooldownUpgradeMaxLevel);
+}
+
+function normalizeGameUpgrades(rawUpgrades) {
+  const normalized = {
+    gameSpeed: 0,
+    startingCredits: 0,
+    shardPercent: 0,
+  };
+  if (!rawUpgrades || typeof rawUpgrades !== "object") return normalized;
+  for (const kind of GAME_UPGRADE_KINDS) {
+    normalized[kind] = clampUpgradeLevel(rawUpgrades[kind], GAME_UPGRADE_MAX_LEVELS[kind] || 0);
+  }
+  return normalized;
+}
+
+function getGameUpgradeLevel(kind) {
+  const maxLevel = GAME_UPGRADE_MAX_LEVELS[kind] || 0;
+  return clampUpgradeLevel(game.gameUpgrades?.[kind], maxLevel);
+}
+
+function getGameUpgradeCost(kind, nextLevel) {
+  const level = Math.max(1, Math.floor(Number(nextLevel) || 1));
+  const costs = GAME_UPGRADE_COSTS[kind];
+  if (!Array.isArray(costs)) return 0;
+  return Math.max(0, Math.floor(costs[level - 1] || 0));
+}
+
+function getMaxUnlockedGameSpeed() {
+  const level = getGameUpgradeLevel("gameSpeed");
+  return Math.min(5, 2 + level * 0.5);
+}
+
+function getMaxUnlockedGameSpeedStepIndex() {
+  const maxSpeed = getMaxUnlockedGameSpeed();
+  for (let index = GAME_SPEED_STEPS.length - 1; index >= 0; index -= 1) {
+    if (GAME_SPEED_STEPS[index] <= maxSpeed + 1e-9) return index;
+  }
+  return 0;
+}
+
+function getStartingCreditsBonusMultiplier() {
+  return 1 + getGameUpgradeLevel("startingCredits") * STARTING_CREDITS_BONUS_STEP;
+}
+
+function getShardGainRate() {
+  return SHARD_GAIN_RATE_BASE + getGameUpgradeLevel("shardPercent") * SHARD_GAIN_RATE_STEP;
 }
 
 // Tower placement cap helpers.
@@ -4168,6 +4232,7 @@ const game = {
   towerAttackSpeedUpgrades: {},
   towerRangeUpgrades: {},
   spawnerCooldownUpgrades: {},
+  gameUpgrades: { gameSpeed: 0, startingCredits: 0, shardPercent: 0 },
   loadoutUpgradeTargetId: null,
   maxLoadoutSlots: BASE_LOADOUT_SLOTS,
   activeLoadout: new Set(Array.from(BASE_UNLOCKED_TOWERS).slice(0, BASE_LOADOUT_SLOTS)),
@@ -4359,6 +4424,7 @@ function updateHudChatVisibility() {
 
 function updateMenuHud() {
   soloHudRefreshTimer = getSoloHudRefreshInterval();
+  const lockMetaMenusDuringRun = game.started && !game.over;
   document.body.classList.remove("mobile-round-layout", "mobile-shop-open");
   if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
   if (menuAccountCurrentEl) menuAccountCurrentEl.textContent = `Account: ${game.accountName || "Commander"}`;
@@ -4367,6 +4433,7 @@ function updateMenuHud() {
   if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
   if (speedControlEl) speedControlEl.hidden = true;
   if (autoWaveBtn) autoWaveBtn.hidden = true;
+  if (openGameUpgradesBtn) openGameUpgradesBtn.disabled = lockMetaMenusDuringRun;
   if (settingsToggleBtn) settingsToggleBtn.classList.toggle("active", game.settingsOpen);
   updateHudChatVisibility();
   applyStatusExpansionState();
@@ -5975,6 +6042,7 @@ function refreshAccountAndMenuUi() {
   renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
+  renderGameUpgradesMenu();
   renderShop();
   updateHud();
 }
@@ -6143,6 +6211,7 @@ function captureGameProgressSeedForAccountMigration() {
     towerAttackSpeedUpgrades: normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades),
     towerRangeUpgrades: normalizeTowerRangeUpgrades(game.towerRangeUpgrades),
     spawnerCooldownUpgrades: normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades),
+    gameUpgrades: normalizeGameUpgrades(game.gameUpgrades),
   };
 }
 
@@ -7032,6 +7101,7 @@ function createAccountRecord(name = "Commander", seed = null) {
   const towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(seed?.towerAttackSpeedUpgrades);
   const towerRangeUpgrades = normalizeTowerRangeUpgrades(seed?.towerRangeUpgrades);
   const spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(seed?.spawnerCooldownUpgrades);
+  const gameUpgrades = normalizeGameUpgrades(seed?.gameUpgrades);
   const maxLoadoutSlots = clampLoadoutSlotLimit(Number(seed?.maxLoadoutSlots));
   let loadout = normalizeTowerIds(
     seed?.activeLoadout,
@@ -7073,6 +7143,7 @@ function createAccountRecord(name = "Commander", seed = null) {
     towerAttackSpeedUpgrades,
     towerRangeUpgrades,
     spawnerCooldownUpgrades,
+    gameUpgrades,
   };
 }
 
@@ -7160,6 +7231,7 @@ function applyAccountToGame(account) {
   game.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(account.towerAttackSpeedUpgrades);
   game.towerRangeUpgrades = normalizeTowerRangeUpgrades(account.towerRangeUpgrades);
   game.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(account.spawnerCooldownUpgrades);
+  game.gameUpgrades = normalizeGameUpgrades(account.gameUpgrades);
   game.enemyKillCounts = normalizeEnemyKillCounts(account.enemyKillCounts);
   game.unlockedSpawnerTowers = normalizeUnlockedSpawnerTypes(
     account.unlockedSpawnerTowers,
@@ -7180,6 +7252,8 @@ function applyAccountToGame(account) {
   if (!isTowerSelectable(game.selectedTowerType)) {
     game.selectedTowerType = firstAvailableTowerId() || "pulse";
   }
+  game.speedStepIndex = Math.max(0, Math.min(getMaxUnlockedGameSpeedStepIndex(), Math.floor(game.speedStepIndex || 0)));
+  game.speedMultiplier = GAME_SPEED_STEPS[game.speedStepIndex] || 1;
   game.loadoutUpgradeTargetId = null;
 }
 
@@ -7246,6 +7320,7 @@ function savePlayerProgress() {
   current.towerAttackSpeedUpgrades = normalizeTowerAttackSpeedUpgrades(game.towerAttackSpeedUpgrades);
   current.towerRangeUpgrades = normalizeTowerRangeUpgrades(game.towerRangeUpgrades);
   current.spawnerCooldownUpgrades = normalizeSpawnerCooldownUpgrades(game.spawnerCooldownUpgrades);
+  current.gameUpgrades = normalizeGameUpgrades(game.gameUpgrades);
   current.enemyKillCounts = normalizeEnemyKillCounts(game.enemyKillCounts);
   current.unlockedSpawnerTowers = Array.from(game.unlockedSpawnerTowers).filter((enemyTypeId) =>
     Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
@@ -7547,9 +7622,9 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     pyramidion: { shape: "pyramid", baseRadius: 1.06, height: 2.12, sides: 8, ringRadius: 0, coreRadius: 0.24, coreY: 0.22 },
     diamondarchon: {
       shape: "diamondSigil",
-      width: 2.82,
-      height: 3.02,
-      depth: 1.18,
+      width: 3.18,
+      height: 3.48,
+      depth: 1.46,
       ringRadius: 0,
       coreRadius: 0.28,
       coreY: 0.22,
@@ -7836,9 +7911,9 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     });
     outerGeometry.center();
     body = cast(new THREE.Mesh(outerGeometry, bodyMat));
-    body.rotation.x = Math.PI / 2;
     body.rotation.y = Math.PI / 4;
     group.add(body);
+    spinNode = body;
 
     const innerGeometry = new THREE.ExtrudeGeometry(diamondShape, {
       depth: depth * 0.42,
@@ -7851,10 +7926,9 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     });
     innerGeometry.center();
     const innerFacet = cast(new THREE.Mesh(innerGeometry, darkMat));
-    innerFacet.rotation.x = Math.PI / 2;
     innerFacet.rotation.y = Math.PI / 4;
     innerFacet.scale.set(0.62, 0.62, 0.62);
-    innerFacet.position.y = depth * 0.16;
+    innerFacet.position.z = depth * 0.14;
     group.add(innerFacet);
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
@@ -8813,7 +8887,6 @@ function createSpawnerTowerMesh(enemyTypeId, bodyColor, coreColor) {
     symbol.rotation.x = Math.PI / 2;
     symbol.rotation.z = Math.PI / 10;
   } else if (enemyTypeId === "diamondarchon") {
-    symbol.rotation.x = Math.PI / 2;
     symbol.rotation.y = Math.PI / 4;
   } else if (enemyTypeId === "rhombus" || enemyTypeId === "rhombusMinus") {
     symbol.rotation.y = Math.PI / 4;
@@ -10801,7 +10874,7 @@ function applyMultiplayerSnapshot(snapshot) {
     ? Math.max(0, Math.min(GAME_SPEED_STEPS.length - 1, Math.floor(snapshot.speedStepIndex)))
     : game.speedStepIndex;
   game.speedMultiplier = Number.isFinite(snapshot.speedMultiplier)
-    ? Math.max(0.5, Math.min(2, snapshot.speedMultiplier))
+    ? Math.max(GAME_SPEED_STEPS[0], Math.min(GAME_SPEED_STEPS[GAME_SPEED_STEPS.length - 1], snapshot.speedMultiplier))
     : GAME_SPEED_STEPS[game.speedStepIndex];
   if (Number.isFinite(snapshot.time)) {
     const incomingTime = snapshot.time;
@@ -11472,7 +11545,8 @@ function prepareLevel(level) {
   game.placing = false;
   game.selling = false;
   game.hoverCell = null;
-  game.money = profile.startingCredits;
+  const startingCredits = Math.max(1, Math.round(profile.startingCredits * getStartingCreditsBonusMultiplier()));
+  game.money = startingCredits;
   game.lives = profile.startingLives;
   game.wave = 0;
   game.waveCreditsEarned = 0;
@@ -13027,6 +13101,136 @@ function renderCreatureShop() {
   menuCreatureShopEl.innerHTML = fragments.join("");
 }
 
+function renderGameUpgradesMenu() {
+  if (!menuGameUpgradesEl) return;
+  const selectedLevel = clampMenuSelectedLevel(game.menuSelectedLevel || getHighestUnlockedLevel());
+  const levelProfile = getLevelDifficultyProfile(selectedLevel);
+  const baseStartingCredits = Math.max(1, Math.floor(levelProfile.startingCredits || 0));
+  const currentSpeedCap = getMaxUnlockedGameSpeed();
+  const currentShardPercent = Math.round(getShardGainRate() * 100);
+  if (menuGameUpgradesSummaryEl) {
+    menuGameUpgradesSummaryEl.textContent = `Cap ${formatSpeedLabel(currentSpeedCap)} | Start +${Math.round(
+      (getStartingCreditsBonusMultiplier() - 1) * 100
+    )}% | Shards ${currentShardPercent}%`;
+  }
+
+  const rows = [];
+  for (const kind of GAME_UPGRADE_KINDS) {
+    const currentLevel = getGameUpgradeLevel(kind);
+    const maxLevel = GAME_UPGRADE_MAX_LEVELS[kind] || 0;
+    const atMax = currentLevel >= maxLevel;
+    const nextLevel = Math.min(maxLevel, currentLevel + 1);
+    const cost = atMax ? 0 : getGameUpgradeCost(kind, nextLevel);
+    const canAfford = atMax || game.shards >= cost;
+    const classes = [
+      "menu-unlock-item",
+      "menu-game-upgrade-item",
+      atMax ? "unlocked" : "",
+      canAfford ? "" : "unaffordable",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    let name = "";
+    let detail = "";
+    if (kind === "gameSpeed") {
+      const nextCap = Math.min(5, 2 + nextLevel * 0.5);
+      name = "Game Speed Cap";
+      detail = atMax
+        ? `Current max speed: ${formatSpeedLabel(currentSpeedCap)} (MAX)`
+        : `Current max speed: ${formatSpeedLabel(currentSpeedCap)} -> ${formatSpeedLabel(nextCap)}`;
+    } else if (kind === "startingCredits") {
+      const currentBonus = Math.round((getStartingCreditsBonusMultiplier() - 1) * 100);
+      const nextBonus = Math.round(nextLevel * STARTING_CREDITS_BONUS_STEP * 100);
+      const currentCredits = Math.round(baseStartingCredits * getStartingCreditsBonusMultiplier());
+      const nextCredits = Math.round(baseStartingCredits * (1 + nextLevel * STARTING_CREDITS_BONUS_STEP));
+      name = "Starting Credits Bonus";
+      detail = atMax
+        ? `Current bonus: +${currentBonus}% | Map ${selectedLevel}: ${currentCredits} credits (MAX)`
+        : `Current bonus: +${currentBonus}% -> +${nextBonus}% | Map ${selectedLevel}: ${currentCredits} -> ${nextCredits}`;
+    } else if (kind === "shardPercent") {
+      const currentPercent = Math.round(getShardGainRate() * 100);
+      const nextPercent = Math.round((SHARD_GAIN_RATE_BASE + nextLevel * SHARD_GAIN_RATE_STEP) * 100);
+      name = "Shard Percentage";
+      detail = atMax
+        ? `Current shard gain: ${currentPercent}% of wave credits (MAX)`
+        : `Current shard gain: ${currentPercent}% -> ${nextPercent}% of wave credits`;
+    }
+
+    const actionLabel = atMax ? "Maxed" : `${cost} ${formatShardWordHtml("Shards")}`;
+    rows.push(`
+      <div class="${classes}">
+        <div>
+          <strong>${name}</strong>
+          <span>${detail}</span>
+        </div>
+        <button class="unlock-action" type="button" data-game-upgrade-kind="${kind}" ${atMax ? "disabled" : ""}>
+          ${actionLabel}
+        </button>
+      </div>
+    `);
+  }
+
+  menuGameUpgradesEl.innerHTML = rows.join("");
+  const buyButtons = menuGameUpgradesEl.querySelectorAll("button[data-game-upgrade-kind]");
+  for (const button of buyButtons) {
+    button.addEventListener("click", () => {
+      const kind = button.dataset.gameUpgradeKind;
+      if (!kind) return;
+      if (game.started && !game.over) {
+        setStatus("Game upgrades are menu-only before starting a run.", true);
+        return;
+      }
+      if (isMultiplayerClient() && isMultiplayerActive()) {
+        setStatus("Only the host can spend shards on upgrades.", true);
+        return;
+      }
+      const maxLevel = GAME_UPGRADE_MAX_LEVELS[kind] || 0;
+      if (maxLevel <= 0) return;
+      const currentLevel = getGameUpgradeLevel(kind);
+      if (currentLevel >= maxLevel) {
+        setStatus("That game upgrade is already maxed.");
+        return;
+      }
+      const nextLevel = currentLevel + 1;
+      const cost = getGameUpgradeCost(kind, nextLevel);
+      if (game.shards < cost) {
+        setStatus("Not enough shards for that game upgrade.", true);
+        return;
+      }
+
+      game.shards -= cost;
+      const nextUpgrades = normalizeGameUpgrades(game.gameUpgrades);
+      nextUpgrades[kind] = nextLevel;
+      game.gameUpgrades = normalizeGameUpgrades(nextUpgrades);
+      if (kind === "gameSpeed") {
+        const maxSpeedStep = getMaxUnlockedGameSpeedStepIndex();
+        if (game.speedStepIndex > maxSpeedStep) {
+          game.speedStepIndex = maxSpeedStep;
+          game.speedMultiplier = GAME_SPEED_STEPS[maxSpeedStep];
+        }
+      }
+
+      if (kind === "gameSpeed") {
+        setStatus(`Game speed cap upgraded to ${formatSpeedLabel(getMaxUnlockedGameSpeed())}.`);
+      } else if (kind === "startingCredits") {
+        setStatus(`Starting credits bonus upgraded to +${Math.round((getStartingCreditsBonusMultiplier() - 1) * 100)}%.`);
+      } else {
+        setStatus(`Shard gain upgraded to ${Math.round(getShardGainRate() * 100)}% of wave credits.`);
+      }
+
+      savePlayerProgress();
+      renderAccountMenu();
+      renderMenuShop();
+      renderTrapShop();
+      renderCreatureShop();
+      renderLoadoutMenu();
+      renderGameUpgradesMenu();
+      updateHud();
+    });
+  }
+}
+
 function setMenuView(view) {
   if (view !== "loadout") game.loadoutUpgradeTargetId = null;
   game.menuView = view;
@@ -13051,6 +13255,7 @@ function openMenuShop() {
   renderTrapShop();
   renderCreatureShop();
   renderLoadoutMenu();
+  renderGameUpgradesMenu();
   refreshMultiplayerPanel();
   updateHud();
 }
@@ -13142,6 +13347,17 @@ function openLoadoutMenu() {
   }
 }
 
+function openGameUpgradesMenu() {
+  if (game.started && !game.over) {
+    setStatus("Game upgrades are menu-only before starting a run.", true);
+    return;
+  }
+  openMenuShop();
+  setMenuView("gameupgrades");
+  renderGameUpgradesMenu();
+  if (menuGameUpgradesEl) menuGameUpgradesEl.scrollTop = 0;
+}
+
 function openMultiplayerMenu() {
   openMenuShop();
   setMenuView("multiplayer");
@@ -13182,6 +13398,10 @@ function closeLoadoutMenu() {
     clearTimeout(loadoutSearchRenderTimer);
     loadoutSearchRenderTimer = null;
   }
+  setMenuView("home");
+}
+
+function closeGameUpgradesMenu() {
   setMenuView("home");
 }
 
@@ -13360,7 +13580,7 @@ function formatSpeedLabel(multiplier) {
 }
 
 function applyGameSpeedStep(nextIndex, announce = true) {
-  const clamped = Math.max(0, Math.min(GAME_SPEED_STEPS.length - 1, Math.floor(nextIndex)));
+  const clamped = Math.max(0, Math.min(getMaxUnlockedGameSpeedStepIndex(), Math.floor(nextIndex)));
   if (!Number.isFinite(clamped)) return;
   if (clamped === game.speedStepIndex) {
     updateHud();
@@ -13541,9 +13761,11 @@ function updateHud() {
   if (openLoadoutBtn) openLoadoutBtn.disabled = lockMetaMenusDuringRun;
   if (openCreatureFromUnlockBtn) openCreatureFromUnlockBtn.disabled = lockMetaMenusDuringRun;
   if (openTrapFromUnlockBtn) openTrapFromUnlockBtn.disabled = lockMetaMenusDuringRun;
+  if (openGameUpgradesBtn) openGameUpgradesBtn.disabled = lockMetaMenusDuringRun;
   const speedLocked = !game.started || game.over || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
+  const speedStepCap = getMaxUnlockedGameSpeedStepIndex();
   if (speedDownBtn) speedDownBtn.disabled = speedLocked || game.speedStepIndex <= 0;
-  if (speedUpBtn) speedUpBtn.disabled = speedLocked || game.speedStepIndex >= GAME_SPEED_STEPS.length - 1;
+  if (speedUpBtn) speedUpBtn.disabled = speedLocked || game.speedStepIndex >= speedStepCap;
 
   const locked =
     !game.started || game.over || game.paused || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
@@ -13931,7 +14153,7 @@ function endWaveIfDone() {
     const bonusCredits = 30 + game.wave * 5;
     game.money += bonusCredits;
     game.waveCreditsEarned += bonusCredits;
-    const shardGain = Math.ceil(game.waveCreditsEarned * 0.01);
+    const shardGain = Math.ceil(game.waveCreditsEarned * getShardGainRate());
     game.shards += shardGain;
     setStatus(`Wave cleared. +${bonusCredits} credits, +${shardGain} shards.`);
     game.waveCreditsEarned = 0;
@@ -14540,12 +14762,14 @@ if (openCreatureFromUnlockBtn) openCreatureFromUnlockBtn.addEventListener("click
 if (openTrapFromUnlockBtn) openTrapFromUnlockBtn.addEventListener("click", openTrapMenu);
 if (openLoadoutBtn) openLoadoutBtn.addEventListener("click", openLoadoutMenu);
 if (openMultiplayerBtn) openMultiplayerBtn.addEventListener("click", openMultiplayerMenu);
+if (openGameUpgradesBtn) openGameUpgradesBtn.addEventListener("click", openGameUpgradesMenu);
 if (closeAccountBtn) closeAccountBtn.addEventListener("click", closeAccountMenu);
 if (closeUnlockShopBtn) closeUnlockShopBtn.addEventListener("click", closeUnlocksMenu);
 if (closeCreatureShopBtn) closeCreatureShopBtn.addEventListener("click", closeCreatureMenu);
 if (closeTrapShopBtn) closeTrapShopBtn.addEventListener("click", closeTrapMenu);
 if (closeLoadoutBtn) closeLoadoutBtn.addEventListener("click", closeLoadoutMenu);
 if (closeMultiplayerBtn) closeMultiplayerBtn.addEventListener("click", closeMultiplayerMenu);
+if (closeGameUpgradesBtn) closeGameUpgradesBtn.addEventListener("click", closeGameUpgradesMenu);
 if (confirmExitBtn) confirmExitBtn.addEventListener("click", confirmExitToMenu);
 if (cancelExitBtn) cancelExitBtn.addEventListener("click", closeExitConfirm);
 if (levelClearMenuBtn) levelClearMenuBtn.addEventListener("click", acknowledgeLevelClearToMenu);

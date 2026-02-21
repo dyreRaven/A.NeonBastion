@@ -14,6 +14,7 @@
   </head>
   <body>
     <section class="menu-screen" id="menuScreen" aria-label="Main menu">
+      <button id="openGameUpgradesBtn" class="menu-upgrades-corner" type="button">Game Upgrades</button>
       <div id="menuShardCorner" class="menu-shard-corner"><span class="shard-word-inline">Shards</span>: 0</div>
       <div class="menu-card" id="menuCard" data-view="home">
         <div id="menuHomeView">
@@ -125,7 +126,7 @@
           </div>
           <div id="menuShop" class="menu-shop-list"></div>
           <p class="menu-shop-note">
-            Earn <span class="shard-word-inline">shards</span> from cleared waves: 1% of wave credits, rounded up. Spend
+            Earn <span class="shard-word-inline">shards</span> from cleared waves: base 1% of wave credits, rounded up (boostable in Game Upgrades). Spend
             <span class="shard-word-inline">shards</span> on tower unlocks.
           </p>
           <div class="menu-shop-actions">
@@ -180,6 +181,20 @@
           <p class="menu-shop-note">Only unlocked towers, traps, and spawners can be equipped. Use Upgrade next to Equip to open all upgrades.</p>
           <div class="menu-shop-actions">
             <button id="closeLoadoutBtn" class="menu-play-btn" type="button">Menu Page</button>
+          </div>
+        </section>
+
+        <section id="menuGameUpgradesPanel" class="menu-shop-panel" aria-label="Game upgrades">
+          <div class="menu-shop-head">
+            <h2>Game Upgrades</h2>
+            <span id="menuGameUpgradesSummary">End-game shard sink</span>
+          </div>
+          <div id="menuGameUpgrades" class="menu-shop-list"></div>
+          <p class="menu-shop-note">
+            Permanent account boosts. Base shard gain is 1% of wave credits; upgrades can push this higher.
+          </p>
+          <div class="menu-shop-actions">
+            <button id="closeGameUpgradesBtn" class="menu-play-btn" type="button">Menu Page</button>
           </div>
         </section>
 
