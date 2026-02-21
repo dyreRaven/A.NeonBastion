@@ -3246,7 +3246,7 @@ canvas {
       rgba(6, 16, 29, 0.22);
     box-shadow: 0 8px 14px rgba(0, 0, 0, 0.14);
     backdrop-filter: none;
-    max-height: min(46dvh, 340px);
+    max-height: min(42dvh, 320px);
     overflow-y: auto;
   }
 
@@ -3304,45 +3304,54 @@ canvas {
 
   body:not(.menu-active) .shop {
     grid-auto-flow: column;
-    grid-auto-columns: minmax(144px, 1fr);
-    gap: 0.22rem;
+    grid-auto-columns: minmax(132px, 1fr);
+    gap: 0.18rem;
     overflow-x: auto;
     overflow-y: hidden;
     padding-bottom: 0.08rem;
+    align-items: start;
   }
 
   body:not(.menu-active) .shop .shop-item {
-    padding: 0.24rem 0.3rem;
+    padding: 0.18rem 0.24rem;
     border-radius: 8px;
     border-color: rgba(200, 231, 255, 0.6);
     background: linear-gradient(145deg, rgba(145, 194, 235, 0.2), rgba(11, 26, 42, 0.22));
     box-shadow: inset 0 1px 0 rgba(245, 252, 255, 0.18);
+    align-self: start;
   }
 
   body:not(.menu-active) .shop .shop-item strong {
-    font-size: 0.74rem;
+    font-size: 0.7rem;
     line-height: 1.1;
   }
 
   body:not(.menu-active) .shop .shop-item > span:not(.shop-cap-line) {
     display: block;
-    font-size: 0.61rem;
+    font-size: 0.58rem;
     line-height: 1.1;
     color: #cfe7f8;
   }
 
+  body:not(.menu-active) .shop .shop-item > span:not(.shop-cap-line):not(:first-of-type) {
+    display: none;
+  }
+
   body:not(.menu-active) .shop .shop-item .shop-cap-line {
-    margin-top: 0.1rem;
-    font-size: 0.58rem;
+    margin-top: 0.08rem;
+    font-size: 0.55rem;
     line-height: 1.1;
   }
 
   body:not(.menu-active) .shop .shop-item .shop-cap-upgrade-btn {
-    margin-top: 0.12rem;
-    min-height: 1.22rem;
-    padding: 0.14rem 0.24rem;
+    margin-top: 0.1rem;
+    min-height: 1rem;
+    padding: 0.1rem 0.18rem;
     border-radius: 6px;
-    font-size: 0.56rem;
+    font-size: 0.5rem;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   body:not(.menu-active) .status {

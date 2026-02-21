@@ -12331,12 +12331,18 @@ function firstAvailableTowerId() {
   return entries.length > 0 ? entries[0][0] : null;
 }
 
+function isCompactPortraitShopLayout() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(max-width: 1100px) and (orientation: portrait) and (pointer: coarse)").matches;
+}
+
 function updateShopButtons() {
   if (!isTowerSelectable(game.selectedTowerType)) {
     game.selectedTowerType = firstAvailableTowerId() || "pulse";
   }
   const selected = getTowerType(game.selectedTowerType);
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return selected;
+  const compactShopLabels = isCompactPortraitShopLayout();
   const buttons = shopEl.querySelectorAll(".shop-item");
   for (const button of buttons) {
     const typeId = button.dataset.towerType;
@@ -12359,21 +12365,32 @@ function updateShopButtons() {
       if (!placement.atCap) {
         capUpgradeButton.hidden = true;
         capUpgradeButton.disabled = false;
+        capUpgradeButton.title = "";
+        capUpgradeButton.removeAttribute("aria-label");
       } else if (hostOnlyCapUpgrade) {
+        const fullLabel = "Host Upgrades Only";
         capUpgradeButton.hidden = false;
         capUpgradeButton.disabled = true;
-        capUpgradeButton.textContent = "Host Upgrades Only";
+        capUpgradeButton.textContent = compactShopLabels ? "Host Only" : fullLabel;
+        capUpgradeButton.title = fullLabel;
+        capUpgradeButton.setAttribute("aria-label", fullLabel);
       } else if (capAtMax) {
+        const fullLabel = "Cap Maxed";
         capUpgradeButton.hidden = false;
         capUpgradeButton.disabled = true;
-        capUpgradeButton.textContent = "Cap Maxed";
+        capUpgradeButton.textContent = fullLabel;
+        capUpgradeButton.title = fullLabel;
+        capUpgradeButton.setAttribute("aria-label", fullLabel);
       } else {
         const nextLevel = capLevel + 1;
         const capCost = getTowerCapUpgradeCost(typeId, nextLevel);
         const shardLabel = capCost === 1 ? "Shard" : "Shards";
+        const fullLabel = `Upgrade Cap (${capCost} ${shardLabel})`;
         capUpgradeButton.hidden = false;
         capUpgradeButton.disabled = game.shards < capCost;
-        capUpgradeButton.textContent = `Upgrade Cap (${capCost} ${shardLabel})`;
+        capUpgradeButton.textContent = compactShopLabels ? `Cap +${capCost}` : fullLabel;
+        capUpgradeButton.title = fullLabel;
+        capUpgradeButton.setAttribute("aria-label", fullLabel);
       }
     }
   }
