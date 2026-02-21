@@ -2879,7 +2879,8 @@ function measureBattleCameraCoverage(distance) {
 }
 
 function fitBattleCameraToViewport() {
-  const limit = BATTLE_CAMERA_FRAME_NDC_LIMIT;
+  const portraitFactor = getPortraitViewportTuningFactor();
+  const limit = Math.min(1.05, BATTLE_CAMERA_FRAME_NDC_LIMIT + 0.07 * portraitFactor);
   let nearDistance = 10;
   let farDistance = 120;
 
@@ -3055,6 +3056,12 @@ function applyLevelLightingTheme(level) {
     prismFillLight.intensity = 0.66;
     prismFillLight.position.set(-14, 12, 14);
   }
+  setLightBaseIntensity(hemiLight);
+  setLightBaseIntensity(sunLight);
+  setLightBaseIntensity(tealRim);
+  setLightBaseIntensity(emberRim);
+  setLightBaseIntensity(prismKeyLight);
+  setLightBaseIntensity(prismFillLight);
 }
 
 const worldGroup = new THREE.Group();
@@ -3090,6 +3097,18 @@ function getPortraitViewportTuningFactor() {
   return Math.max(0, Math.min(1, (1 - aspect) / 0.5));
 }
 
+function setLightBaseIntensity(light) {
+  if (!light) return;
+  if (!light.userData) light.userData = {};
+  light.userData.baseIntensity = light.intensity;
+}
+
+function applyLightViewportBoost(light, boost = 1) {
+  if (!light) return;
+  const base = Number.isFinite(light.userData?.baseIntensity) ? light.userData.baseIntensity : light.intensity;
+  light.intensity = base * boost;
+}
+
 function applyViewportMapVisibilityTuning() {
   const moonLevel = game.currentLevel === 2;
   const emberLevel = game.currentLevel >= 3;
@@ -3098,11 +3117,22 @@ function applyViewportMapVisibilityTuning() {
   const baseExposure = emberLevel ? 1.0 : moonLevel ? 0.96 : 1.08;
   const baseVignette = emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48;
   const baseShadowWash = emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2;
+  const exposureBoost = (moonLevel ? 0.2 : emberLevel ? 0.16 : 0.18) * portraitFactor;
 
-  scene.fog.density = baseFogDensity * (1 - 0.5 * portraitFactor);
-  renderer.toneMappingExposure = baseExposure + (moonLevel ? 0.11 : 0.09) * portraitFactor;
-  if (mapState.vignetteMaterial) mapState.vignetteMaterial.opacity = baseVignette * (1 - 0.7 * portraitFactor);
-  if (mapState.shadowWashMaterial) mapState.shadowWashMaterial.opacity = baseShadowWash * (1 - 0.72 * portraitFactor);
+  scene.fog.density = baseFogDensity * (1 - 0.86 * portraitFactor);
+  renderer.toneMappingExposure = baseExposure + exposureBoost;
+  if (mapState.vignetteMaterial) mapState.vignetteMaterial.opacity = baseVignette * (1 - 0.93 * portraitFactor);
+  if (mapState.shadowWashMaterial) mapState.shadowWashMaterial.opacity = baseShadowWash * (1 - 0.95 * portraitFactor);
+
+  const globalLightBoost = 1 + 0.14 * portraitFactor;
+  applyLightViewportBoost(hemiLight, globalLightBoost);
+  applyLightViewportBoost(sunLight, 1 + 0.12 * portraitFactor);
+  applyLightViewportBoost(tealRim, 1 + 0.18 * portraitFactor);
+  applyLightViewportBoost(emberRim, 1 + 0.16 * portraitFactor);
+  applyLightViewportBoost(prismKeyLight, 1 + 0.16 * portraitFactor);
+  applyLightViewportBoost(prismFillLight, 1 + 0.16 * portraitFactor);
+  const mapLightBoost = 1 + 0.35 * portraitFactor;
+  for (const light of mapState.mapLights) applyLightViewportBoost(light, mapLightBoost);
 }
 
 function getCellTopY(cellX, cellY) {
@@ -3242,6 +3272,7 @@ function buildMap() {
     2
   );
   mapLightA.position.set(-boardWidth * 0.34, 6.2, -boardHeight * 0.26);
+  setLightBaseIntensity(mapLightA);
   worldGroup.add(mapLightA);
 
   const mapLightB = new THREE.PointLight(
@@ -3251,6 +3282,7 @@ function buildMap() {
     2
   );
   mapLightB.position.set(boardWidth * 0.36, 6.8, boardHeight * 0.3);
+  setLightBaseIntensity(mapLightB);
   worldGroup.add(mapLightB);
 
   const mapLightC = new THREE.PointLight(
@@ -3260,6 +3292,7 @@ function buildMap() {
     2
   );
   mapLightC.position.set(0, 7.5, 0);
+  setLightBaseIntensity(mapLightC);
   worldGroup.add(mapLightC);
   mapState.mapLights.push(mapLightA, mapLightB, mapLightC);
 
