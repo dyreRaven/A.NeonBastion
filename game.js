@@ -1480,6 +1480,12 @@ const TOWER_TYPES = {
     sprayRadius: 1.85,
     splashRadius: 2.8,
     footprint: 2,
+    bombardFxLite: true,
+    bombardShotSfxInterval: 0.22,
+    bombardMuzzleFxInterval: 0.16,
+    bombardImpactSfxInterval: 0.18,
+    bombardImpactFxInterval: 0.2,
+    bombardImpactShrapnelScale: 0.22,
   },
   rift: {
     name: "Rift",
@@ -2264,6 +2270,23 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   }
   tower.autoBombard = !!config.autoBombard;
   tower.sprayRadius = tower.autoBombard ? Math.max(0.05, Number(config.sprayRadius || tower.sprayRadius || 1.2)) : 0;
+  tower.bombardFxLite = tower.autoBombard && !!config.bombardFxLite;
+  tower.bombardShotSfxInterval =
+    tower.autoBombard && Number.isFinite(config.bombardShotSfxInterval) ? Math.max(0, config.bombardShotSfxInterval) : 0;
+  tower.bombardMuzzleFxInterval =
+    tower.autoBombard && Number.isFinite(config.bombardMuzzleFxInterval) ? Math.max(0, config.bombardMuzzleFxInterval) : 0;
+  tower.bombardImpactSfxInterval =
+    tower.autoBombard && Number.isFinite(config.bombardImpactSfxInterval) ? Math.max(0, config.bombardImpactSfxInterval) : 0;
+  tower.bombardImpactFxInterval =
+    tower.autoBombard && Number.isFinite(config.bombardImpactFxInterval) ? Math.max(0, config.bombardImpactFxInterval) : 0;
+  tower.bombardImpactShrapnelScale =
+    tower.autoBombard && Number.isFinite(config.bombardImpactShrapnelScale)
+      ? Math.max(0, Math.min(1, config.bombardImpactShrapnelScale))
+      : 1;
+  if (!Number.isFinite(tower.nextBombardShotSfxAt)) tower.nextBombardShotSfxAt = 0;
+  if (!Number.isFinite(tower.nextBombardMuzzleFxAt)) tower.nextBombardMuzzleFxAt = 0;
+  if (!Number.isFinite(tower.nextBombardImpactSfxAt)) tower.nextBombardImpactSfxAt = 0;
+  if (!Number.isFinite(tower.nextBombardImpactFxAt)) tower.nextBombardImpactFxAt = 0;
   tower.manualAreaTargeting = !!config.manualAreaTargeting;
   tower.splashRadius =
     tower.manualAreaTargeting || tower.autoBombard ? Math.max(0.8, Number(config.splashRadius || tower.splashRadius || 1.4)) : 0;
@@ -10271,6 +10294,23 @@ class Tower {
     this.manualAreaTargeting = !!config.manualAreaTargeting;
     this.autoBombard = !!config.autoBombard;
     this.sprayRadius = this.autoBombard ? Math.max(0.05, Number(config.sprayRadius || 1.2)) : 0;
+    this.bombardFxLite = this.autoBombard && !!config.bombardFxLite;
+    this.bombardShotSfxInterval =
+      this.autoBombard && Number.isFinite(config.bombardShotSfxInterval) ? Math.max(0, config.bombardShotSfxInterval) : 0;
+    this.bombardMuzzleFxInterval =
+      this.autoBombard && Number.isFinite(config.bombardMuzzleFxInterval) ? Math.max(0, config.bombardMuzzleFxInterval) : 0;
+    this.bombardImpactSfxInterval =
+      this.autoBombard && Number.isFinite(config.bombardImpactSfxInterval) ? Math.max(0, config.bombardImpactSfxInterval) : 0;
+    this.bombardImpactFxInterval =
+      this.autoBombard && Number.isFinite(config.bombardImpactFxInterval) ? Math.max(0, config.bombardImpactFxInterval) : 0;
+    this.bombardImpactShrapnelScale =
+      this.autoBombard && Number.isFinite(config.bombardImpactShrapnelScale)
+        ? Math.max(0, Math.min(1, config.bombardImpactShrapnelScale))
+        : 1;
+    this.nextBombardShotSfxAt = 0;
+    this.nextBombardMuzzleFxAt = 0;
+    this.nextBombardImpactSfxAt = 0;
+    this.nextBombardImpactFxAt = 0;
     this.splashRadius =
       this.manualAreaTargeting || this.autoBombard ? Math.max(0.8, Number(config.splashRadius || 1.4)) : 0;
     this.hasAreaTarget = false;
@@ -10394,9 +10434,34 @@ class Tower {
       else muzzleDir.set(0, 0, 1);
 
       this.cooldown = this.fireInterval;
-      audioSystem.playTowerShot(this.damage * 1.04);
-      audioSystem.playBombarderShot(this.damage, this.splashRadius);
-      game.debris.push(new BombardMuzzleFireEffect(origin, muzzleDir, this.projectileColor, this.projectileRadius));
+      const now = game.time;
+      const shotSfxDue = !this.bombardFxLite || now >= this.nextBombardShotSfxAt;
+      if (shotSfxDue) {
+        if (this.bombardFxLite && this.bombardShotSfxInterval > 0) {
+          this.nextBombardShotSfxAt = now + this.bombardShotSfxInterval;
+        }
+        audioSystem.playTowerShot(this.damage * 1.04);
+        audioSystem.playBombarderShot(this.damage, this.splashRadius);
+      }
+
+      const muzzleFxDue =
+        game.explosionParticlesEnabled && (!this.bombardFxLite || now >= this.nextBombardMuzzleFxAt);
+      if (muzzleFxDue) {
+        if (this.bombardFxLite && this.bombardMuzzleFxInterval > 0) {
+          this.nextBombardMuzzleFxAt = now + this.bombardMuzzleFxInterval;
+        }
+        game.debris.push(new BombardMuzzleFireEffect(origin, muzzleDir, this.projectileColor, this.projectileRadius));
+      }
+
+      const impactSfxDue = !this.bombardFxLite || now >= this.nextBombardImpactSfxAt;
+      if (impactSfxDue && this.bombardFxLite && this.bombardImpactSfxInterval > 0) {
+        this.nextBombardImpactSfxAt = now + this.bombardImpactSfxInterval;
+      }
+      const impactFxDue = !this.bombardFxLite || now >= this.nextBombardImpactFxAt;
+      if (impactFxDue && this.bombardFxLite && this.bombardImpactFxInterval > 0) {
+        this.nextBombardImpactFxAt = now + this.bombardImpactFxInterval;
+      }
+
       game.projectiles.push(
         new BombardProjectile(
           origin,
@@ -10405,7 +10470,13 @@ class Tower {
           this.projectileSpeed,
           this.projectileColor,
           this.projectileRadius,
-          this.splashRadius
+          this.splashRadius,
+          {
+            playImpactSfx: impactSfxDue,
+            spawnImpactEffect: impactFxDue,
+            spawnImpactPulse: impactFxDue,
+            impactShrapnelScale: impactFxDue ? this.bombardImpactShrapnelScale : 0,
+          }
         )
       );
       return;
@@ -10970,12 +11041,19 @@ class BombardImpactEffect {
 }
 
 class BombardProjectile {
-  constructor(origin, targetPoint, damage, speed, color, radius, splashRadius) {
+  constructor(origin, targetPoint, damage, speed, color, radius, splashRadius, options = null) {
     this.damage = Math.max(1, Math.round(Number(damage) || 1));
     this.speed = Math.max(4, Number(speed) || 4);
     this.color = color;
     this.radius = Math.max(0.08, Number(radius) || 0.12);
     this.splashRadius = Math.max(0.8, Number(splashRadius) || 0.8);
+    const fxOptions = options && typeof options === "object" ? options : {};
+    this.playImpactSfx = fxOptions.playImpactSfx !== false;
+    this.spawnImpactEffect = fxOptions.spawnImpactEffect !== false;
+    this.spawnImpactPulse = fxOptions.spawnImpactPulse !== false;
+    this.impactShrapnelScale = Number.isFinite(fxOptions.impactShrapnelScale)
+      ? Math.max(0, Math.min(1, fxOptions.impactShrapnelScale))
+      : 1;
     this.alive = true;
     this.elapsed = 0;
 
@@ -11028,13 +11106,16 @@ class BombardProjectile {
 
   impact() {
     const impactY = getLaneSurfaceY(this.target.x, this.target.z) + 0.06;
-    audioSystem.playBombarderImpact(this.damage, this.splashRadius);
+    if (this.playImpactSfx) audioSystem.playBombarderImpact(this.damage, this.splashRadius);
     applyBombardSplashDamage(this.target.x, this.target.z, this.damage, this.splashRadius);
-    if (game.explosionParticlesEnabled) {
+    if (game.explosionParticlesEnabled && this.spawnImpactEffect) {
       game.debris.push(new BombardImpactEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color));
 
       const blastColor = new THREE.Color(this.color);
-      const shrapnelCount = Math.min(36, 16 + Math.round(this.splashRadius * 6.6));
+      const shrapnelCount = Math.max(
+        0,
+        Math.round((Math.min(36, 16 + Math.round(this.splashRadius * 6.6)) * this.impactShrapnelScale))
+      );
       for (let i = 0; i < shrapnelCount; i += 1) {
         const size = THREE.MathUtils.lerp(this.splashRadius * 0.055, this.splashRadius * 0.14, Math.random());
         const geometry =
@@ -11071,32 +11152,34 @@ class BombardProjectile {
         game.debris.push(new EnemyDebrisPiece(mesh, launchDir.multiplyScalar(speed), size));
       }
 
-      const pulseBase = Math.max(0.44, this.splashRadius * 0.66);
-      const pulseA = new THREE.Mesh(
-        new THREE.SphereGeometry(pulseBase, 14, 14),
-        new THREE.MeshBasicMaterial({
-          color: blastColor.clone().lerp(new THREE.Color("#ffc386"), 0.22),
-          transparent: true,
-          opacity: 0.64,
-          depthWrite: false,
-        })
-      );
-      pulseA.position.set(this.target.x, impactY + 0.03, this.target.z);
-      scene.add(pulseA);
-      game.debris.push(new EnemyDebrisPulse(pulseA, pulseBase));
+      if (this.spawnImpactPulse) {
+        const pulseBase = Math.max(0.44, this.splashRadius * 0.66);
+        const pulseA = new THREE.Mesh(
+          new THREE.SphereGeometry(pulseBase, 14, 14),
+          new THREE.MeshBasicMaterial({
+            color: blastColor.clone().lerp(new THREE.Color("#ffc386"), 0.22),
+            transparent: true,
+            opacity: 0.64,
+            depthWrite: false,
+          })
+        );
+        pulseA.position.set(this.target.x, impactY + 0.03, this.target.z);
+        scene.add(pulseA);
+        game.debris.push(new EnemyDebrisPulse(pulseA, pulseBase));
 
-      const pulseB = new THREE.Mesh(
-        new THREE.SphereGeometry(pulseBase * 0.72, 12, 12),
-        new THREE.MeshBasicMaterial({
-          color: blastColor.clone().lerp(new THREE.Color("#ffdcb6"), 0.36),
-          transparent: true,
-          opacity: 0.54,
-          depthWrite: false,
-        })
-      );
-      pulseB.position.set(this.target.x, impactY + 0.04, this.target.z);
-      scene.add(pulseB);
-      game.debris.push(new EnemyDebrisPulse(pulseB, pulseBase * 0.72));
+        const pulseB = new THREE.Mesh(
+          new THREE.SphereGeometry(pulseBase * 0.72, 12, 12),
+          new THREE.MeshBasicMaterial({
+            color: blastColor.clone().lerp(new THREE.Color("#ffdcb6"), 0.36),
+            transparent: true,
+            opacity: 0.54,
+            depthWrite: false,
+          })
+        );
+        pulseB.position.set(this.target.x, impactY + 0.04, this.target.z);
+        scene.add(pulseB);
+        game.debris.push(new EnemyDebrisPulse(pulseB, pulseBase * 0.72));
+      }
     }
   }
 
