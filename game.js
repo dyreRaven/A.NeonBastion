@@ -8960,26 +8960,26 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   if (towerTypeId === "deluxeBombarder") {
     // Circular O-shaped base for the 2x2 deluxe body.
     const footprintDisk = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.82, CELL_SIZE * 0.88, 0.18, 42), darkMat)
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.68, CELL_SIZE * 0.74, 0.14, 42), darkMat)
     );
-    footprintDisk.position.y = 0.1;
+    footprintDisk.position.y = 0.08;
     group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.78, 0.11, 14, 54), glowMat));
+    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.65, 0.08, 12, 48), glowMat));
     footprintRing.rotation.x = Math.PI / 2;
-    footprintRing.position.y = 0.2;
+    footprintRing.position.y = 0.17;
     group.add(footprintRing);
 
     // Wide chassis so the tower body (not only base) visually spans the 2x2 footprint.
     const superHull = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.74, CELL_SIZE * 0.8, 1.28, 34), bodyMat)
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.58, CELL_SIZE * 0.64, 1.02, 34), bodyMat)
     );
-    superHull.position.y = 1.16;
+    superHull.position.y = 1.03;
     group.add(superHull);
 
-    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.64, 0.1, 14, 46), coreMat));
+    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.53, 0.08, 12, 42), coreMat));
     superHullRing.rotation.x = Math.PI / 2;
-    superHullRing.position.y = 1.7;
+    superHullRing.position.y = 1.46;
     group.add(superHullRing);
   }
 
@@ -9005,10 +9005,10 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   group.add(ring);
 
   if (towerTypeId === "deluxeBombarder") {
-    base.scale.set(1.24, 1.1, 1.24);
-    lowerCore.scale.set(1.42, 1.32, 1.42);
-    neck.scale.set(1.5, 1.26, 1.5);
-    ring.scale.set(1.62, 1, 1.62);
+    base.scale.set(1.08, 1.06, 1.08);
+    lowerCore.scale.set(1.22, 1.24, 1.22);
+    neck.scale.set(1.28, 1.2, 1.28);
+    ring.scale.set(1.34, 1, 1.34);
   }
 
   turret = new THREE.Group();
