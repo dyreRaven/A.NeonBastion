@@ -3166,7 +3166,7 @@ canvas {
   }
 }
 
-@media (max-width: 760px) and (orientation: portrait) {
+@media (max-width: 1100px) and (orientation: portrait) and (pointer: coarse) {
   .menu-screen {
     place-items: stretch;
     padding:
@@ -3233,7 +3233,7 @@ canvas {
   }
 }
 
-@media (max-width: 760px) and (orientation: portrait) {
+@media (max-width: 1100px) and (orientation: portrait) and (pointer: coarse) {
   body:not(.menu-active) .hud {
     top: calc(0.36rem + var(--safe-top));
     left: calc(0.24rem + var(--safe-left));

@@ -257,6 +257,7 @@ async function resolveStaticFilePath(pathname) {
 function getCacheControlHeader(filePath) {
   const extension = extname(filePath).toLowerCase();
   if (extension === ".html") return "no-store";
+  if (extension === ".webmanifest") return "no-store";
   if (basename(filePath).toLowerCase() === "sw.js") return "no-store";
   return "public, max-age=31536000, immutable";
 }

@@ -1,17 +1,17 @@
-const STATIC_CACHE = "neon-bastion-static-v2026-02-21-3";
-const RUNTIME_CACHE = "neon-bastion-runtime-v2026-02-21-3";
+const STATIC_CACHE = "neon-bastion-static-v2026-02-21-4";
+const RUNTIME_CACHE = "neon-bastion-runtime-v2026-02-21-4";
 
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./styles.css?v=20260221a",
+  "./styles.css?v=20260221b",
   "./game.js?v=20260221a",
   "./vendor/three.min.js",
   "./ambient_flute.mp3",
   "./boss_alien_talk.mp3",
   "./boss_wave20.mp3",
   "./enemy_shatter.mp3",
-  "./manifest.webmanifest",
+  "./manifest.webmanifest?v=20260221b",
   "./icons/neon-bastion-icon-192.png",
   "./icons/neon-bastion-icon-512.png",
   "./icons/apple-touch-icon-180.png",
