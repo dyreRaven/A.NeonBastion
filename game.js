@@ -3022,33 +3022,33 @@ function applyLevelLightingTheme(level) {
   const marsLevel = level >= 4;
 
   if (marsLevel) {
-    scene.background.set("#4f2a18");
-    scene.fog.color.set("#6f3c24");
-    scene.fog.density = 0.016;
-    renderer.toneMappingExposure = 0.98;
+    scene.background.set("#6e3a22");
+    scene.fog.color.set("#915134");
+    scene.fog.density = 0.02;
+    renderer.toneMappingExposure = 0.92;
 
-    hemiLight.color.set("#ffcea6");
-    hemiLight.groundColor.set("#3c2116");
-    hemiLight.intensity = 0.64;
+    hemiLight.color.set("#ffd0a8");
+    hemiLight.groundColor.set("#4a291b");
+    hemiLight.intensity = 0.68;
 
-    sunLight.color.set("#ffd4ac");
-    sunLight.intensity = 1.12;
+    sunLight.color.set("#ffcc96");
+    sunLight.intensity = 1.18;
     sunLight.position.set(-16, 28, -10);
 
-    tealRim.color.set("#ff9b63");
-    tealRim.intensity = 0.52;
+    tealRim.color.set("#ff8f54");
+    tealRim.intensity = 0.58;
     tealRim.position.set(-22, 9, -14);
 
-    emberRim.color.set("#ffc083");
-    emberRim.intensity = 0.46;
+    emberRim.color.set("#ffb06c");
+    emberRim.intensity = 0.54;
     emberRim.position.set(23, 8, 15);
 
-    prismKeyLight.color.set("#ffd8b3");
-    prismKeyLight.intensity = 0.46;
+    prismKeyLight.color.set("#ffd2a3");
+    prismKeyLight.intensity = 0.5;
     prismKeyLight.position.set(-4, 13, -8);
 
-    prismFillLight.color.set("#ff8c5c");
-    prismFillLight.intensity = 0.34;
+    prismFillLight.color.set("#ff7a42");
+    prismFillLight.intensity = 0.42;
     prismFillLight.position.set(12, 9, 14);
   } else if (emberLevel) {
     scene.background.set("#090e1c");
@@ -3197,10 +3197,10 @@ function applyViewportMapVisibilityTuning() {
   const emberLevel = game.currentLevel === 3;
   const marsLevel = game.currentLevel >= 4;
   const portraitFactor = getPortraitViewportTuningFactor();
-  const baseFogDensity = marsLevel ? 0.016 : emberLevel ? 0.012 : moonLevel ? 0.01 : 0.012;
-  const baseExposure = marsLevel ? 0.98 : emberLevel ? 1.0 : moonLevel ? 0.96 : 1.08;
+  const baseFogDensity = marsLevel ? 0.02 : emberLevel ? 0.012 : moonLevel ? 0.01 : 0.012;
+  const baseExposure = marsLevel ? 0.92 : emberLevel ? 1.0 : moonLevel ? 0.96 : 1.08;
   const baseVignette = marsLevel ? 0.54 : emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48;
-  const baseShadowWash = marsLevel ? 0.3 : emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2;
+  const baseShadowWash = marsLevel ? 0.42 : emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2;
   const exposureBoost = (moonLevel ? 0.2 : emberLevel ? 0.16 : marsLevel ? 0.14 : 0.18) * portraitFactor;
 
   scene.fog.density = baseFogDensity * (1 - 0.86 * portraitFactor);
@@ -3290,13 +3290,13 @@ function buildMap() {
   const base = new THREE.Mesh(
     new THREE.BoxGeometry(boardWidth + 14, 1.9, boardHeight + 14),
     new THREE.MeshPhysicalMaterial({
-      color: marsLevel ? "#4c2b1d" : emberLevel ? "#151824" : moonLevel ? "#121620" : "#0a1624",
+      color: marsLevel ? "#6f3f28" : emberLevel ? "#151824" : moonLevel ? "#121620" : "#0a1624",
       roughness: 0.82,
       metalness: 0.18,
       clearcoat: 0.3,
       clearcoatRoughness: 0.48,
-      emissive: marsLevel ? "#31170d" : emberLevel ? "#0d101b" : moonLevel ? "#0b0f18" : "#050e19",
-      emissiveIntensity: marsLevel ? 0.5 : emberLevel ? 0.56 : moonLevel ? 0.58 : 0.66,
+      emissive: marsLevel ? "#462414" : emberLevel ? "#0d101b" : moonLevel ? "#0b0f18" : "#050e19",
+      emissiveIntensity: marsLevel ? 0.62 : emberLevel ? 0.56 : moonLevel ? 0.58 : 0.66,
       envMapIntensity: 1.05,
     })
   );
@@ -3307,11 +3307,11 @@ function buildMap() {
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(boardWidth + 5.2, 0.18, boardHeight + 5.2),
     new THREE.MeshStandardMaterial({
-      color: marsLevel ? "#6d3d27" : emberLevel ? "#1f2436" : moonLevel ? "#1a202d" : "#102538",
+      color: marsLevel ? "#8a4e31" : emberLevel ? "#1f2436" : moonLevel ? "#1a202d" : "#102538",
       roughness: 0.72,
       metalness: 0.26,
-      emissive: marsLevel ? "#3a1f13" : emberLevel ? "#141a2a" : moonLevel ? "#101722" : "#08192a",
-      emissiveIntensity: marsLevel ? 0.24 : emberLevel ? 0.28 : moonLevel ? 0.26 : 0.34,
+      emissive: marsLevel ? "#4a2819" : emberLevel ? "#141a2a" : moonLevel ? "#101722" : "#08192a",
+      emissiveIntensity: marsLevel ? 0.34 : emberLevel ? 0.28 : moonLevel ? 0.26 : 0.34,
     })
   );
   deck.position.y = -0.06;
@@ -3320,7 +3320,7 @@ function buildMap() {
 
   const boardRadius = Math.max(boardWidth, boardHeight) * 0.78;
   const vignetteMaterial = new THREE.MeshBasicMaterial({
-    color: marsLevel ? "#241108" : emberLevel ? "#080812" : moonLevel ? "#04070e" : "#01060c",
+    color: marsLevel ? "#3a1d10" : emberLevel ? "#080812" : moonLevel ? "#04070e" : "#01060c",
     transparent: true,
     opacity: marsLevel ? 0.54 : emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48,
     side: THREE.DoubleSide,
@@ -3335,9 +3335,9 @@ function buildMap() {
   worldGroup.add(vignette);
 
   const shadowWashMaterial = new THREE.MeshBasicMaterial({
-    color: marsLevel ? "#2b170e" : emberLevel ? "#0a0b15" : moonLevel ? "#02050a" : "#01050a",
+    color: marsLevel ? "#4b2717" : emberLevel ? "#0a0b15" : moonLevel ? "#02050a" : "#01050a",
     transparent: true,
-    opacity: marsLevel ? 0.3 : emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2,
+    opacity: marsLevel ? 0.42 : emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2,
     depthWrite: false,
   });
   const shadowWash = new THREE.Mesh(
@@ -3412,8 +3412,8 @@ function buildMap() {
 
       const tileColor = new THREE.Color();
       if (marsLevel) {
-        if (onPath) tileColor.setHSL(0.075 + n * 0.014, 0.68, 0.33 + n * 0.05 - edgeBlend * 0.04);
-        else tileColor.setHSL(0.08 + duneRidge * 0.024 + n * 0.016, 0.57, 0.29 + n * 0.08 + duneRidge * 0.08 - edgeBlend * 0.07);
+        if (onPath) tileColor.setHSL(0.06 + n * 0.016, 0.76, 0.36 + n * 0.06 - edgeBlend * 0.04);
+        else tileColor.setHSL(0.055 + duneRidge * 0.03 + n * 0.018, 0.65, 0.31 + n * 0.09 + duneRidge * 0.1 - edgeBlend * 0.08);
       } else if (emberLevel) {
         if (onPath) tileColor.setHSL(0.03 + n * 0.018, 0.66, 0.22 + n * 0.04 - edgeBlend * 0.05);
         else tileColor.setHSL(0.64 + n * 0.024, 0.26, 0.13 + n * 0.06 - edgeBlend * 0.08);
@@ -3719,22 +3719,22 @@ function buildSkyBits(boardWidth, boardHeight) {
   const moonLevel = game.currentLevel === 2;
   const emberLevel = game.currentLevel === 3;
   const marsLevel = game.currentLevel >= 4;
-  const count = marsLevel ? 300 : emberLevel ? 340 : moonLevel ? 560 : 420;
+  const count = marsLevel ? 540 : emberLevel ? 340 : moonLevel ? 560 : 420;
   const positions = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i += 1) {
     positions[i * 3] = (Math.random() - 0.5) * (boardWidth + 18);
-    positions[i * 3 + 1] = marsLevel ? 4 + Math.random() * 9 : 9 + Math.random() * 20;
+    positions[i * 3 + 1] = marsLevel ? 2.4 + Math.random() * 13 : 9 + Math.random() * 20;
     positions[i * 3 + 2] = (Math.random() - 0.5) * (boardHeight + 18);
   }
 
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const starMaterial = new THREE.PointsMaterial({
-    color: marsLevel ? "#ffcda1" : emberLevel ? "#c6d7ff" : moonLevel ? "#d6e7ff" : "#a8dcff",
-    size: marsLevel ? 0.34 : emberLevel ? 0.28 : moonLevel ? 0.24 : 0.22,
+    color: marsLevel ? "#ffbc84" : emberLevel ? "#c6d7ff" : moonLevel ? "#d6e7ff" : "#a8dcff",
+    size: marsLevel ? 0.42 : emberLevel ? 0.28 : moonLevel ? 0.24 : 0.22,
     transparent: true,
-    opacity: marsLevel ? 0.28 : emberLevel ? 0.34 : moonLevel ? 0.42 : 0.34,
+    opacity: marsLevel ? 0.42 : emberLevel ? 0.34 : moonLevel ? 0.42 : 0.34,
     depthWrite: false,
     blending: marsLevel ? THREE.NormalBlending : THREE.AdditiveBlending,
   });
@@ -3784,18 +3784,21 @@ function buildPerimeterBeacons(boardWidth, boardHeight) {
 
 function resetMarsDustStormBand(storm, halfBoardWidth, halfBoardHeight, initialSpawn = false) {
   if (!storm || !storm.root) return;
-  storm.wrapMargin = 6 + Math.random() * 4.2;
+  storm.wrapMargin = 8 + Math.random() * 5.6;
   storm.x = initialSpawn
     ? (Math.random() * 2 - 1) * (halfBoardWidth + storm.wrapMargin * 0.36)
     : -halfBoardWidth - storm.wrapMargin;
-  storm.baseZ = (Math.random() * 2 - 1) * (halfBoardHeight * 0.9);
-  storm.y = 0.38 + Math.random() * 0.34;
-  storm.speed = 1 + Math.random() * 1.75;
-  storm.swayAmplitude = 0.34 + Math.random() * 1.08;
-  storm.swayFrequency = 0.22 + Math.random() * 0.44;
+  storm.baseZ = (Math.random() * 2 - 1) * (halfBoardHeight * 0.98);
+  storm.y = 0.34 + Math.random() * 0.48;
+  storm.speed = 2.1 + Math.random() * 2.8;
+  storm.swayAmplitude = 0.8 + Math.random() * 1.85;
+  storm.swayFrequency = 0.42 + Math.random() * 0.78;
   storm.pulsePhase = Math.random() * Math.PI * 2;
-  storm.pulseSpeed = 0.34 + Math.random() * 0.62;
-  storm.yaw = -0.14 + Math.random() * 0.28;
+  storm.pulseSpeed = 0.7 + Math.random() * 1.2;
+  storm.gustPhase = Math.random() * Math.PI * 2;
+  storm.gustSpeed = 0.18 + Math.random() * 0.32;
+  storm.gustPower = 0.5 + Math.random() * 1;
+  storm.yaw = -0.22 + Math.random() * 0.44;
   storm.root.position.set(storm.x, storm.y, storm.baseZ);
   storm.root.rotation.set(0, storm.yaw, 0);
 }
@@ -3803,21 +3806,21 @@ function resetMarsDustStormBand(storm, halfBoardWidth, halfBoardHeight, initialS
 function buildMarsDustStorms(boardWidth, boardHeight) {
   const halfBoardWidth = boardWidth * 0.5;
   const halfBoardHeight = boardHeight * 0.5;
-  const bandCount = rendererLowPowerMode ? 10 : 18;
+  const bandCount = rendererLowPowerMode ? 18 : 34;
   const baseGeometry = new THREE.CircleGeometry(1, 20);
 
   for (let i = 0; i < bandCount; i += 1) {
     const root = new THREE.Group();
     worldGroup.add(root);
     const puffs = [];
-    const puffCount = 3 + Math.floor(Math.random() * 3);
+    const puffCount = 5 + Math.floor(Math.random() * 5);
 
     for (let j = 0; j < puffCount; j += 1) {
-      const baseOpacity = 0.06 + Math.random() * 0.09;
+      const baseOpacity = 0.09 + Math.random() * 0.16;
       const mesh = new THREE.Mesh(
         baseGeometry,
         new THREE.MeshBasicMaterial({
-          color: j % 2 === 0 ? "#efb27d" : "#cf7f51",
+          color: j % 3 === 0 ? "#ffba7d" : j % 2 === 0 ? "#e9925e" : "#bb673e",
           transparent: true,
           opacity: baseOpacity,
           depthWrite: false,
@@ -3825,9 +3828,9 @@ function buildMarsDustStorms(boardWidth, boardHeight) {
         })
       );
       mesh.rotation.x = -Math.PI / 2;
-      const baseX = (Math.random() * 2 - 1) * 1.5;
-      mesh.position.set(baseX, 0.06 + j * 0.014, (Math.random() * 2 - 1) * 0.95);
-      mesh.scale.set(2.1 + Math.random() * 3.4, 0.9 + Math.random() * 1.9, 1);
+      const baseX = (Math.random() * 2 - 1) * 2.6;
+      mesh.position.set(baseX, 0.06 + j * 0.014, (Math.random() * 2 - 1) * 1.3);
+      mesh.scale.set(3 + Math.random() * 5.2, 1.2 + Math.random() * 2.7, 1);
       root.add(mesh);
 
       puffs.push({
@@ -3835,8 +3838,8 @@ function buildMarsDustStorms(boardWidth, boardHeight) {
         baseX,
         baseOpacity,
         driftPhase: Math.random() * Math.PI * 2,
-        driftSpeed: 0.25 + Math.random() * 0.65,
-        driftAmp: 0.07 + Math.random() * 0.12,
+        driftSpeed: 0.5 + Math.random() * 1.1,
+        driftAmp: 0.12 + Math.random() * 0.24,
       });
     }
 
@@ -3851,6 +3854,9 @@ function buildMarsDustStorms(boardWidth, boardHeight) {
       swayFrequency: 0,
       pulsePhase: 0,
       pulseSpeed: 0,
+      gustPhase: 0,
+      gustSpeed: 0,
+      gustPower: 0,
       yaw: 0,
       wrapMargin: 0,
     };
@@ -3866,15 +3872,17 @@ function updateMarsDustStorms(dt) {
   const halfBoardHeight = (ROWS * CELL_SIZE) * 0.5;
 
   for (const storm of mapState.dustStorms) {
-    storm.x += storm.speed * safeDt;
+    const gust = 0.76 + Math.sin(game.time * storm.gustSpeed + storm.gustPhase) * storm.gustPower;
+    storm.x += storm.speed * Math.max(0.35, gust) * safeDt;
     const sway = Math.sin(game.time * storm.swayFrequency + storm.pulsePhase) * storm.swayAmplitude;
-    storm.root.position.set(storm.x, storm.y, storm.baseZ + sway);
-    storm.root.rotation.y = storm.yaw + Math.sin(game.time * 0.2 + storm.pulsePhase) * 0.08;
+    const yLift = Math.sin(game.time * (0.55 + storm.gustSpeed) + storm.pulsePhase * 1.4) * 0.06;
+    storm.root.position.set(storm.x, storm.y + yLift, storm.baseZ + sway);
+    storm.root.rotation.y = storm.yaw + Math.sin(game.time * (0.34 + storm.gustSpeed) + storm.pulsePhase) * 0.16;
 
-    const stormPulse = 0.72 + Math.sin(game.time * storm.pulseSpeed + storm.pulsePhase) * 0.28;
+    const stormPulse = 0.8 + Math.sin(game.time * storm.pulseSpeed + storm.pulsePhase) * 0.36;
     for (const puff of storm.puffs) {
       const material = puff.mesh.material;
-      const layerPulse = 0.84 + Math.sin(game.time * (0.6 + puff.driftSpeed) + puff.driftPhase) * 0.16;
+      const layerPulse = 0.9 + Math.sin(game.time * (0.8 + puff.driftSpeed) + puff.driftPhase) * 0.24;
       material.opacity = Math.max(0.015, puff.baseOpacity * stormPulse * layerPulse);
       puff.mesh.position.x = puff.baseX + Math.cos(game.time * puff.driftSpeed + puff.driftPhase) * puff.driftAmp;
     }
@@ -15055,15 +15063,19 @@ function updateMapEffects(dt) {
 
   if (mapState.starField) {
     mapState.starField.rotation.y += dt * (marsLevel ? 0.01 : emberLevel ? 0.014 : moonLevel ? 0.024 : 0.018);
+    if (marsLevel && mapState.starField.material) {
+      const dustPulse = 0.86 + Math.sin(game.time * 0.72) * 0.2;
+      mapState.starField.material.opacity = Math.max(0.22, 0.42 * dustPulse);
+    }
   }
 
   if (marsLevel) {
-    tealRim.intensity = 0.47 + Math.sin(game.time * 0.92) * 0.06;
-    emberRim.intensity = 0.41 + Math.sin(game.time * 0.78 + 1.2) * 0.05;
-    prismKeyLight.intensity = 0.42 + Math.sin(game.time * 1.08 + 0.4) * 0.07;
-    prismFillLight.intensity = 0.3 + Math.sin(game.time * 0.96 + 1.9) * 0.06;
-    prismKeyLight.position.x = -4 + Math.sin(game.time * 0.21) * 6.2;
-    prismFillLight.position.z = 14 + Math.cos(game.time * 0.18) * 3.2;
+    tealRim.intensity = 0.56 + Math.sin(game.time * 1.18) * 0.09;
+    emberRim.intensity = 0.52 + Math.sin(game.time * 1.02 + 1.2) * 0.08;
+    prismKeyLight.intensity = 0.48 + Math.sin(game.time * 1.28 + 0.4) * 0.09;
+    prismFillLight.intensity = 0.4 + Math.sin(game.time * 1.12 + 1.9) * 0.08;
+    prismKeyLight.position.x = -4 + Math.sin(game.time * 0.34) * 8.4;
+    prismFillLight.position.z = 14 + Math.cos(game.time * 0.3) * 5.1;
   } else if (emberLevel) {
     tealRim.intensity = 0.64 + Math.sin(game.time * 1.34) * 0.08;
     emberRim.intensity = 0.36 + Math.sin(game.time * 1.06 + 1.2) * 0.06;
@@ -15089,9 +15101,9 @@ function updateMapEffects(dt) {
 
   if (mapState.mapLights.length >= 3) {
     if (marsLevel) {
-      mapState.mapLights[0].intensity = 0.3 + Math.sin(game.time * 0.82 + 0.2) * 0.06;
-      mapState.mapLights[1].intensity = 0.28 + Math.sin(game.time * 0.76 + 1.6) * 0.05;
-      mapState.mapLights[2].intensity = 0.18 + Math.sin(game.time * 0.88 + 2.2) * 0.04;
+      mapState.mapLights[0].intensity = 0.36 + Math.sin(game.time * 1 + 0.2) * 0.08;
+      mapState.mapLights[1].intensity = 0.32 + Math.sin(game.time * 0.94 + 1.6) * 0.07;
+      mapState.mapLights[2].intensity = 0.24 + Math.sin(game.time * 1.08 + 2.2) * 0.06;
     } else if (emberLevel) {
       mapState.mapLights[0].intensity = 0.38 + Math.sin(game.time * 1.05 + 0.2) * 0.09;
       mapState.mapLights[1].intensity = 0.3 + Math.sin(game.time * 0.96 + 1.6) * 0.08;
