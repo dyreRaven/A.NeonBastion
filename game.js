@@ -3064,6 +3064,8 @@ const mapState = {
   pulseOrbs: [],
   starField: null,
   mapLights: [],
+  vignetteMaterial: null,
+  shadowWashMaterial: null,
   cellTopY: Array.from({ length: ROWS }, () => Array(COLS).fill(0)),
   meteorEffects: [],
   meteorStorm: {
@@ -3077,6 +3079,31 @@ const mapState = {
     },
   },
 };
+
+function getPortraitViewportTuningFactor() {
+  const width = Math.max(1, Math.floor(window.innerWidth || 0));
+  const height = Math.max(1, Math.floor(window.innerHeight || 0));
+  const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  if (!coarsePointer) return 0;
+  if (width >= height) return 0;
+  const aspect = width / Math.max(height, 1);
+  return Math.max(0, Math.min(1, (1 - aspect) / 0.5));
+}
+
+function applyViewportMapVisibilityTuning() {
+  const moonLevel = game.currentLevel === 2;
+  const emberLevel = game.currentLevel >= 3;
+  const portraitFactor = getPortraitViewportTuningFactor();
+  const baseFogDensity = emberLevel ? 0.012 : moonLevel ? 0.01 : 0.012;
+  const baseExposure = emberLevel ? 1.0 : moonLevel ? 0.96 : 1.08;
+  const baseVignette = emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48;
+  const baseShadowWash = emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2;
+
+  scene.fog.density = baseFogDensity * (1 - 0.5 * portraitFactor);
+  renderer.toneMappingExposure = baseExposure + (moonLevel ? 0.11 : 0.09) * portraitFactor;
+  if (mapState.vignetteMaterial) mapState.vignetteMaterial.opacity = baseVignette * (1 - 0.7 * portraitFactor);
+  if (mapState.shadowWashMaterial) mapState.shadowWashMaterial.opacity = baseShadowWash * (1 - 0.72 * portraitFactor);
+}
 
 function getCellTopY(cellX, cellY) {
   if (cellX < 0 || cellY < 0 || cellX >= COLS || cellY >= ROWS) return 0;
@@ -3120,6 +3147,8 @@ function rebuildWorld() {
   mapState.pulseOrbs = [];
   mapState.starField = null;
   mapState.mapLights = [];
+  mapState.vignetteMaterial = null;
+  mapState.shadowWashMaterial = null;
   mapState.cellTopY = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   mapState.meteorEffects = [];
   mapState.meteorStorm.active = false;
@@ -3174,32 +3203,37 @@ function buildMap() {
   worldGroup.add(deck);
 
   const boardRadius = Math.max(boardWidth, boardHeight) * 0.78;
+  const vignetteMaterial = new THREE.MeshBasicMaterial({
+    color: emberLevel ? "#080812" : moonLevel ? "#04070e" : "#01060c",
+    transparent: true,
+    opacity: emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
   const vignette = new THREE.Mesh(
     new THREE.RingGeometry(boardRadius * 0.58, boardRadius * 0.96, 72),
-    new THREE.MeshBasicMaterial({
-      color: emberLevel ? "#080812" : moonLevel ? "#04070e" : "#01060c",
-      transparent: true,
-      opacity: emberLevel ? 0.5 : moonLevel ? 0.56 : 0.48,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    })
+    vignetteMaterial
   );
   vignette.rotation.x = -Math.PI / 2;
   vignette.position.y = 0.02;
   worldGroup.add(vignette);
 
+  const shadowWashMaterial = new THREE.MeshBasicMaterial({
+    color: emberLevel ? "#0a0b15" : moonLevel ? "#02050a" : "#01050a",
+    transparent: true,
+    opacity: emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2,
+    depthWrite: false,
+  });
   const shadowWash = new THREE.Mesh(
     new THREE.PlaneGeometry(boardWidth + 4.8, boardHeight + 4.8),
-    new THREE.MeshBasicMaterial({
-      color: emberLevel ? "#0a0b15" : moonLevel ? "#02050a" : "#01050a",
-      transparent: true,
-      opacity: emberLevel ? 0.26 : moonLevel ? 0.26 : 0.2,
-      depthWrite: false,
-    })
+    shadowWashMaterial
   );
   shadowWash.rotation.x = -Math.PI / 2;
   shadowWash.position.y = 0.03;
   worldGroup.add(shadowWash);
+  mapState.vignetteMaterial = vignetteMaterial;
+  mapState.shadowWashMaterial = shadowWashMaterial;
+  applyViewportMapVisibilityTuning();
 
   const mapLightA = new THREE.PointLight(
     emberLevel ? 0x6aaeff : moonLevel ? 0x8ab5ff : 0x58c6ff,
@@ -15021,6 +15055,7 @@ function onResize() {
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   fitBattleCameraToViewport();
+  applyViewportMapVisibilityTuning();
 }
 
 let viewportRefreshTimer = 0;
