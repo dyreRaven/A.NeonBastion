@@ -1213,7 +1213,7 @@ const TOWER_UNLOCKS = {
   frost: { shardCost: 28 },
   quarry: { shardCost: 44 },
   bombarder: { shardCost: 50 },
-  deluxeBombarder: { shardCost: 86 },
+  deluxeBombarder: { shardCost: 600 },
   rift: { shardCost: 32 },
   volt: { shardCost: 36 },
   bastion: { shardCost: 48 },
@@ -1467,7 +1467,7 @@ const TOWER_TYPES = {
     cost: 1780,
     range: 16.4,
     damage: 236,
-    fireInterval: 0.48,
+    fireInterval: 0.12,
     turnSpeed: 3.4,
     projectileSpeed: 20,
     projectileRadius: 0.33,
@@ -1475,7 +1475,7 @@ const TOWER_TYPES = {
     bodyColor: "#e0a96f",
     coreColor: "#4a2e16",
     summary: "Rapid auto splash siege",
-    meshScale: 1.34,
+    meshScale: 1.04,
     autoBombard: true,
     sprayRadius: 1.85,
     splashRadius: 2.8,
@@ -8932,6 +8932,17 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   base.position.y = 0.21;
   group.add(base);
 
+  if (towerTypeId === "deluxeBombarder") {
+    // Wide platform so the 2x2 footprint visibly covers four tiles.
+    const footprintDeck = cast(new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE * 1.84, 0.18, CELL_SIZE * 1.84), darkMat));
+    footprintDeck.position.y = 0.09;
+    group.add(footprintDeck);
+
+    const footprintRing = cast(new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE * 1.66, 0.08, CELL_SIZE * 1.66), glowMat));
+    footprintRing.position.y = 0.24;
+    group.add(footprintRing);
+  }
+
   const lowerCore = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.98, 1.15, 24), bodyMat));
   lowerCore.position.y = 0.95;
   group.add(lowerCore);
@@ -12547,12 +12558,34 @@ function skipToWaveByCommand(targetWave) {
   updateHud();
 }
 
+function grantShardsByCommand(amount = 999999) {
+  const shardAmount = Math.max(0, Math.floor(amount));
+  if (shardAmount <= 0) return;
+  game.shards += shardAmount;
+  savePlayerProgress();
+  if (game.menuOpen) {
+    renderAccountMenu();
+    renderLoadoutMenu();
+    renderMenuShop();
+    renderTrapShop();
+    renderCreatureShop();
+    renderGameUpgradesMenu();
+  }
+  updateHud();
+  setStatus(`Command applied: +${shardAmount} shards.`);
+}
+
 function executeConsoleCommand(rawCommand) {
   const command = String(rawCommand || "").trim();
   if (!command) return;
 
   if (/^@reset$/i.test(command)) {
     resetAllProgressFromCommand();
+    return;
+  }
+
+  if (/^getshard$/i.test(command)) {
+    grantShardsByCommand(999999);
     return;
   }
 
