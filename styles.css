@@ -3242,10 +3242,11 @@ canvas {
     gap: 0.16rem;
     border-radius: 12px;
     background:
-      linear-gradient(138deg, rgba(16, 43, 66, 0.34), rgba(8, 21, 37, 0.18)),
-      rgba(6, 16, 29, 0.56);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22);
-    max-height: min(54dvh, 390px);
+      linear-gradient(138deg, rgba(16, 43, 66, 0.16), rgba(8, 21, 37, 0.06)),
+      rgba(6, 16, 29, 0.22);
+    box-shadow: 0 8px 14px rgba(0, 0, 0, 0.14);
+    backdrop-filter: none;
+    max-height: min(46dvh, 340px);
     overflow-y: auto;
   }
 
@@ -3289,8 +3290,8 @@ canvas {
     padding: 0.28rem 0.32rem;
     gap: 0.14rem;
     border-radius: 10px;
-    border-color: rgba(180, 220, 250, 0.46);
-    background: linear-gradient(126deg, rgba(120, 166, 203, 0.2), rgba(15, 37, 58, 0.32));
+    border-color: rgba(180, 220, 250, 0.34);
+    background: linear-gradient(126deg, rgba(120, 166, 203, 0.12), rgba(15, 37, 58, 0.14));
   }
 
   body:not(.menu-active) .shop-panel h2 {
