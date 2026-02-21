@@ -178,9 +178,9 @@ const GAME_UPGRADE_MAX_LEVELS = Object.freeze({
   shardPercent: 4,
 });
 const GAME_UPGRADE_COSTS = Object.freeze({
-  gameSpeed: [3200, 7800, 14600, 24800, 39200, 59000],
-  startingCredits: [2800, 7600, 16800, 32000],
-  shardPercent: [3600, 9800, 21200, 42000],
+  gameSpeed: [800, 1950, 3650, 6200, 9800, 14750],
+  startingCredits: [700, 1900, 4200, 8000],
+  shardPercent: [900, 2450, 5300, 10500],
 });
 const STARTING_CREDITS_BONUS_STEP = 0.25;
 const SHARD_GAIN_RATE_BASE = 0.01;
@@ -2326,6 +2326,76 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
   ].filter((entry) => entry.weight > 0);
 }
 
+function getEnemyStrengthScore(typeId) {
+  const type = ENEMY_TYPES[typeId] || ENEMY_TYPES.crawler;
+  return type.hp * (1 + type.coreDamage * 0.08) + type.speed * 120;
+}
+
+function getEmberStrengthRoster(effectiveWave) {
+  const roster = [
+    { id: "specter", weight: 10 },
+    { id: "warden", weight: 11 },
+    { id: "prism", weight: 9 },
+    { id: "colossus", weight: 9 },
+    { id: "trapiziod", weight: 11 },
+    { id: "cross", weight: 10 },
+  ];
+  if (effectiveWave >= 14) roster.push({ id: "leviathan", weight: 9 });
+  if (effectiveWave >= 16) roster.push({ id: "pyramidion", weight: 8 });
+  if (effectiveWave >= 20) roster.push({ id: "monolith", weight: 7 });
+  if (effectiveWave >= 24) roster.push({ id: "diamondarchon", weight: 7 });
+  if (effectiveWave >= 28) roster.push({ id: "diamondarchon", weight: 10 });
+  return roster;
+}
+
+function rebalanceEmberQueueByStrength(queue, effectiveWave) {
+  if (!Array.isArray(queue) || queue.length <= 2) return queue;
+  if (effectiveWave < 14) return queue;
+
+  let countScale = 0.82;
+  if (effectiveWave >= 18) countScale = 0.72;
+  if (effectiveWave >= 22) countScale = 0.62;
+  if (effectiveWave >= 26) countScale = 0.54;
+
+  const targetCount = Math.max(1, Math.min(queue.length, Math.round(queue.length * countScale)));
+  const targetStrength = queue.reduce((sum, typeId) => sum + getEnemyStrengthScore(typeId), 0);
+  const roster = getEmberStrengthRoster(effectiveWave);
+  const strongerFallback =
+    effectiveWave >= 24 ? "diamondarchon" : effectiveWave >= 20 ? (Math.random() < 0.5 ? "monolith" : "pyramidion") : "pyramidion";
+
+  const compactQueue = [];
+  let compactStrength = 0;
+  for (let i = 0; i < targetCount; i += 1) {
+    const typeId = weightedChoice(roster);
+    compactQueue.push(typeId);
+    compactStrength += getEnemyStrengthScore(typeId);
+  }
+
+  const strengthFloor = targetStrength * 0.92;
+  let guard = 0;
+  while (compactStrength < strengthFloor && guard < targetCount * 6) {
+    guard += 1;
+    let weakestIndex = 0;
+    let weakestStrength = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < compactQueue.length; i += 1) {
+      const strength = getEnemyStrengthScore(compactQueue[i]);
+      if (strength < weakestStrength) {
+        weakestStrength = strength;
+        weakestIndex = i;
+      }
+    }
+    const upgradedStrength = getEnemyStrengthScore(strongerFallback);
+    if (upgradedStrength <= weakestStrength) break;
+    compactQueue[weakestIndex] = strongerFallback;
+    compactStrength += upgradedStrength - weakestStrength;
+  }
+
+  if (compactQueue.length > 0 && effectiveWave >= 18) {
+    compactQueue[0] = effectiveWave >= 24 ? "diamondarchon" : "pyramidion";
+  }
+  return compactQueue;
+}
+
 function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   if (level === 1 && wave === 20) return ["icosahedron"];
   if (level >= 3 && wave === 40) return ["star"];
@@ -2386,6 +2456,9 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
       const secondIndex = Math.min(queue.length - 1, Math.max(2, Math.floor(queue.length * 0.45)));
       queue[secondIndex] = "monolith";
     }
+  }
+  if (level >= 3 && wave >= 12) {
+    return rebalanceEmberQueueByStrength(queue, effectiveWave);
   }
   return queue;
 }
@@ -14594,6 +14667,18 @@ function update(dt) {
       }
       if (isRhombusWave && spawnedType === "rhombus" && game.spawnQueue.includes("rhombus")) {
         nextSpawnDelay = Math.max(nextSpawnDelay, 1.4);
+      }
+
+      const isEmberWave = game.currentLevel >= 3 && game.wave >= 12;
+      if (isEmberWave) {
+        const emberSpreadFloor = game.wave >= 24 ? 0.3 : game.wave >= 18 ? 0.27 : 0.24;
+        nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor);
+        if (spawnedType === "diamondarchon" || spawnedType === "monolith") {
+          nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor + 0.09);
+        } else if (spawnedType === "pyramidion" || spawnedType === "trapiziod" || spawnedType === "cross") {
+          nextSpawnDelay = Math.max(nextSpawnDelay, emberSpreadFloor + 0.05);
+        }
+        nextSpawnDelay += Math.random() * 0.03;
       }
       game.spawnTimer = nextSpawnDelay;
     }
