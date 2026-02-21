@@ -1450,7 +1450,8 @@ const TOWER_TYPES = {
   bombarder: {
     name: "Bombarder",
     cost: 980,
-    range: 25.2,
+    range: 30,
+    minRange: 4.6,
     damage: 428,
     fireInterval: 2.35,
     turnSpeed: 2.4,
@@ -1466,7 +1467,8 @@ const TOWER_TYPES = {
   deluxeBombarder: {
     name: "Deluxe Bombarder",
     cost: 1780,
-    range: 24.6,
+    range: 29.5,
+    minRange: 4.6,
     damage: 472,
     fireInterval: 0.12,
     turnSpeed: 3.4,
@@ -2259,6 +2261,7 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   tower.spawnInterval = config.spawnInterval || config.fireInterval;
   tower.spawnCount = Math.max(1, Math.floor(config.spawnCount || 1));
   tower.range = config.range;
+  tower.minRange = Math.max(0, Number(config.minRange || 0));
   tower.damage = config.damage;
   tower.turnSpeed = config.turnSpeed ?? tower.turnSpeed;
   tower.fireInterval = config.fireInterval;
@@ -2297,10 +2300,23 @@ function applyTowerTypeConfigToPlacedTower(tower) {
     if (tower.areaMarker) {
       if (tower.hasAreaTarget && inBounds(tower.areaTargetCellX, tower.areaTargetCellY)) {
         const targetWorld = cellToWorld(tower.areaTargetCellX, tower.areaTargetCellY);
+        const dx = targetWorld.x - tower.x;
+        const dz = targetWorld.z - tower.z;
+        const distSq = dx * dx + dz * dz;
+        const minRange = Math.max(0, tower.minRange || 0);
+        const maxRange = Math.max(1.2, tower.range || 1.2);
+        const minRangeSq = minRange * minRange;
+        const maxRangeSq = maxRange * maxRange;
+        if (distSq < minRangeSq || distSq > maxRangeSq) {
+          tower.hasAreaTarget = false;
+          tower.areaMarker.visible = false;
+        }
         tower.areaTargetX = targetWorld.x;
         tower.areaTargetZ = targetWorld.z;
         tower.areaTargetY = getCellTopY(tower.areaTargetCellX, tower.areaTargetCellY) + 0.08;
-        tower.areaMarker.position.set(tower.areaTargetX, tower.areaTargetY, tower.areaTargetZ);
+        if (tower.hasAreaTarget) {
+          tower.areaMarker.position.set(tower.areaTargetX, tower.areaTargetY, tower.areaTargetZ);
+        }
       }
       tower.areaMarker.scale.set(1, 1, 1);
       tower.areaMarker.visible = !!tower.hasAreaTarget;
@@ -9248,13 +9264,18 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     }
 
     muzzle = new THREE.Object3D();
-    muzzle.position.set(0, 0.42, 2.6);
-    if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
-    if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
-    if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") muzzle.position.set(0, 1.34, 3.82);
-    if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
-    if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
-    turret.add(muzzle);
+    if ((towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") && barrelRig) {
+      // Emit from the end of the pitched barrel so projectile origin matches visual aim.
+      muzzle.position.set(0, 0.08, 3.2);
+      barrelRig.add(muzzle);
+    } else {
+      muzzle.position.set(0, 0.42, 2.6);
+      if (towerTypeId === "ion") muzzle.position.set(0, 0.44, 2.74);
+      if (towerTypeId === "quarry") muzzle.position.set(0, 0.4, 2.9);
+      if (towerTypeId === "sentinel") muzzle.position.set(0, 0.44, 3.34);
+      if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
+      turret.add(muzzle);
+    }
   } else if (towerTypeId === "swarm" || towerTypeId === "volt" || towerTypeId === "frost" || towerTypeId === "nova" || towerTypeId === "photon") {
     turret.position.y = 1.78;
 
@@ -10298,6 +10319,7 @@ class Tower {
     this.spawnInterval = config.spawnInterval || config.fireInterval;
     this.spawnCount = Math.max(1, Math.floor(config.spawnCount || 1));
     this.range = config.range;
+    this.minRange = Math.max(0, Number(config.minRange || 0));
     this.damage = config.damage;
     this.turnSpeed = config.turnSpeed ?? 5.2;
     this.cooldown = 0;
@@ -10429,10 +10451,12 @@ class Tower {
     if (this.autoBombard) {
       if (!game.inWave) return;
       let target = null;
+      const minRange = Math.max(0, this.minRange || 0);
       for (const enemy of game.enemies) {
         if (!enemy.alive) continue;
         const d = Math.hypot(enemy.x - this.x, enemy.z - this.z);
         if (d > this.range) continue;
+        if (d < minRange) continue;
         if (!target || enemy.progressScore > target.progressScore) {
           target = enemy;
         }
@@ -10460,15 +10484,29 @@ class Tower {
 
       let splashX = target.x + (Math.random() * 2 - 1) * this.sprayRadius;
       let splashZ = target.z + (Math.random() * 2 - 1) * this.sprayRadius;
-      const spreadDx = splashX - this.x;
-      const spreadDz = splashZ - this.z;
+      let spreadDx = splashX - this.x;
+      let spreadDz = splashZ - this.z;
       const maxRange = Math.max(1.2, this.range || 1.2);
+      const minRangeSq = minRange * minRange;
       const distSq = spreadDx * spreadDx + spreadDz * spreadDz;
       if (distSq > maxRange * maxRange) {
         const dist = Math.sqrt(distSq);
         const scale = maxRange / Math.max(1e-6, dist);
         splashX = this.x + spreadDx * scale;
         splashZ = this.z + spreadDz * scale;
+      } else if (distSq < minRangeSq) {
+        if (distSq <= 1e-8) {
+          const angle = Math.random() * Math.PI * 2;
+          spreadDx = Math.cos(angle) * minRange;
+          spreadDz = Math.sin(angle) * minRange;
+        } else {
+          const dist = Math.sqrt(distSq);
+          const scale = minRange / dist;
+          spreadDx *= scale;
+          spreadDz *= scale;
+        }
+        splashX = this.x + spreadDx;
+        splashZ = this.z + spreadDz;
       }
       const splashY = getLaneSurfaceY(splashX, splashZ) + 0.08;
 
@@ -10636,6 +10674,12 @@ class Tower {
     const targetCellY = Math.floor(cellY);
     if (!inBounds(targetCellX, targetCellY)) return false;
     const world = cellToWorld(targetCellX, targetCellY);
+    const dx = world.x - this.x;
+    const dz = world.z - this.z;
+    const distSq = dx * dx + dz * dz;
+    const minRange = Math.max(0, this.minRange || 0);
+    const maxRange = Math.max(1.2, this.range || 1.2);
+    if (distSq < minRange * minRange || distSq > maxRange * maxRange) return false;
     this.hasAreaTarget = true;
     this.areaTargetCellX = targetCellX;
     this.areaTargetCellY = targetCellY;
@@ -15309,8 +15353,10 @@ function canAssignBombarderTargetCell(tower, cellX, cellY) {
   const world = cellToWorld(cellX, cellY);
   const dx = world.x - tower.x;
   const dz = world.z - tower.z;
+  const minRange = Math.max(0, tower.minRange || 0);
   const maxRange = Math.max(1.2, tower.range || 1.2);
-  return dx * dx + dz * dz <= maxRange * maxRange;
+  const distSq = dx * dx + dz * dz;
+  return distSq >= minRange * minRange && distSq <= maxRange * maxRange;
 }
 
 function applyBombarderTargetCell(tower, cellX, cellY, announce = true, assignedByPeer = "") {
@@ -15318,10 +15364,24 @@ function applyBombarderTargetCell(tower, cellX, cellY, announce = true, assigned
   const targetCellX = Math.floor(cellX);
   const targetCellY = Math.floor(cellY);
   if (!canAssignBombarderTargetCell(tower, targetCellX, targetCellY)) {
-    if (announce) setStatus("Bombard target is out of range. Select a tile inside the tower ring.", true);
+    if (announce) {
+      const minRange = Math.max(0, tower.minRange || 0);
+      if (minRange > 0) {
+        setStatus(
+          `Bombard target must be between ${minRange.toFixed(1)} and ${tower.range.toFixed(1)} range.`,
+          true
+        );
+      } else {
+        setStatus("Bombard target is out of range. Select a tile inside the tower ring.", true);
+      }
+    }
     return false;
   }
-  tower.setAreaTargetCell(targetCellX, targetCellY);
+  const assigned = tower.setAreaTargetCell(targetCellX, targetCellY);
+  if (!assigned) {
+    if (announce) setStatus("Bombard target could not be assigned.", true);
+    return false;
+  }
   if (announce) {
     if (assignedByPeer) {
       setStatus(`Bombarder target set by ${assignedByPeer} at ${targetCellX},${targetCellY}.`);
@@ -15339,7 +15399,9 @@ function beginBombarderTargetingMode(tower) {
   game.selling = false;
   game.editingLane = false;
   setStatus(
-    `Bombarder targeting active. Click a tile within ${tower.range.toFixed(1)} range to set bombard area. Right-click/Escape cancels.`
+    tower.minRange > 0
+      ? `Bombarder targeting active. Click a tile between ${tower.minRange.toFixed(1)} and ${tower.range.toFixed(1)} range. Right-click/Escape cancels.`
+      : `Bombarder targeting active. Click a tile within ${tower.range.toFixed(1)} range to set bombard area. Right-click/Escape cancels.`
   );
   updateHud();
   return true;
@@ -15503,7 +15565,15 @@ function onPointerDown(event) {
   if (activeBombarder) {
     const validTarget = canAssignBombarderTargetCell(activeBombarder, cellX, cellY);
     if (!validTarget) {
-      setStatus("Bombard target is out of range. Pick a tile inside the tower range.", true);
+      const minRange = Math.max(0, activeBombarder.minRange || 0);
+      if (minRange > 0) {
+        setStatus(
+          `Bombard target must be between ${minRange.toFixed(1)} and ${activeBombarder.range.toFixed(1)} range.`,
+          true
+        );
+      } else {
+        setStatus("Bombard target is out of range. Pick a tile inside the tower range.", true);
+      }
       return;
     }
 
