@@ -585,11 +585,11 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-map-preview[data-map-theme="mars"] {
-  border-color: rgba(207, 133, 83, 0.5);
+  border-color: rgba(183, 65, 14, 0.56);
   background:
-    radial-gradient(circle at 18% 88%, rgba(182, 88, 48, 0.3), transparent 38%),
-    radial-gradient(circle at 80% 18%, rgba(190, 132, 88, 0.16), transparent 34%),
-    linear-gradient(162deg, rgba(96, 47, 24, 0.68), rgba(56, 27, 17, 0.88) 49%, rgba(26, 12, 9, 0.96));
+    radial-gradient(circle at 18% 88%, rgba(139, 64, 0, 0.34), transparent 38%),
+    radial-gradient(circle at 80% 18%, rgba(183, 65, 14, 0.14), transparent 34%),
+    linear-gradient(162deg, rgba(79, 31, 13, 0.74), rgba(47, 18, 9, 0.9) 49%, rgba(20, 8, 5, 0.97));
 }
 
 .menu-map-preview[data-map-theme="mars"]::before {
@@ -597,23 +597,23 @@ body:not(.menu-active) .menu-screen {
   background:
     repeating-linear-gradient(
       122deg,
-      rgba(193, 126, 83, 0.2) 0 2px,
-      rgba(140, 73, 42, 0.12) 2px 12px,
+      rgba(183, 65, 14, 0.24) 0 2px,
+      rgba(127, 51, 15, 0.14) 2px 12px,
       transparent 12px 24px
     ),
-    linear-gradient(110deg, rgba(199, 142, 99, 0.12), transparent 42%);
+    linear-gradient(110deg, rgba(154, 70, 26, 0.12), transparent 42%);
   mix-blend-mode: screen;
   animation: menu-mars-dust-flow 7.8s linear infinite;
 }
 
 .menu-map-preview[data-map-theme="mars"]::after {
   background:
-    radial-gradient(circle at 14% 30%, rgba(207, 150, 109, 0.24) 0 1.1px, transparent 1.5px),
-    radial-gradient(circle at 32% 52%, rgba(181, 117, 80, 0.2) 0 1px, transparent 1.4px),
-    radial-gradient(circle at 55% 42%, rgba(194, 137, 98, 0.18) 0 0.9px, transparent 1.3px),
-    radial-gradient(circle at 76% 60%, rgba(170, 105, 68, 0.18) 0 1.1px, transparent 1.5px),
-    linear-gradient(180deg, rgba(170, 101, 63, 0.14), transparent 56%);
-  opacity: 0.72;
+    radial-gradient(circle at 14% 30%, rgba(183, 65, 14, 0.24) 0 1.1px, transparent 1.5px),
+    radial-gradient(circle at 32% 52%, rgba(139, 64, 0, 0.2) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 55% 42%, rgba(154, 70, 26, 0.2) 0 0.9px, transparent 1.3px),
+    radial-gradient(circle at 76% 60%, rgba(127, 51, 15, 0.18) 0 1.1px, transparent 1.5px),
+    linear-gradient(180deg, rgba(139, 64, 0, 0.16), transparent 56%);
+  opacity: 0.7;
   animation: menu-mars-dust-specks 5.4s linear infinite;
 }
 
