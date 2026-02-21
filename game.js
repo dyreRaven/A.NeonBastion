@@ -2303,10 +2303,23 @@ function getLevelDifficultyProfile(level = game.currentLevel) {
 function enemyWeightsForWave(wave, level = game.currentLevel) {
   const profile = getLevelDifficultyProfile(level);
   const moonLevel = level >= 2;
-  const emberLevel = level >= 3;
+  const emberLevel = level === 3;
+  const marsLevel = level >= 4;
   const effectiveWave = Math.max(1, wave + profile.effectiveWaveOffset);
   const bulwarkStartWave = level >= 2 ? 5 : 4;
   const raiderStartWave = level >= 2 ? 6 : 5;
+  const trapiziodUnlocked = emberLevel ? wave >= 7 : marsLevel && effectiveWave >= 9;
+  const crossUnlocked = emberLevel ? wave >= 10 : marsLevel && effectiveWave >= 10;
+  const trapiziodWeight = trapiziodUnlocked
+    ? emberLevel
+      ? Math.min((wave - 6) * 3.3, 18)
+      : Math.min((effectiveWave - 8) * 3.3, 18)
+    : 0;
+  const crossWeight = crossUnlocked
+    ? emberLevel
+      ? Math.min((wave - 9) * 3.1, 17)
+      : Math.min((effectiveWave - 9) * 3.1, 17)
+    : 0;
   return [
     { id: "crawler", weight: Math.max(70 - effectiveWave * 4, 14) },
     { id: "blink", weight: effectiveWave >= 2 ? Math.min(8 + effectiveWave * 2.5, 22) : 0 },
@@ -2319,10 +2332,10 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
     { id: "colossus", weight: effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 2.8, 16) : 0 },
     { id: "leviathan", weight: effectiveWave >= 12 ? Math.min((effectiveWave - 11) * 2.3, 14) : 0 },
     { id: "monolith", weight: moonLevel && wave >= 21 ? Math.min((effectiveWave - 22) * 2.4, 11) : 0 },
-    { id: "trapiziod", weight: emberLevel && effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 3.3, 18) : 0 },
-    { id: "cross", weight: emberLevel && effectiveWave >= 10 ? Math.min((effectiveWave - 9) * 3.1, 17) : 0 },
-    { id: "pyramidion", weight: emberLevel && effectiveWave >= 14 ? Math.min((effectiveWave - 13) * 2.8, 16) : 0 },
-    { id: "diamondarchon", weight: emberLevel && effectiveWave >= 18 ? Math.min((effectiveWave - 17) * 2.4, 12) : 0 },
+    { id: "trapiziod", weight: trapiziodWeight },
+    { id: "cross", weight: crossWeight },
+    { id: "pyramidion", weight: (emberLevel || marsLevel) && effectiveWave >= 14 ? Math.min((effectiveWave - 13) * 2.8, 16) : 0 },
+    { id: "diamondarchon", weight: (emberLevel || marsLevel) && effectiveWave >= 18 ? Math.min((effectiveWave - 17) * 2.4, 12) : 0 },
   ].filter((entry) => entry.weight > 0);
 }
 
@@ -2474,16 +2487,21 @@ function createEnemyStats(typeId, wave, level = game.currentLevel, options = nul
   const forAlly = !!options?.forAlly;
   const profile = getLevelDifficultyProfile(level);
   const type = ENEMY_TYPES[typeId] || ENEMY_TYPES.crawler;
+  const emberLevel = level === 3;
   const effectiveWave = Math.max(1, wave + profile.effectiveWaveOffset);
   const waveFactor = Math.max(0, effectiveWave - 1);
   const baseReward = type.reward + type.rewardGrowth * waveFactor;
   const rewardScaled = (typeId === "crawler" ? baseReward : baseReward / 3) * profile.rewardMultiplier;
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
   let scaledSpeed = type.speed * (1 + type.speedGrowth * waveFactor) * profile.speedMultiplier;
+  let coreDamage = Math.max(1, Math.round(type.coreDamage * profile.coreDamageMultiplier));
   let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 77508 : scaledHp;
   if (!forAlly && isBossWave(level, wave)) hp = Math.max(1, Math.round(hp * BOSS_WAVE_DIFFICULTY_MULTIPLIER));
   if (!forAlly && level >= 3 && typeId === "star") hp = Math.max(1, Math.round(hp * 2));
   if (!forAlly && typeId === "star") scaledSpeed *= 2;
+  if (!forAlly && emberLevel && (typeId === "trapiziod" || typeId === "cross")) {
+    coreDamage = Math.max(1, Math.round(coreDamage * 0.5));
+  }
 
   return {
     typeId,
@@ -2492,7 +2510,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel, options = nul
     speed: scaledSpeed,
     reward: Math.max(1, Math.round(rewardScaled)),
     radius: type.radius,
-    coreDamage: Math.max(1, Math.round(type.coreDamage * profile.coreDamageMultiplier)),
+    coreDamage,
     colorA: type.colorA,
     colorB: type.colorB,
     hoverHeight: type.hoverHeight,
