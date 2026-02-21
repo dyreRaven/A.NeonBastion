@@ -4983,8 +4983,16 @@ function renderMultiplayerRoster() {
   if (multiplayerPlayersHudEl) multiplayerPlayersHudEl.textContent = getMultiplayerHudRosterText();
 }
 
+function isNetworkOnline() {
+  try {
+    if (typeof navigator?.onLine === "boolean") return navigator.onLine;
+  } catch (_) {}
+  return true;
+}
+
 function refreshMultiplayerPanel() {
   const supported = multiplayer.supported;
+  const online = isNetworkOnline();
   const active = isMultiplayerActive();
   const connecting = multiplayer.connecting;
   const host = isMultiplayerHost();
@@ -5008,11 +5016,11 @@ function refreshMultiplayerPanel() {
   }
   if (hostMultiplayerBtn) {
     hostMultiplayerBtn.textContent = host ? "Hosting" : "Create Room";
-    hostMultiplayerBtn.disabled = !supported || active || connecting || !hasServerUrl;
+    hostMultiplayerBtn.disabled = !supported || !online || active || connecting || !hasServerUrl;
   }
   if (joinMultiplayerBtn) {
     joinMultiplayerBtn.textContent = client ? "Joined" : "Join Room";
-    joinMultiplayerBtn.disabled = !supported || active || connecting || !hasServerUrl;
+    joinMultiplayerBtn.disabled = !supported || !online || active || connecting || !hasServerUrl;
   }
   if (leaveMultiplayerBtn) {
     leaveMultiplayerBtn.textContent = connecting ? "Cancel" : "Leave Room";
@@ -5021,6 +5029,8 @@ function refreshMultiplayerPanel() {
   if (menuMultiplayerHintEl) {
     if (!supported) {
       menuMultiplayerHintEl.textContent = "Multiplayer is unavailable in this browser.";
+    } else if (!online) {
+      menuMultiplayerHintEl.textContent = "Offline mode active. Multiplayer requires an internet connection.";
     } else if (connecting) {
       menuMultiplayerHintEl.textContent = "Connecting to multiplayer server...";
     } else if (!hasServerUrl) {
@@ -5205,6 +5215,9 @@ function openMultiplayerConnection(roomCode, role, serverUrl) {
   if (!multiplayer.supported) {
     return Promise.reject(new Error("Multiplayer unavailable in this browser."));
   }
+  if (!isNetworkOnline()) {
+    return Promise.reject(new Error("Multiplayer requires an internet connection."));
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
     const socket = new WebSocket(serverUrl);
@@ -5375,6 +5388,11 @@ async function hostMultiplayerSession() {
     setStatus("Multiplayer unavailable in this browser.", true);
     return;
   }
+  if (!isNetworkOnline()) {
+    setStatus("Multiplayer requires an internet connection.", true);
+    refreshMultiplayerPanel();
+    return;
+  }
 
   const roomCode = sanitizeRoomCode(multiplayerRoomInputEl?.value || multiplayer.roomCode || "");
   if (!roomCode) {
@@ -5430,6 +5448,11 @@ async function hostMultiplayerSession() {
 async function joinMultiplayerSession() {
   if (!multiplayer.supported) {
     setStatus("Multiplayer unavailable in this browser.", true);
+    return;
+  }
+  if (!isNetworkOnline()) {
+    setStatus("Multiplayer requires an internet connection.", true);
+    refreshMultiplayerPanel();
     return;
   }
 
@@ -15413,6 +15436,17 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("resize", onResize);
 window.addEventListener("online", () => {
   queueCloudProgressSync(150);
+  refreshMultiplayerPanel();
+  if (!isMultiplayerActive() && !multiplayer.connecting) {
+    setStatus("Back online. Multiplayer and cloud sync are available.");
+  }
+});
+window.addEventListener("offline", () => {
+  if (isMultiplayerActive() || multiplayer.connecting) {
+    leaveMultiplayerSession(false);
+  }
+  refreshMultiplayerPanel();
+  setStatus("Offline mode active. Single-player works; multiplayer and cloud sync are paused.", true);
 });
 window.addEventListener("pagehide", () => {
   flushQueuedCloudSync(false);

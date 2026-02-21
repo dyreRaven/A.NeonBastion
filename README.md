@@ -5,9 +5,24 @@
 - Live site (game + multiplayer server on one URL): `https://neon-bastion-multiplayer.onrender.com`
 - Mirror site: `https://dyreraven.github.io/A.NeonBastion/`
 
+## Install + Offline (PWA)
+
+The web build is now installable on desktop and mobile as a PWA.
+
+- Desktop (Chrome/Edge): open the site, then use `Install app` in the address bar/menu.
+- Android Chrome: open the site, then `Add to Home screen`.
+- iOS Safari: open the site, then Share -> `Add to Home Screen`.
+
+Offline behavior:
+
+- Single-player: available offline after first successful load.
+- Multiplayer: requires internet connection.
+- Cloud login/sync: requires internet; local progress still saves offline and sync can resume when back online.
+
 ## Local Run
 
 - Open `index.html` in a browser.
+- To test install/offline PWA behavior, serve over `http://localhost` or `https://` (service workers do not run from `file://`).
 
 ## Cross-Device Multiplayer Setup
 
