@@ -2832,7 +2832,7 @@ const CAMERA_FRAME_SAMPLE_POINTS = [
 const cameraFrameProbe = new THREE.Vector3();
 const rendererCoarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
 const rendererLowPowerMode = rendererCoarsePointer || window.innerWidth <= 980;
-const rendererPixelRatioCap = rendererLowPowerMode ? 1.2 : 2;
+const rendererPixelRatioCap = rendererCoarsePointer ? 1 : rendererLowPowerMode ? 1.2 : 2;
 let rendererContextLost = false;
 let rendererWebglAvailable = true;
 
@@ -13871,8 +13871,9 @@ function isRoundHudMobileLayout() {
   const height = Math.max(1, Math.floor(window.innerHeight || 0));
   const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
   const landscape = width >= height;
+  const shortSide = Math.min(width, height);
   if (!landscape) return false;
-  if (coarsePointer) return width <= 1400;
+  if (coarsePointer) return shortSide <= 620;
   return width <= 980;
 }
 
@@ -15022,6 +15023,18 @@ function onResize() {
   fitBattleCameraToViewport();
 }
 
+let viewportRefreshTimer = 0;
+function scheduleViewportRefresh(delayMs = 0) {
+  onResize();
+  updateHud();
+  if (viewportRefreshTimer) window.clearTimeout(viewportRefreshTimer);
+  viewportRefreshTimer = window.setTimeout(() => {
+    viewportRefreshTimer = 0;
+    onResize();
+    updateHud();
+  }, Math.max(0, Math.floor(delayMs || 0)));
+}
+
 let last = performance.now();
 function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
@@ -15437,7 +15450,11 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-window.addEventListener("resize", onResize);
+window.addEventListener("resize", () => scheduleViewportRefresh(120));
+window.addEventListener("orientationchange", () => scheduleViewportRefresh(220));
+if (window.visualViewport && typeof window.visualViewport.addEventListener === "function") {
+  window.visualViewport.addEventListener("resize", () => scheduleViewportRefresh(140));
+}
 window.addEventListener("online", () => {
   queueCloudProgressSync(150);
   refreshMultiplayerPanel();

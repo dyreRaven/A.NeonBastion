@@ -3242,9 +3242,11 @@ canvas {
     gap: 0.16rem;
     border-radius: 12px;
     background:
-      linear-gradient(138deg, rgba(16, 43, 66, 0.56), rgba(8, 21, 37, 0.32)),
-      rgba(6, 16, 29, 0.82);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+      linear-gradient(138deg, rgba(16, 43, 66, 0.34), rgba(8, 21, 37, 0.18)),
+      rgba(6, 16, 29, 0.56);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22);
+    max-height: min(54dvh, 390px);
+    overflow-y: auto;
   }
 
   body:not(.menu-active) .hud-top {
@@ -3350,5 +3352,59 @@ canvas {
     white-space: normal;
     line-height: 1.22;
     max-height: min(16vh, 132px);
+  }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (min-width: 900px) and (max-width: 1368px) {
+  body:not(.menu-active) .hud {
+    top: calc(0.7rem + var(--safe-top));
+    left: calc(0.34rem + var(--safe-left));
+    right: calc(0.34rem + var(--safe-right));
+    padding: 0.3rem 0.36rem 0.32rem;
+    gap: 0.16rem;
+  }
+
+  body:not(.menu-active) .stats span {
+    padding: 0.14rem 0.32rem;
+    font-size: 0.7rem;
+  }
+
+  body:not(.menu-active) .controls-group {
+    gap: 0.16rem;
+  }
+
+  body:not(.menu-active) .controls-group button {
+    min-height: 1.54rem;
+    padding: 0.16rem 0.36rem;
+    font-size: 0.72rem;
+    border-radius: 8px;
+  }
+
+  body:not(.menu-active) .shop-panel h2 {
+    display: block;
+    font-size: 0.7rem;
+  }
+
+  body:not(.menu-active) .shop {
+    grid-auto-columns: minmax(128px, 1fr);
+    gap: 0.18rem;
+  }
+
+  body:not(.menu-active) .shop .shop-item strong {
+    font-size: 0.68rem;
+  }
+
+  body:not(.menu-active) .shop .shop-item > span:not(.shop-cap-line) {
+    display: block;
+    font-size: 0.58rem;
+  }
+
+  body:not(.menu-active) .shop .shop-item .shop-cap-line {
+    font-size: 0.55rem;
+  }
+
+  body:not(.menu-active) .status {
+    font-size: 0.62rem;
+    min-height: 0.96rem;
   }
 }
