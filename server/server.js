@@ -6,7 +6,7 @@ import { WebSocketServer } from "ws";
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
-const SERVER_BUILD_ID = process.env.RENDER_GIT_COMMIT || "2026-02-21-a3691b1";
+const SERVER_BUILD_ID = process.env.RENDER_GIT_COMMIT || "2026-02-21-b8a4b85";
 const ROOM_CODE_LIMIT = 16;
 const PEER_ID_LIMIT = 48;
 const DISPLAY_NAME_LIMIT = 24;
