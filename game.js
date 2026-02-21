@@ -13867,9 +13867,13 @@ function stepGameSpeed(delta) {
 }
 
 function isRoundHudMobileLayout() {
-  const narrowViewport = window.innerWidth <= 980;
+  const width = Math.max(1, Math.floor(window.innerWidth || 0));
+  const height = Math.max(1, Math.floor(window.innerHeight || 0));
   const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-  return narrowViewport || (coarsePointer && window.innerWidth <= 1280);
+  const landscape = width >= height;
+  if (!landscape) return false;
+  if (coarsePointer) return width <= 1400;
+  return width <= 980;
 }
 
 function isCompactRoundHudMode() {

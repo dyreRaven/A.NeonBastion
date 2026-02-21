@@ -2665,13 +2665,18 @@ canvas {
 
 @media (max-width: 980px), (pointer: coarse) and (max-width: 1280px) {
   body:not(.menu-active) .shell {
+    position: fixed;
+    inset: 0;
     grid-template-rows: minmax(0, 1fr);
     gap: 0;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
   }
 
   body:not(.menu-active) .arena-wrap {
+    grid-row: 1 / -1;
+    height: 100%;
+    min-height: 0;
     border-radius: 10px;
   }
 
@@ -3158,5 +3163,192 @@ canvas {
 
   body:not(.menu-active) .shop {
     grid-auto-columns: minmax(82px, 1fr);
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .menu-screen {
+    place-items: stretch;
+    padding:
+      calc(0.42rem + var(--safe-top))
+      calc(0.44rem + var(--safe-right))
+      calc(0.48rem + var(--safe-bottom))
+      calc(0.44rem + var(--safe-left));
+  }
+
+  .menu-card {
+    width: min(100%, 560px);
+    margin: 0 auto;
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 0.9rem);
+    padding: 0.84rem 0.72rem;
+  }
+
+  .menu-card h1 {
+    font-size: clamp(1.44rem, 9vw, 2.06rem);
+  }
+
+  .menu-action-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.42rem;
+  }
+
+  .menu-action-row > .menu-map-select,
+  .menu-action-row > .menu-play-btn {
+    grid-column: 1 / -1;
+  }
+
+  .menu-shop-panel {
+    max-height: min(72dvh, 620px);
+    padding: 0.72rem;
+    gap: 0.46rem;
+  }
+
+  .menu-card[data-view="account"] #menuAccountPanel {
+    margin-top: 0;
+    height: min(72dvh, 640px);
+    grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
+  }
+
+  .menu-card[data-view="account"] .menu-account-auth {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+    gap: 0.42rem;
+  }
+
+  .menu-multiplayer-panels {
+    gap: 0.36rem;
+  }
+
+  .menu-multiplayer-pane-log {
+    min-height: 150px;
+  }
+
+  .menu-multiplayer-room-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #leaveMultiplayerBtn {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  body:not(.menu-active) .hud {
+    top: calc(0.36rem + var(--safe-top));
+    left: calc(0.24rem + var(--safe-left));
+    right: calc(0.24rem + var(--safe-right));
+    padding: 0.28rem 0.34rem 0.3rem;
+    gap: 0.16rem;
+    border-radius: 12px;
+    background:
+      linear-gradient(138deg, rgba(16, 43, 66, 0.56), rgba(8, 21, 37, 0.32)),
+      rgba(6, 16, 29, 0.82);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  body:not(.menu-active) .hud-top {
+    gap: 0.2rem;
+  }
+
+  body:not(.menu-active) .stats {
+    gap: 0.16rem;
+  }
+
+  body:not(.menu-active) .stats span {
+    padding: 0.15rem 0.32rem;
+    font-size: 0.68rem;
+    line-height: 1.05;
+  }
+
+  body:not(.menu-active) .controls-group {
+    gap: 0.22rem;
+    flex-wrap: wrap;
+  }
+
+  body:not(.menu-active) .controls-group button {
+    flex: 1 1 calc(50% - 0.22rem);
+    min-width: calc(50% - 0.22rem);
+    min-height: 1.72rem;
+    padding: 0.18rem 0.34rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.1;
+    border-radius: 9px;
+    white-space: normal;
+    border-color: rgba(214, 238, 255, 0.72);
+    background: linear-gradient(180deg, rgba(169, 210, 243, 0.28), rgba(75, 119, 164, 0.26));
+    box-shadow:
+      inset 0 1px 0 rgba(245, 252, 255, 0.22),
+      0 8px 16px rgba(0, 0, 0, 0.24);
+  }
+
+  body:not(.menu-active) .shop-panel {
+    padding: 0.28rem 0.32rem;
+    gap: 0.14rem;
+    border-radius: 10px;
+    border-color: rgba(180, 220, 250, 0.46);
+    background: linear-gradient(126deg, rgba(120, 166, 203, 0.2), rgba(15, 37, 58, 0.32));
+  }
+
+  body:not(.menu-active) .shop-panel h2 {
+    display: block;
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: #d9efff;
+  }
+
+  body:not(.menu-active) .shop {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(144px, 1fr);
+    gap: 0.22rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.08rem;
+  }
+
+  body:not(.menu-active) .shop .shop-item {
+    padding: 0.24rem 0.3rem;
+    border-radius: 8px;
+    border-color: rgba(200, 231, 255, 0.6);
+    background: linear-gradient(145deg, rgba(145, 194, 235, 0.2), rgba(11, 26, 42, 0.22));
+    box-shadow: inset 0 1px 0 rgba(245, 252, 255, 0.18);
+  }
+
+  body:not(.menu-active) .shop .shop-item strong {
+    font-size: 0.74rem;
+    line-height: 1.1;
+  }
+
+  body:not(.menu-active) .shop .shop-item > span:not(.shop-cap-line) {
+    display: block;
+    font-size: 0.61rem;
+    line-height: 1.1;
+    color: #cfe7f8;
+  }
+
+  body:not(.menu-active) .shop .shop-item .shop-cap-line {
+    margin-top: 0.1rem;
+    font-size: 0.58rem;
+    line-height: 1.1;
+  }
+
+  body:not(.menu-active) .shop .shop-item .shop-cap-upgrade-btn {
+    margin-top: 0.12rem;
+    min-height: 1.22rem;
+    padding: 0.14rem 0.24rem;
+    border-radius: 6px;
+    font-size: 0.56rem;
+  }
+
+  body:not(.menu-active) .status {
+    min-height: 1.08rem;
+    margin-top: 0.1rem;
+    padding: 0.16rem 0.3rem;
+    font-size: 0.66rem;
+    white-space: normal;
+    line-height: 1.22;
+    max-height: min(16vh, 132px);
   }
 }
