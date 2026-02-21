@@ -140,6 +140,7 @@ const settingSfxBtn = $id("settingSfxBtn");
 const settingShotBtn = $id("settingShotBtn");
 const settingShatterBtn = $id("settingShatterBtn");
 const settingExplosionBtn = $id("settingExplosionBtn");
+const settingExplosionLightingBtn = $id("settingExplosionLightingBtn");
 const settingEnemyRingsBtn = $id("settingEnemyRingsBtn");
 
 if (!window.THREE) {
@@ -1460,7 +1461,7 @@ const TOWER_TYPES = {
     coreColor: "#4a2e16",
     summary: "Manual splash siege",
     manualAreaTargeting: true,
-    splashRadius: 2.8,
+    splashRadius: 3.6,
   },
   deluxeBombarder: {
     name: "Deluxe Bombarder",
@@ -1475,10 +1476,10 @@ const TOWER_TYPES = {
     bodyColor: "#e0a96f",
     coreColor: "#4a2e16",
     summary: "Rapid auto splash siege",
-    meshScale: 1.1,
+    meshScale: 1.02,
     autoBombard: true,
     sprayRadius: 1.85,
-    splashRadius: 2.8,
+    splashRadius: 3.6,
     footprint: 2,
     bombardFxLite: true,
     bombardShotSfxInterval: 0.22,
@@ -4804,6 +4805,7 @@ const game = {
   settingsOpen: false,
   settingsPage: 0,
   explosionParticlesEnabled: true,
+  explosionLightingEffectsEnabled: true,
   enemyRingsEnabled: true,
   money: 220,
   shards: 0,
@@ -8958,26 +8960,26 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   if (towerTypeId === "deluxeBombarder") {
     // Circular O-shaped base for the 2x2 deluxe body.
     const footprintDisk = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.96, CELL_SIZE * 1.02, 0.2, 42), darkMat)
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.82, CELL_SIZE * 0.88, 0.18, 42), darkMat)
     );
     footprintDisk.position.y = 0.1;
     group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.92, 0.16, 16, 54), glowMat));
+    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.78, 0.11, 14, 54), glowMat));
     footprintRing.rotation.x = Math.PI / 2;
-    footprintRing.position.y = 0.22;
+    footprintRing.position.y = 0.2;
     group.add(footprintRing);
 
     // Wide chassis so the tower body (not only base) visually spans the 2x2 footprint.
     const superHull = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.84, CELL_SIZE * 0.92, 1.1, 34), bodyMat)
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.74, CELL_SIZE * 0.8, 1.28, 34), bodyMat)
     );
-    superHull.position.y = 1.1;
+    superHull.position.y = 1.16;
     group.add(superHull);
 
-    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.78, 0.13, 14, 46), coreMat));
+    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.64, 0.1, 14, 46), coreMat));
     superHullRing.rotation.x = Math.PI / 2;
-    superHullRing.position.y = 1.6;
+    superHullRing.position.y = 1.7;
     group.add(superHullRing);
   }
 
@@ -9003,10 +9005,10 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   group.add(ring);
 
   if (towerTypeId === "deluxeBombarder") {
-    base.scale.set(1.44, 1.12, 1.44);
-    lowerCore.scale.set(1.66, 1.26, 1.66);
-    neck.scale.set(1.78, 1.2, 1.78);
-    ring.scale.set(1.95, 1, 1.95);
+    base.scale.set(1.24, 1.1, 1.24);
+    lowerCore.scale.set(1.42, 1.32, 1.42);
+    neck.scale.set(1.5, 1.26, 1.5);
+    ring.scale.set(1.62, 1, 1.62);
   }
 
   turret = new THREE.Group();
@@ -9186,8 +9188,8 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(serviceHatch);
 
       if (towerTypeId === "deluxeBombarder") {
-        turret.scale.set(2.3, 1.36, 2.3);
-        turret.position.y = 2.22;
+        turret.scale.set(1.92, 1.34, 1.92);
+        turret.position.y = 2.28;
       }
     } else if (towerTypeId === "sentinel") {
       head.scale.set(0.98, 0.9, 1.1);
@@ -10957,7 +10959,7 @@ class BombardMuzzleFireEffect {
 }
 
 class BombardImpactEffect {
-  constructor(x, y, z, radius, color) {
+  constructor(x, y, z, radius, color, enableLight = true) {
     this.age = 0;
     this.life = 0.62;
     this.radius = Math.max(0.7, Number(radius) || 0.7);
@@ -11023,9 +11025,12 @@ class BombardImpactEffect {
     this.heatDisk.position.y = 0.025;
     this.group.add(this.heatDisk);
 
-    this.light = new THREE.PointLight(colorA.clone().lerp(new THREE.Color("#ffaf67"), 0.28), 3.9, 24, 2);
-    this.light.position.set(0, 1.05, 0);
-    this.group.add(this.light);
+    this.light = null;
+    if (enableLight) {
+      this.light = new THREE.PointLight(colorA.clone().lerp(new THREE.Color("#ffaf67"), 0.28), 3.9, 24, 2);
+      this.light.position.set(0, 1.05, 0);
+      this.group.add(this.light);
+    }
 
     scene.add(this.group);
   }
@@ -11045,7 +11050,7 @@ class BombardImpactEffect {
     this.ringSecondary.material.opacity = Math.max(0, 0.82 * (1 - t * 1.24));
     this.flash.material.opacity = Math.max(0, 0.9 * (1 - t * 1.34));
     this.heatDisk.material.opacity = Math.max(0, 0.4 * (1 - t * 1.08));
-    this.light.intensity = Math.max(0, 3.9 * (1 - t) * (1 - t * 0.35));
+    if (this.light) this.light.intensity = Math.max(0, 3.9 * (1 - t) * (1 - t * 0.35));
     return t < 1;
   }
 
@@ -11123,8 +11128,12 @@ class BombardProjectile {
     const impactY = getLaneSurfaceY(this.target.x, this.target.z) + 0.06;
     if (this.playImpactSfx) audioSystem.playBombarderImpact(this.damage, this.splashRadius);
     applyBombardSplashDamage(this.target.x, this.target.z, this.damage, this.splashRadius);
-    if (game.explosionParticlesEnabled && this.spawnImpactEffect) {
-      game.debris.push(new BombardImpactEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color));
+    const spawnImpactParticles = this.spawnImpactEffect && game.explosionParticlesEnabled;
+    const spawnImpactLighting = this.spawnImpactEffect && game.explosionLightingEffectsEnabled;
+    if (spawnImpactParticles) {
+      game.debris.push(
+        new BombardImpactEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color, spawnImpactLighting)
+      );
 
       const blastColor = new THREE.Color(this.color);
       const shrapnelCount = Math.max(
@@ -11195,6 +11204,9 @@ class BombardProjectile {
         scene.add(pulseB);
         game.debris.push(new EnemyDebrisPulse(pulseB, pulseBase * 0.72));
       }
+    }
+    if (!spawnImpactParticles && spawnImpactLighting) {
+      game.debris.push(new BombardImpactLightEffect(this.target.x, impactY, this.target.z, this.splashRadius, this.color));
     }
   }
 
@@ -12238,6 +12250,30 @@ function onSolarTyrantDefeated() {
   );
 }
 
+class BombardImpactLightEffect {
+  constructor(x, y, z, radius, color) {
+    this.age = 0;
+    this.life = 0.3;
+    this.baseIntensity = 4.2 + Math.max(0.4, Number(radius) || 1) * 0.9;
+    this.light = new THREE.PointLight(new THREE.Color(color).lerp(new THREE.Color("#ffb57f"), 0.24), this.baseIntensity, 26, 2);
+    this.light.position.set(x, y + 0.95, z);
+    scene.add(this.light);
+  }
+
+  update(dt) {
+    this.age += dt;
+    const t = THREE.MathUtils.clamp(this.age / this.life, 0, 1);
+    this.light.intensity = Math.max(0, this.baseIntensity * (1 - t) * (1 - t * 0.42));
+    return t < 1;
+  }
+
+  dispose() {
+    if (!this.light) return;
+    scene.remove(this.light);
+    this.light = null;
+  }
+}
+
 function spawnSolarTyrantShards(defeatedEnemy) {
   if (!defeatedEnemy || pathPoints.length < 2) return 0;
 
@@ -12519,6 +12555,7 @@ function refreshSettingsPanel() {
   applyToggleVisual(settingShotBtn, audioSystem.shotSfxEnabled);
   applyToggleVisual(settingShatterBtn, audioSystem.shatterSfxEnabled);
   applyToggleVisual(settingExplosionBtn, game.explosionParticlesEnabled);
+  applyToggleVisual(settingExplosionLightingBtn, game.explosionLightingEffectsEnabled);
   applyToggleVisual(settingEnemyRingsBtn, game.enemyRingsEnabled);
 
   if (settingShotBtn) settingShotBtn.disabled = !audioSystem.sfxEnabled;
@@ -12603,7 +12640,7 @@ function toggleSettingShatter() {
 function toggleSettingExplosionParticles() {
   if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   game.explosionParticlesEnabled = !game.explosionParticlesEnabled;
-  if (game.explosionParticlesEnabled || game.enemyRingsEnabled) {
+  if (game.explosionParticlesEnabled || game.explosionLightingEffectsEnabled || game.enemyRingsEnabled) {
     mobilePerformance.autoReduced = false;
     resetMobilePerformanceSampling();
   }
@@ -12611,10 +12648,21 @@ function toggleSettingExplosionParticles() {
   refreshSettingsPanel();
 }
 
+function toggleSettingExplosionLighting() {
+  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
+  game.explosionLightingEffectsEnabled = !game.explosionLightingEffectsEnabled;
+  if (game.explosionParticlesEnabled || game.explosionLightingEffectsEnabled || game.enemyRingsEnabled) {
+    mobilePerformance.autoReduced = false;
+    resetMobilePerformanceSampling();
+  }
+  setStatus(game.explosionLightingEffectsEnabled ? "Explosion lighting effects enabled." : "Explosion lighting effects hidden.");
+  refreshSettingsPanel();
+}
+
 function toggleSettingEnemyRings() {
   if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   game.enemyRingsEnabled = !game.enemyRingsEnabled;
-  if (game.explosionParticlesEnabled || game.enemyRingsEnabled) {
+  if (game.explosionParticlesEnabled || game.explosionLightingEffectsEnabled || game.enemyRingsEnabled) {
     mobilePerformance.autoReduced = false;
     resetMobilePerformanceSampling();
   }
@@ -14642,6 +14690,10 @@ function applyLowEndMobilePerformancePreset() {
     game.explosionParticlesEnabled = false;
     changed = true;
   }
+  if (game.explosionLightingEffectsEnabled) {
+    game.explosionLightingEffectsEnabled = false;
+    changed = true;
+  }
   if (game.enemyRingsEnabled) {
     game.enemyRingsEnabled = false;
     applyEnemyRingVisibility();
@@ -15859,6 +15911,7 @@ if (settingSfxBtn) settingSfxBtn.addEventListener("click", toggleSettingSfx);
 if (settingShotBtn) settingShotBtn.addEventListener("click", toggleSettingShots);
 if (settingShatterBtn) settingShatterBtn.addEventListener("click", toggleSettingShatter);
 if (settingExplosionBtn) settingExplosionBtn.addEventListener("click", toggleSettingExplosionParticles);
+if (settingExplosionLightingBtn) settingExplosionLightingBtn.addEventListener("click", toggleSettingExplosionLighting);
 if (settingEnemyRingsBtn) settingEnemyRingsBtn.addEventListener("click", toggleSettingEnemyRings);
 if (settingsPanelEl) {
   let settingsSwipeStartX = null;
