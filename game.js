@@ -1475,7 +1475,7 @@ const TOWER_TYPES = {
     bodyColor: "#e0a96f",
     coreColor: "#4a2e16",
     summary: "Rapid auto splash siege",
-    meshScale: 1.04,
+    meshScale: 1.1,
     autoBombard: true,
     sprayRadius: 1.85,
     splashRadius: 2.8,
@@ -8964,6 +8964,13 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   ring.position.y = 1.46;
   group.add(ring);
 
+  if (towerTypeId === "deluxeBombarder") {
+    base.scale.set(1.58, 1.08, 1.58);
+    lowerCore.scale.set(1.56, 1.2, 1.56);
+    neck.scale.set(1.44, 1.14, 1.44);
+    ring.scale.set(1.52, 1, 1.52);
+  }
+
   turret = new THREE.Group();
   group.add(turret);
 
@@ -9139,6 +9146,11 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const serviceHatch = cast(new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.08, 0.72), glowMat));
       serviceHatch.position.set(0, 0.84, 0.58);
       turret.add(serviceHatch);
+
+      if (towerTypeId === "deluxeBombarder") {
+        turret.scale.set(1.52, 1.26, 1.52);
+        turret.position.y = 2.16;
+      }
     } else if (towerTypeId === "sentinel") {
       head.scale.set(0.98, 0.9, 1.1);
 
