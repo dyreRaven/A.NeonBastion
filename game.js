@@ -1722,7 +1722,7 @@ const ENEMY_TYPES = {
   },
   trapiziod: {
     name: "Trapiziod",
-    hp: 1660,
+    hp: 412,
     speed: 7.7,
     reward: 98,
     radius: 1.58,
@@ -2319,7 +2319,7 @@ function enemyWeightsForWave(wave, level = game.currentLevel) {
     { id: "colossus", weight: effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 2.8, 16) : 0 },
     { id: "leviathan", weight: effectiveWave >= 12 ? Math.min((effectiveWave - 11) * 2.3, 14) : 0 },
     { id: "monolith", weight: moonLevel && wave >= 21 ? Math.min((effectiveWave - 22) * 2.4, 11) : 0 },
-    { id: "trapiziod", weight: emberLevel && effectiveWave >= 8 ? Math.min((effectiveWave - 7) * 3.3, 18) : 0 },
+    { id: "trapiziod", weight: emberLevel && effectiveWave >= 9 ? Math.min((effectiveWave - 8) * 3.3, 18) : 0 },
     { id: "cross", weight: emberLevel && effectiveWave >= 10 ? Math.min((effectiveWave - 9) * 3.1, 17) : 0 },
     { id: "pyramidion", weight: emberLevel && effectiveWave >= 14 ? Math.min((effectiveWave - 13) * 2.8, 16) : 0 },
     { id: "diamondarchon", weight: emberLevel && effectiveWave >= 18 ? Math.min((effectiveWave - 17) * 2.4, 12) : 0 },
