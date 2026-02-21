@@ -1466,7 +1466,7 @@ const TOWER_TYPES = {
     name: "Deluxe Bombarder",
     cost: 1780,
     range: 16.4,
-    damage: 236,
+    damage: 472,
     fireInterval: 0.12,
     turnSpeed: 3.4,
     projectileSpeed: 20,
@@ -8956,14 +8956,29 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   group.add(base);
 
   if (towerTypeId === "deluxeBombarder") {
-    // Wide platform so the 2x2 footprint visibly covers four tiles.
-    const footprintDeck = cast(new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE * 1.84, 0.18, CELL_SIZE * 1.84), darkMat));
-    footprintDeck.position.y = 0.09;
-    group.add(footprintDeck);
+    // Circular O-shaped base for the 2x2 deluxe body.
+    const footprintDisk = cast(
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.96, CELL_SIZE * 1.02, 0.2, 42), darkMat)
+    );
+    footprintDisk.position.y = 0.1;
+    group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE * 1.66, 0.08, CELL_SIZE * 1.66), glowMat));
-    footprintRing.position.y = 0.24;
+    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.92, 0.16, 16, 54), glowMat));
+    footprintRing.rotation.x = Math.PI / 2;
+    footprintRing.position.y = 0.22;
     group.add(footprintRing);
+
+    // Wide chassis so the tower body (not only base) visually spans the 2x2 footprint.
+    const superHull = cast(
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.84, CELL_SIZE * 0.92, 1.1, 34), bodyMat)
+    );
+    superHull.position.y = 1.1;
+    group.add(superHull);
+
+    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.78, 0.13, 14, 46), coreMat));
+    superHullRing.rotation.x = Math.PI / 2;
+    superHullRing.position.y = 1.6;
+    group.add(superHullRing);
   }
 
   const lowerCore = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.98, 1.15, 24), bodyMat));
@@ -8988,10 +9003,10 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   group.add(ring);
 
   if (towerTypeId === "deluxeBombarder") {
-    base.scale.set(1.58, 1.08, 1.58);
-    lowerCore.scale.set(1.56, 1.2, 1.56);
-    neck.scale.set(1.44, 1.14, 1.44);
-    ring.scale.set(1.52, 1, 1.52);
+    base.scale.set(1.44, 1.12, 1.44);
+    lowerCore.scale.set(1.66, 1.26, 1.66);
+    neck.scale.set(1.78, 1.2, 1.78);
+    ring.scale.set(1.95, 1, 1.95);
   }
 
   turret = new THREE.Group();
@@ -9171,8 +9186,8 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(serviceHatch);
 
       if (towerTypeId === "deluxeBombarder") {
-        turret.scale.set(1.52, 1.26, 1.52);
-        turret.position.y = 2.16;
+        turret.scale.set(2.3, 1.36, 2.3);
+        turret.position.y = 2.22;
       }
     } else if (towerTypeId === "sentinel") {
       head.scale.set(0.98, 0.9, 1.1);
