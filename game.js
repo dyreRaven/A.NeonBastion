@@ -7695,12 +7695,13 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     pyramidion: { shape: "pyramid", baseRadius: 1.06, height: 2.12, sides: 8, ringRadius: 0, coreRadius: 0.24, coreY: 0.22 },
     diamondarchon: {
       shape: "diamondSigil",
-      width: 3.18,
-      height: 3.48,
-      depth: 1.46,
+      radius: 1.42,
+      heightTop: 1.22,
+      heightBottom: 1.86,
+      sides: 8,
       ringRadius: 0,
       coreRadius: 0.28,
-      coreY: 0.22,
+      coreY: 0.12,
     },
     icosahedron: {
       shape: "icosa",
@@ -7962,47 +7963,32 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     coreGeometry.dispose();
     faceGeometry.dispose();
   } else if (setup.shape === "diamondSigil") {
-    const halfWidth = Math.max(0.5, (setup.width || 2.6) * 0.5);
-    const halfHeight = Math.max(0.7, (setup.height || 2.8) * 0.5);
-    const depth = Math.max(0.35, setup.depth || 1.08);
-    const diamondShape = new THREE.Shape();
-    diamondShape.moveTo(0, halfHeight);
-    diamondShape.lineTo(halfWidth, 0);
-    diamondShape.lineTo(0, -halfHeight);
-    diamondShape.lineTo(-halfWidth, 0);
-    diamondShape.closePath();
+    const radius = Math.max(0.5, setup.radius || 1.36);
+    const topHeight = Math.max(0.45, setup.heightTop || 1.12);
+    const bottomHeight = Math.max(0.7, setup.heightBottom || 1.72);
+    const sides = Math.max(6, Math.floor(setup.sides || 8));
+    const yaw = Math.PI / sides;
 
-    const bevelSize = Math.min(0.18, Math.max(0.03, depth * 0.08));
-    const outerGeometry = new THREE.ExtrudeGeometry(diamondShape, {
-      depth,
-      steps: 1,
-      bevelEnabled: true,
-      bevelThickness: bevelSize,
-      bevelSize,
-      bevelSegments: 2,
-      curveSegments: 1,
-    });
-    outerGeometry.center();
-    body = cast(new THREE.Mesh(outerGeometry, bodyMat));
-    body.rotation.y = Math.PI / 4;
-    group.add(body);
-    spinNode = body;
+    const crystal = new THREE.Group();
+    group.add(crystal);
+    spinNode = crystal;
 
-    const innerGeometry = new THREE.ExtrudeGeometry(diamondShape, {
-      depth: depth * 0.42,
-      steps: 1,
-      bevelEnabled: true,
-      bevelThickness: bevelSize * 0.62,
-      bevelSize: bevelSize * 0.52,
-      bevelSegments: 1,
-      curveSegments: 1,
-    });
-    innerGeometry.center();
-    const innerFacet = cast(new THREE.Mesh(innerGeometry, darkMat));
-    innerFacet.rotation.y = Math.PI / 4;
-    innerFacet.scale.set(0.62, 0.62, 0.62);
-    innerFacet.position.z = depth * 0.14;
-    group.add(innerFacet);
+    const crown = cast(new THREE.Mesh(new THREE.ConeGeometry(radius * 0.76, topHeight, sides), bodyMat));
+    crown.position.y = topHeight * 0.5;
+    crown.rotation.y = yaw;
+    crystal.add(crown);
+
+    const keel = cast(new THREE.Mesh(new THREE.ConeGeometry(radius, bottomHeight, sides), bodyMat));
+    keel.position.y = -bottomHeight * 0.5;
+    keel.rotation.x = Math.PI;
+    keel.rotation.y = yaw;
+    crystal.add(keel);
+
+    const girdleHeight = Math.max(0.16, (topHeight + bottomHeight) * 0.07);
+    const girdle = cast(new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.72, radius * 0.86, girdleHeight, sides), darkMat));
+    girdle.position.y = 0;
+    girdle.rotation.y = yaw;
+    crystal.add(girdle);
   } else if (setup.shape === "rhombus") {
     body = cast(new THREE.Mesh(new THREE.OctahedronGeometry(setup.radius, 0), bodyMat));
     body.rotation.y = Math.PI / 4;
@@ -8013,7 +7999,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     group.add(body);
   }
 
-  if (!isPrimarySphere && body) {
+  if (!isPrimarySphere && body && setup.shape !== "diamondSigil") {
     const sleekCoat = new THREE.Mesh(
       body.geometry.clone(),
       new THREE.MeshPhysicalMaterial({
