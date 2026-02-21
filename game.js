@@ -1470,7 +1470,7 @@ const TOWER_TYPES = {
     damage: 472,
     fireInterval: 0.12,
     turnSpeed: 3.4,
-    projectileSpeed: 20,
+    projectileSpeed: 46,
     projectileRadius: 0.33,
     projectileColor: "#ffd7ad",
     bodyColor: "#e0a96f",
@@ -11057,6 +11057,7 @@ class BombardProjectile {
     this.spawnImpactEffect = fxOptions.spawnImpactEffect !== false;
     this.spawnImpactPulse = fxOptions.spawnImpactPulse !== false;
     this.miniMissile = !!fxOptions.miniMissile;
+    if (this.miniMissile) this.speed *= 1.2;
     this.impactShrapnelScale = Number.isFinite(fxOptions.impactShrapnelScale)
       ? Math.max(0, Math.min(1, fxOptions.impactShrapnelScale))
       : 1;
@@ -11065,7 +11066,7 @@ class BombardProjectile {
     this.elapsed = 0;
     this.smoke = [];
     this.smokeSpawnTimer = 0;
-    this.maxSmokePuffs = this.miniMissile ? (rendererLowPowerMode ? 5 : 8) : 0;
+    this.maxSmokePuffs = this.miniMissile ? (rendererLowPowerMode ? 12 : 20) : 0;
 
     this.origin = origin.clone();
     this.target = targetPoint.clone();
@@ -11079,9 +11080,9 @@ class BombardProjectile {
     this.desiredQuat = new THREE.Quaternion();
 
     this.flightDistance = Math.max(0.2, this.origin.distanceTo(this.target));
-    this.flightTime = Math.max(0.32, this.flightDistance / this.speed);
+    this.flightTime = Math.max(this.miniMissile ? 0.1 : 0.32, this.flightDistance / this.speed);
     const baseArcHeight = Math.max(0.7, Math.min(4.2, this.flightDistance * 0.22 + this.splashRadius * 0.34));
-    this.arcHeight = this.miniMissile ? Math.max(0.22, baseArcHeight * 0.36) : baseArcHeight;
+    this.arcHeight = this.miniMissile ? Math.max(0.05, baseArcHeight * 0.09) : baseArcHeight;
 
     this.group = new THREE.Group();
     this.group.position.copy(this.position);
@@ -11186,7 +11187,7 @@ class BombardProjectile {
       this.missileRollSpeed = 0;
     }
 
-    this.trailBaseOpacity = this.miniMissile ? 0.44 : 0.56;
+    this.trailBaseOpacity = this.miniMissile ? 0.24 : 0.56;
     const trailMat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -11210,34 +11211,34 @@ class BombardProjectile {
 
   spawnSmokePuff() {
     if (!this.miniMissile || this.smoke.length >= this.maxSmokePuffs) return;
-    const size = Math.max(0.06, this.radius * (0.44 + Math.random() * 0.34));
+    const size = Math.max(0.09, this.radius * (0.68 + Math.random() * 0.72));
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(size, 7, 7),
       new THREE.MeshBasicMaterial({
-        color: Math.random() < 0.5 ? "#746960" : "#928379",
+        color: Math.random() < 0.45 ? "#5e5e5e" : Math.random() < 0.72 ? "#767676" : "#8a8a8a",
         transparent: true,
-        opacity: 0.42,
+        opacity: 0.78,
         depthWrite: false,
       })
     );
     mesh.position.copy(this.renderPosition);
-    mesh.position.addScaledVector(this.direction, -this.radius * (1.2 + Math.random() * 0.8));
-    mesh.position.x += (Math.random() * 2 - 1) * this.radius * 0.28;
-    mesh.position.y += (Math.random() * 2 - 1) * this.radius * 0.2;
-    mesh.position.z += (Math.random() * 2 - 1) * this.radius * 0.28;
+    mesh.position.addScaledVector(this.direction, -this.radius * (1.9 + Math.random() * 1.5));
+    mesh.position.x += (Math.random() * 2 - 1) * this.radius * 0.44;
+    mesh.position.y += (Math.random() * 2 - 1) * this.radius * 0.26;
+    mesh.position.z += (Math.random() * 2 - 1) * this.radius * 0.44;
     scene.add(mesh);
 
-    const velocity = this.direction.clone().multiplyScalar(-(0.8 + Math.random() * 1.4));
-    velocity.x += (Math.random() * 2 - 1) * 0.35;
-    velocity.y += 0.25 + Math.random() * 0.42;
-    velocity.z += (Math.random() * 2 - 1) * 0.35;
+    const velocity = this.direction.clone().multiplyScalar(-(0.25 + Math.random() * 0.65));
+    velocity.x += (Math.random() * 2 - 1) * 0.28;
+    velocity.y += 0.38 + Math.random() * 0.58;
+    velocity.z += (Math.random() * 2 - 1) * 0.28;
 
     this.smoke.push({
       mesh,
       velocity,
       age: 0,
-      life: 0.3 + Math.random() * 0.34,
-      scaleDrift: 0.9 + Math.random() * 0.8,
+      life: 0.72 + Math.random() * 0.43,
+      scaleDrift: 1.5 + Math.random() * 1.1,
     });
   }
 
@@ -11247,11 +11248,11 @@ class BombardProjectile {
     for (const puff of this.smoke) {
       puff.age += dt;
       puff.mesh.position.addScaledVector(puff.velocity, dt);
-      puff.velocity.multiplyScalar(Math.exp(-2.8 * dt));
-      puff.velocity.y += 0.34 * dt;
+      puff.velocity.multiplyScalar(Math.exp(-1.9 * dt));
+      puff.velocity.y += 0.55 * dt;
 
       const t = Math.min(1, puff.age / puff.life);
-      puff.mesh.material.opacity = Math.max(0, 0.42 * (1 - t));
+      puff.mesh.material.opacity = Math.max(0, 0.78 * (1 - t));
       const scale = 1 + t * puff.scaleDrift;
       puff.mesh.scale.setScalar(scale);
 
@@ -11363,7 +11364,7 @@ class BombardProjectile {
     this.position.lerpVectors(this.origin, this.target, t);
     this.position.y += Math.sin(t * Math.PI) * this.arcHeight;
 
-    const smoothing = 1 - Math.exp(-24 * safeDt);
+    const smoothing = 1 - Math.exp(-(this.miniMissile ? 36 : 24) * safeDt);
     this.renderPosition.lerp(this.position, smoothing);
     this.moveVec.subVectors(this.renderPosition, this.prevRenderPosition);
     if (this.moveVec.lengthSq() > 1e-6) this.direction.copy(this.moveVec).normalize();
@@ -11382,8 +11383,8 @@ class BombardProjectile {
       this.trail.scale.y = trailPulse;
       this.trail.material.opacity = THREE.MathUtils.clamp(
         this.trailBaseOpacity + Math.sin(this.elapsed * 24 + 0.7) * 0.08,
-        0.28,
-        0.72
+        0.14,
+        0.34
       );
       if (this.exhaust && this.exhaust.material) {
         const exhaustPulse = 0.86 + Math.sin(this.elapsed * 34 + this.radius * 10) * 0.16;
@@ -11398,9 +11399,9 @@ class BombardProjectile {
 
     if (this.miniMissile) {
       this.smokeSpawnTimer -= safeDt;
-      const smokeStep = rendererLowPowerMode ? 0.13 : 0.085;
+      const smokeStep = rendererLowPowerMode ? 0.055 : 0.032;
       let smokeLoops = 0;
-      while (this.smokeSpawnTimer <= 0 && smokeLoops < 3) {
+      while (this.smokeSpawnTimer <= 0 && smokeLoops < 5) {
         this.spawnSmokePuff();
         this.smokeSpawnTimer += smokeStep + Math.random() * 0.03;
         smokeLoops += 1;
@@ -11413,6 +11414,9 @@ class BombardProjectile {
 
     if (t >= 1) {
       this.impact();
+      if (this.miniMissile) {
+        for (let i = 0; i < 8; i += 1) this.spawnSmokePuff();
+      }
       this.impacted = true;
       if (this.group) this.group.visible = false;
       if (!this.miniMissile || this.smoke.length === 0) this.alive = false;
