@@ -2482,6 +2482,7 @@ function createEnemyStats(typeId, wave, level = game.currentLevel, options = nul
   let scaledSpeed = type.speed * (1 + type.speedGrowth * waveFactor) * profile.speedMultiplier;
   let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 77508 : scaledHp;
   if (!forAlly && isBossWave(level, wave)) hp = Math.max(1, Math.round(hp * BOSS_WAVE_DIFFICULTY_MULTIPLIER));
+  if (!forAlly && level >= 3 && typeId === "star") hp = Math.max(1, Math.round(hp * 2));
   if (!forAlly && typeId === "star") scaledSpeed *= 2;
 
   return {
