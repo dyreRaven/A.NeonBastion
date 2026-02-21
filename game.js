@@ -10480,6 +10480,7 @@ class Tower {
             playImpactSfx: impactSfxDue,
             spawnImpactEffect: impactFxDue,
             spawnImpactPulse: impactFxDue,
+            miniMissile: this.towerTypeId === "deluxeBombarder",
             impactShrapnelScale: impactFxDue ? this.bombardImpactShrapnelScale : 0,
           }
         )
@@ -11055,11 +11056,16 @@ class BombardProjectile {
     this.playImpactSfx = fxOptions.playImpactSfx !== false;
     this.spawnImpactEffect = fxOptions.spawnImpactEffect !== false;
     this.spawnImpactPulse = fxOptions.spawnImpactPulse !== false;
+    this.miniMissile = !!fxOptions.miniMissile;
     this.impactShrapnelScale = Number.isFinite(fxOptions.impactShrapnelScale)
       ? Math.max(0, Math.min(1, fxOptions.impactShrapnelScale))
       : 1;
     this.alive = true;
+    this.impacted = false;
     this.elapsed = 0;
+    this.smoke = [];
+    this.smokeSpawnTimer = 0;
+    this.maxSmokePuffs = this.miniMissile ? (rendererLowPowerMode ? 5 : 8) : 0;
 
     this.origin = origin.clone();
     this.target = targetPoint.clone();
@@ -11074,38 +11080,185 @@ class BombardProjectile {
 
     this.flightDistance = Math.max(0.2, this.origin.distanceTo(this.target));
     this.flightTime = Math.max(0.32, this.flightDistance / this.speed);
-    this.arcHeight = Math.max(0.7, Math.min(4.2, this.flightDistance * 0.22 + this.splashRadius * 0.34));
+    const baseArcHeight = Math.max(0.7, Math.min(4.2, this.flightDistance * 0.22 + this.splashRadius * 0.34));
+    this.arcHeight = this.miniMissile ? Math.max(0.22, baseArcHeight * 0.36) : baseArcHeight;
 
     this.group = new THREE.Group();
     this.group.position.copy(this.position);
 
-    const shellMat = new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 1.1,
-      metalness: 0.35,
-      roughness: 0.24,
-    });
-    this.shell = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 12, 12), shellMat);
-    this.group.add(this.shell);
+    const baseColor = new THREE.Color(color);
+    if (this.miniMissile) {
+      const missileLength = this.radius * 5.6;
+      const missileBodyRadius = this.radius * 0.42;
+      const hullColor = baseColor.clone().lerp(new THREE.Color("#ffd0a2"), 0.34);
+      const hullEmissive = baseColor.clone().multiplyScalar(0.28);
 
+      const hullMat = new THREE.MeshStandardMaterial({
+        color: hullColor,
+        emissive: hullEmissive,
+        emissiveIntensity: 0.54,
+        metalness: 0.68,
+        roughness: 0.3,
+      });
+      this.shell = new THREE.Mesh(
+        new THREE.CylinderGeometry(missileBodyRadius * 0.9, missileBodyRadius, missileLength * 0.58, 10),
+        hullMat
+      );
+      this.shell.rotation.x = Math.PI / 2;
+      this.shell.position.z = -missileLength * 0.02;
+      this.group.add(this.shell);
+
+      const noseMat = new THREE.MeshStandardMaterial({
+        color: hullColor.clone().lerp(new THREE.Color("#fff0cf"), 0.44),
+        emissive: hullEmissive.clone().lerp(new THREE.Color("#ffbc7a"), 0.34),
+        emissiveIntensity: 0.48,
+        metalness: 0.52,
+        roughness: 0.24,
+      });
+      this.nose = new THREE.Mesh(
+        new THREE.ConeGeometry(missileBodyRadius * 0.96, missileLength * 0.38, 10),
+        noseMat
+      );
+      this.nose.rotation.x = Math.PI / 2;
+      this.nose.position.z = missileLength * 0.46;
+      this.group.add(this.nose);
+
+      const tailMat = new THREE.MeshStandardMaterial({
+        color: baseColor.clone().lerp(new THREE.Color("#5a301e"), 0.42),
+        emissive: baseColor.clone().multiplyScalar(0.18),
+        emissiveIntensity: 0.42,
+        metalness: 0.56,
+        roughness: 0.44,
+      });
+      this.tail = new THREE.Mesh(
+        new THREE.CylinderGeometry(missileBodyRadius * 0.68, missileBodyRadius * 0.78, missileLength * 0.18, 10),
+        tailMat
+      );
+      this.tail.rotation.x = Math.PI / 2;
+      this.tail.position.z = -missileLength * 0.44;
+      this.group.add(this.tail);
+
+      const finMat = new THREE.MeshStandardMaterial({
+        color: baseColor.clone().lerp(new THREE.Color("#3a1f15"), 0.52),
+        emissive: baseColor.clone().multiplyScalar(0.14),
+        emissiveIntensity: 0.36,
+        metalness: 0.62,
+        roughness: 0.46,
+      });
+      const finGeometry = new THREE.BoxGeometry(
+        missileBodyRadius * 1.7,
+        missileBodyRadius * 0.16,
+        missileLength * 0.24
+      );
+      const finOffsetZ = -missileLength * 0.24;
+      const finA = new THREE.Mesh(finGeometry, finMat);
+      finA.position.z = finOffsetZ;
+      this.group.add(finA);
+      const finB = new THREE.Mesh(finGeometry.clone(), finMat.clone());
+      finB.position.z = finOffsetZ;
+      finB.rotation.z = Math.PI / 2;
+      this.group.add(finB);
+
+      this.exhaust = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(0.06, missileBodyRadius * 0.62), 8, 8),
+        new THREE.MeshBasicMaterial({
+          color: baseColor.clone().lerp(new THREE.Color("#ffc17c"), 0.52),
+          transparent: true,
+          opacity: 0.66,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      this.exhaust.position.z = -missileLength * 0.54;
+      this.group.add(this.exhaust);
+      this.missileRollSpeed = 1.2 + Math.random() * 1.9;
+    } else {
+      const shellMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 1.1,
+        metalness: 0.35,
+        roughness: 0.24,
+      });
+      this.shell = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 12, 12), shellMat);
+      this.group.add(this.shell);
+      this.exhaust = null;
+      this.missileRollSpeed = 0;
+    }
+
+    this.trailBaseOpacity = this.miniMissile ? 0.44 : 0.56;
     const trailMat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
-      opacity: 0.56,
+      opacity: this.trailBaseOpacity,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     this.trail = new THREE.Mesh(
-      new THREE.CylinderGeometry(this.radius * 0.28, this.radius * 0.72, this.radius * 6.8, 10, 1, true),
+      this.miniMissile
+        ? new THREE.CylinderGeometry(this.radius * 0.12, this.radius * 0.66, this.radius * 8.4, 10, 1, true)
+        : new THREE.CylinderGeometry(this.radius * 0.28, this.radius * 0.72, this.radius * 6.8, 10, 1, true),
       trailMat
     );
     this.trail.rotation.x = Math.PI / 2;
-    this.trail.position.z = -this.radius * 2.2;
+    this.trail.position.z = this.miniMissile ? -this.radius * 3.3 : -this.radius * 2.2;
     this.group.add(this.trail);
 
     this.group.quaternion.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
     scene.add(this.group);
+  }
+
+  spawnSmokePuff() {
+    if (!this.miniMissile || this.smoke.length >= this.maxSmokePuffs) return;
+    const size = Math.max(0.06, this.radius * (0.44 + Math.random() * 0.34));
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(size, 7, 7),
+      new THREE.MeshBasicMaterial({
+        color: Math.random() < 0.5 ? "#746960" : "#928379",
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      })
+    );
+    mesh.position.copy(this.renderPosition);
+    mesh.position.addScaledVector(this.direction, -this.radius * (1.2 + Math.random() * 0.8));
+    mesh.position.x += (Math.random() * 2 - 1) * this.radius * 0.28;
+    mesh.position.y += (Math.random() * 2 - 1) * this.radius * 0.2;
+    mesh.position.z += (Math.random() * 2 - 1) * this.radius * 0.28;
+    scene.add(mesh);
+
+    const velocity = this.direction.clone().multiplyScalar(-(0.8 + Math.random() * 1.4));
+    velocity.x += (Math.random() * 2 - 1) * 0.35;
+    velocity.y += 0.25 + Math.random() * 0.42;
+    velocity.z += (Math.random() * 2 - 1) * 0.35;
+
+    this.smoke.push({
+      mesh,
+      velocity,
+      age: 0,
+      life: 0.3 + Math.random() * 0.34,
+      scaleDrift: 0.9 + Math.random() * 0.8,
+    });
+  }
+
+  updateSmokePuffs(dt) {
+    if (this.smoke.length === 0) return;
+    const alive = [];
+    for (const puff of this.smoke) {
+      puff.age += dt;
+      puff.mesh.position.addScaledVector(puff.velocity, dt);
+      puff.velocity.multiplyScalar(Math.exp(-2.8 * dt));
+      puff.velocity.y += 0.34 * dt;
+
+      const t = Math.min(1, puff.age / puff.life);
+      puff.mesh.material.opacity = Math.max(0, 0.42 * (1 - t));
+      const scale = 1 + t * puff.scaleDrift;
+      puff.mesh.scale.setScalar(scale);
+
+      if (puff.age < puff.life) alive.push(puff);
+      else disposeSceneObject(puff.mesh);
+    }
+    this.smoke = alive;
   }
 
   impact() {
@@ -11196,32 +11349,82 @@ class BombardProjectile {
 
   update(dt) {
     if (!this.alive) return;
-    this.elapsed += dt;
+    const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    if (safeDt <= 0) return;
+
+    if (this.impacted) {
+      this.updateSmokePuffs(safeDt);
+      if (!this.miniMissile || this.smoke.length === 0) this.alive = false;
+      return;
+    }
+
+    this.elapsed += safeDt;
     const t = THREE.MathUtils.clamp(this.elapsed / this.flightTime, 0, 1);
     this.position.lerpVectors(this.origin, this.target, t);
     this.position.y += Math.sin(t * Math.PI) * this.arcHeight;
 
-    const smoothing = 1 - Math.exp(-24 * dt);
+    const smoothing = 1 - Math.exp(-24 * safeDt);
     this.renderPosition.lerp(this.position, smoothing);
     this.moveVec.subVectors(this.renderPosition, this.prevRenderPosition);
     if (this.moveVec.lengthSq() > 1e-6) this.direction.copy(this.moveVec).normalize();
 
     this.group.position.copy(this.renderPosition);
     this.desiredQuat.setFromUnitVectors(PROJECTILE_FORWARD, this.direction);
-    this.group.quaternion.slerp(this.desiredQuat, 1 - Math.exp(-30 * dt));
+    this.group.quaternion.slerp(this.desiredQuat, 1 - Math.exp(-30 * safeDt));
+    if (this.miniMissile) this.group.rotateZ(safeDt * this.missileRollSpeed);
     this.prevRenderPosition.copy(this.renderPosition);
 
     const stretch = 1 + Math.min(this.speed * 0.022, 1.35);
     this.trail.scale.z = stretch;
+    if (this.miniMissile) {
+      const trailPulse = 1 + Math.sin(this.elapsed * 30 + this.flightDistance * 0.35) * 0.2;
+      this.trail.scale.x = trailPulse;
+      this.trail.scale.y = trailPulse;
+      this.trail.material.opacity = THREE.MathUtils.clamp(
+        this.trailBaseOpacity + Math.sin(this.elapsed * 24 + 0.7) * 0.08,
+        0.28,
+        0.72
+      );
+      if (this.exhaust && this.exhaust.material) {
+        const exhaustPulse = 0.86 + Math.sin(this.elapsed * 34 + this.radius * 10) * 0.16;
+        this.exhaust.scale.set(exhaustPulse, exhaustPulse, exhaustPulse * 1.2);
+        this.exhaust.material.opacity = THREE.MathUtils.clamp(
+          0.58 + Math.sin(this.elapsed * 32 + 1.1) * 0.14,
+          0.32,
+          0.86
+        );
+      }
+    }
+
+    if (this.miniMissile) {
+      this.smokeSpawnTimer -= safeDt;
+      const smokeStep = rendererLowPowerMode ? 0.13 : 0.085;
+      let smokeLoops = 0;
+      while (this.smokeSpawnTimer <= 0 && smokeLoops < 3) {
+        this.spawnSmokePuff();
+        this.smokeSpawnTimer += smokeStep + Math.random() * 0.03;
+        smokeLoops += 1;
+      }
+      if (this.smokeSpawnTimer <= 0) {
+        this.smokeSpawnTimer = smokeStep + Math.random() * 0.03;
+      }
+      this.updateSmokePuffs(safeDt);
+    }
 
     if (t >= 1) {
       this.impact();
-      this.alive = false;
+      this.impacted = true;
+      if (this.group) this.group.visible = false;
+      if (!this.miniMissile || this.smoke.length === 0) this.alive = false;
     }
   }
 
   dispose() {
-    scene.remove(this.group);
+    for (const puff of this.smoke) disposeSceneObject(puff.mesh);
+    this.smoke = [];
+    if (!this.group) return;
+    disposeSceneObject(this.group);
+    this.group = null;
   }
 }
 
