@@ -9878,9 +9878,18 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     turret.add(beacon);
 
     const barrelRig = new THREE.Group();
-    barrelRig.position.set(0, isDeluxe ? 0.76 : 0.64, 0.78);
+    barrelRig.position.set(0, isDeluxe ? 0.76 : 0.64, isDeluxe ? 0.9 : 0.7);
     barrelRig.rotation.x = -0.22;
     turret.add(barrelRig);
+
+    const mountBridge = cast(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(isDeluxe ? 0.94 : 0.56, isDeluxe ? 0.28 : 0.22, isDeluxe ? 0.94 : 0.7),
+        darkMat
+      )
+    );
+    mountBridge.position.set(0, 0.08, -0.04);
+    barrelRig.add(mountBridge);
 
     const breech = cast(
       new THREE.Mesh(
@@ -9888,7 +9897,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
         coreMat
       )
     );
-    breech.position.set(0, 0.08, 0.32);
+    breech.position.set(0, 0.08, 0.36);
     barrelRig.add(breech);
 
     if (isDeluxe) {
