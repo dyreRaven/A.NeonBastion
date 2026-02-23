@@ -1305,7 +1305,7 @@ const HALF_ROWS = (ROWS - 1) / 2;
 const TOWER_TYPES = {
   spikes: {
     name: "Rift Spikes",
-    cost: 130,
+    cost: 260,
     range: 1.04,
     damage: 12,
     fireInterval: 0.46,
@@ -1322,7 +1322,7 @@ const TOWER_TYPES = {
   },
   pulse: {
     name: "Pulse",
-    cost: 130,
+    cost: 260,
     range: 9.6,
     damage: 24,
     fireInterval: 0.52,
@@ -1336,7 +1336,7 @@ const TOWER_TYPES = {
   },
   swarm: {
     name: "Swarm",
-    cost: 245,
+    cost: 490,
     range: 8.8,
     damage: 14,
     fireInterval: 0.165,
@@ -1350,7 +1350,7 @@ const TOWER_TYPES = {
   },
   lance: {
     name: "Lance",
-    cost: 390,
+    cost: 780,
     range: 17.8,
     damage: 122,
     fireInterval: 1.02,
@@ -1364,7 +1364,7 @@ const TOWER_TYPES = {
   },
   ember: {
     name: "Ember",
-    cost: 460,
+    cost: 920,
     range: 12.2,
     damage: 68,
     fireInterval: 0.4,
@@ -1378,7 +1378,7 @@ const TOWER_TYPES = {
   },
   nova: {
     name: "Nova",
-    cost: 740,
+    cost: 1480,
     range: 11.6,
     damage: 64,
     fireInterval: 0.2,
@@ -1392,7 +1392,7 @@ const TOWER_TYPES = {
   },
   sentinel: {
     name: "Sentinel",
-    cost: 1180,
+    cost: 2360,
     range: 22.5,
     damage: 468,
     fireInterval: 1.75,
@@ -1406,7 +1406,7 @@ const TOWER_TYPES = {
   },
   volt: {
     name: "Volt",
-    cost: 540,
+    cost: 1080,
     range: 11.2,
     damage: 36,
     fireInterval: 0.21,
@@ -1419,8 +1419,8 @@ const TOWER_TYPES = {
     summary: "Arc burst",
   },
   tesla: {
-    name: "Tesla",
-    cost: 860,
+    name: "Stormcoil",
+    cost: 1720,
     range: 12.8,
     damage: 58,
     fireInterval: 0.5,
@@ -1436,7 +1436,7 @@ const TOWER_TYPES = {
   },
   frost: {
     name: "Frost",
-    cost: 500,
+    cost: 1000,
     range: 10,
     damage: 31,
     fireInterval: 0.19,
@@ -1450,7 +1450,7 @@ const TOWER_TYPES = {
   },
   ion: {
     name: "Ion",
-    cost: 760,
+    cost: 1520,
     range: 20.8,
     damage: 258,
     fireInterval: 1.2,
@@ -1464,7 +1464,7 @@ const TOWER_TYPES = {
   },
   quarry: {
     name: "Quarry",
-    cost: 920,
+    cost: 1840,
     range: 15.4,
     damage: 342,
     fireInterval: 1.45,
@@ -1478,7 +1478,7 @@ const TOWER_TYPES = {
   },
   bombarder: {
     name: "Bombarder",
-    cost: 980,
+    cost: 1960,
     range: 30,
     minRange: 9.6,
     damage: 428,
@@ -1523,7 +1523,7 @@ const TOWER_TYPES = {
   },
   rift: {
     name: "Rift",
-    cost: 680,
+    cost: 1360,
     range: 7.8,
     damage: 80,
     fireInterval: 0.25,
@@ -1537,7 +1537,7 @@ const TOWER_TYPES = {
   },
   bastion: {
     name: "Bastion",
-    cost: 980,
+    cost: 1960,
     range: 13.2,
     damage: 236,
     fireInterval: 0.72,
@@ -1551,7 +1551,7 @@ const TOWER_TYPES = {
   },
   photon: {
     name: "Photon",
-    cost: 720,
+    cost: 1440,
     range: 13.6,
     damage: 58,
     fireInterval: 0.16,
@@ -1565,7 +1565,7 @@ const TOWER_TYPES = {
   },
   citadel: {
     name: "Citadel",
-    cost: 1420,
+    cost: 2840,
     range: 19.6,
     damage: 684,
     fireInterval: 2.05,
