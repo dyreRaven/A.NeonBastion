@@ -9116,9 +9116,9 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     footprintDisk.position.y = 0.12;
     group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.44, 0.05, 12, 48), glowMat));
+    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.3, 0.03, 10, 40), glowMat));
     footprintRing.rotation.x = Math.PI / 2;
-    footprintRing.position.y = 0.21;
+    footprintRing.position.y = 0.17;
     group.add(footprintRing);
 
     // Raised central chassis so the 2x2 variant reads taller instead of bulky.
@@ -9290,17 +9290,6 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       tail.position.set(0, 0.34, -0.56);
       beacon.position.set(0, 1.05, 0.02);
 
-      const armoredDeck = cast(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.28, 1.76), darkMat));
-      armoredDeck.position.set(0, 0.34, 0.62);
-      turret.add(armoredDeck);
-
-      const skirtL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.62, 1.52), darkMat));
-      skirtL.position.set(-0.32, 0.42, 1.05);
-      turret.add(skirtL);
-      const skirtR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.62, 1.52), darkMat));
-      skirtR.position.set(0.32, 0.42, 1.05);
-      turret.add(skirtR);
-
       const turretCollar = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.38, 0.28, 14), bodyMat));
       turretCollar.position.set(0, 0.62, 0.48);
       turret.add(turretCollar);
@@ -9346,15 +9335,6 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const muzzleVentR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.46), glowMat));
       muzzleVentR.position.set(0.24, 0.11, 2.42);
       barrelRig.add(muzzleVentR);
-
-      const stabilizerL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 1.18), darkMat));
-      stabilizerL.position.set(-0.23, 0.28, 1.02);
-      stabilizerL.rotation.x = -0.08;
-      turret.add(stabilizerL);
-      const stabilizerR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.32, 1.18), darkMat));
-      stabilizerR.position.set(0.23, 0.28, 1.02);
-      stabilizerR.rotation.x = -0.08;
-      turret.add(stabilizerR);
 
       const serviceHatch = cast(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.84), glowMat));
       serviceHatch.position.set(0, 1.02, 0.56);
