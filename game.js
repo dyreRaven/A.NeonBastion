@@ -1815,8 +1815,8 @@ const ENEMY_TYPES = {
     hpGrowth: 0,
     speedGrowth: 0,
     rewardGrowth: 0,
-    colorA: "#79dcff",
-    colorB: "#ffe4b1",
+    colorA: "#ff8a3b",
+    colorB: "#ffd8ad",
     hoverHeight: 1.68,
   },
   solarshard: {
@@ -8571,6 +8571,37 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     accentMat.attenuationColor.set("#fff0a8");
     accentMat.attenuationDistance = 1.22;
     accentMat.envMapIntensity = 1.95;
+  } else if (typeId === MARS_BOSS_TYPE_ID) {
+    bodyMat.color.set("#ff9b4d");
+    bodyMat.emissive.set("#8f2f00");
+    bodyMat.emissiveIntensity = 0.32;
+    bodyMat.roughness = 0.02;
+    bodyMat.thickness = 1.2 * glassIntensity;
+    bodyMat.attenuationColor.set("#ffbb75");
+    bodyMat.attenuationDistance = 1.16;
+    bodyMat.envMapIntensity = 2.05;
+
+    accentMat.color.set("#ffd8a8");
+    accentMat.emissive.set("#b84b00");
+    accentMat.emissiveIntensity = 0.42;
+    accentMat.roughness = 0.018;
+    accentMat.thickness = 1.05 * glassIntensity;
+    accentMat.attenuationColor.set("#ffe7c8");
+    accentMat.attenuationDistance = 1.04;
+    accentMat.envMapIntensity = 2.15;
+
+    darkMat.color.set("#7a2f00");
+    darkMat.emissive.set("#3d1400");
+    darkMat.emissiveIntensity = 0.24;
+
+    ringMat.color.set("#ffc688");
+    ringMat.emissive.set("#b74400");
+    ringMat.emissiveIntensity = 0.46;
+    ringMat.roughness = 0.03;
+    ringMat.thickness = 0.58 * glassIntensity;
+    ringMat.attenuationColor.set("#ffe7c9");
+    ringMat.attenuationDistance = 0.95;
+    ringMat.envMapIntensity = 2.1;
   }
 
   const cast = (mesh) => {
@@ -8883,40 +8914,88 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     group.add(frameRoot);
     spinNode = frameRoot;
 
-    const wireColor = secondary.clone().lerp(new THREE.Color("#dff3ff"), 0.52);
-    const connectorColor = primary.clone().lerp(new THREE.Color("#ffd8a3"), 0.35);
-    const wireMat = new THREE.LineBasicMaterial({
+    const wireColor = primary.clone().lerp(new THREE.Color("#ffb77f"), 0.38);
+    const connectorColor = secondary.clone().lerp(new THREE.Color("#fff0dd"), 0.46);
+    const wireMat = new THREE.MeshPhysicalMaterial({
       color: wireColor,
+      emissive: wireColor.clone().multiplyScalar(0.24),
+      emissiveIntensity: 0.58,
+      roughness: 0.022,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.5,
+      thickness: 0.46 * glassIntensity,
+      attenuationColor: connectorColor.clone(),
+      attenuationDistance: 0.88,
+      clearcoat: 1,
+      clearcoatRoughness: 0.02,
+      envMapIntensity: 2.2,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.9,
+      wireframe: true,
+      depthWrite: false,
     });
-    const connectorMat = new THREE.LineBasicMaterial({
+    const connectorMat = new THREE.MeshPhysicalMaterial({
       color: connectorColor,
+      emissive: connectorColor.clone().multiplyScalar(0.18),
+      emissiveIntensity: 0.5,
+      roughness: 0.03,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.48,
+      thickness: 0.34 * glassIntensity,
+      attenuationColor: wireColor.clone().lerp(new THREE.Color("#ffd4a6"), 0.45),
+      attenuationDistance: 0.78,
+      clearcoat: 1,
+      clearcoatRoughness: 0.03,
+      envMapIntensity: 2.05,
       transparent: true,
       opacity: 0.82,
+      depthWrite: false,
+    });
+    const shellMat = new THREE.MeshPhysicalMaterial({
+      color: connectorColor.clone().lerp(new THREE.Color("#ffdfa9"), 0.34),
+      emissive: wireColor.clone().multiplyScalar(0.12),
+      emissiveIntensity: 0.42,
+      roughness: 0.02,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.52,
+      thickness: 0.66 * glassIntensity,
+      attenuationColor: wireColor.clone().lerp(new THREE.Color("#ffcf97"), 0.52),
+      attenuationDistance: 1.16,
+      clearcoat: 1,
+      clearcoatRoughness: 0.012,
+      envMapIntensity: 2.16,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
     });
 
-    const outerFrame = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(frameRadius, 0)),
+    const outerFrame = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(frameRadius, 0),
       wireMat
     );
     outerFrame.rotation.y = Math.PI / 10;
     frameRoot.add(outerFrame);
 
-    const midFrame = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.DodecahedronGeometry(frameRadius * 0.76, 0)),
-      wireMat
+    const midFrame = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(frameRadius * 0.76, 0),
+      connectorMat
     );
     midFrame.rotation.x = Math.PI / 8;
     midFrame.rotation.z = Math.PI / 12;
     frameRoot.add(midFrame);
 
-    const innerFrame = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.OctahedronGeometry(frameRadius * 0.5, 0)),
-      wireMat
+    const innerFrame = new THREE.Mesh(
+      new THREE.OctahedronGeometry(frameRadius * 0.5, 0),
+      connectorMat
     );
     innerFrame.rotation.y = Math.PI / 4;
     frameRoot.add(innerFrame);
+
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(frameRadius * 0.9, 28, 28), shellMat);
+    frameRoot.add(shell);
 
     const outerTemplate = new THREE.IcosahedronGeometry(frameRadius, 0);
     const outerPos = outerTemplate.getAttribute("position");
@@ -8935,29 +9014,51 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     }
     outerTemplate.dispose();
 
-    const connectorPositions = [];
+    const upAxis = new THREE.Vector3(0, 1, 0);
+    const unitStrutGeometry = new THREE.CylinderGeometry(0.024, 0.024, 1, 6);
+    const unitStrutInnerGeometry = new THREE.CylinderGeometry(0.018, 0.018, 1, 6);
+    const addGlassStrut = (a, b, material, geometry) => {
+      const strutDir = b.clone().sub(a);
+      const length = strutDir.length();
+      if (length < 1e-4) return;
+      const strut = cast(new THREE.Mesh(geometry, material));
+      strut.position.copy(a).add(b).multiplyScalar(0.5);
+      strut.quaternion.setFromUnitVectors(upAxis, strutDir.multiplyScalar(1 / length));
+      strut.scale.y = length;
+      frameRoot.add(strut);
+    };
+
     const innerRadius = frameRadius * 0.42;
     const midRadius = frameRadius * 0.7;
     for (let i = 0; i < vertexDirs.length; i += 1) {
       const dir = vertexDirs[i];
       const outerPoint = dir.clone().multiplyScalar(frameRadius * 0.98);
       const innerPoint = dir.clone().multiplyScalar(innerRadius);
-      connectorPositions.push(outerPoint.x, outerPoint.y, outerPoint.z, innerPoint.x, innerPoint.y, innerPoint.z);
+      addGlassStrut(outerPoint, innerPoint, connectorMat, unitStrutGeometry);
 
       const nextDir = vertexDirs[(i + 3) % vertexDirs.length];
       const latticePoint = nextDir.clone().add(dir).normalize().multiplyScalar(midRadius);
-      connectorPositions.push(innerPoint.x, innerPoint.y, innerPoint.z, latticePoint.x, latticePoint.y, latticePoint.z);
+      addGlassStrut(innerPoint, latticePoint, wireMat, unitStrutInnerGeometry);
     }
-    const connectorGeometry = new THREE.BufferGeometry();
-    connectorGeometry.setAttribute("position", new THREE.Float32BufferAttribute(connectorPositions, 3));
-    const connectorLines = new THREE.LineSegments(connectorGeometry, connectorMat);
-    frameRoot.add(connectorLines);
 
-    const orbitMat = new THREE.MeshBasicMaterial({
+    const orbitMat = new THREE.MeshPhysicalMaterial({
       color: wireColor.clone().lerp(new THREE.Color("#ffffff"), 0.2),
+      emissive: wireColor.clone().multiplyScalar(0.2),
+      emissiveIntensity: 0.58,
+      roughness: 0.02,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.47,
+      thickness: 0.3 * glassIntensity,
+      attenuationColor: connectorColor.clone(),
+      attenuationDistance: 0.84,
+      clearcoat: 1,
+      clearcoatRoughness: 0.02,
+      envMapIntensity: 2.04,
       transparent: true,
-      opacity: 0.74,
+      opacity: 0.78,
       wireframe: true,
+      depthWrite: false,
     });
     const equator = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.86, 0.03, 8, 56), orbitMat);
     equator.rotation.x = Math.PI / 2;
