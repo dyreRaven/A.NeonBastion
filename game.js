@@ -1219,18 +1219,18 @@ const audioSystem = {
 };
 
 const TOWER_UNLOCKS = {
-  spikes: { shardCost: 16 },
-  ion: { shardCost: 56 },
-  frost: { shardCost: 28 },
-  quarry: { shardCost: 44 },
-  bombarder: { shardCost: 50 },
+  spikes: { shardCost: 32 },
+  ion: { shardCost: 112 },
+  frost: { shardCost: 56 },
+  quarry: { shardCost: 88 },
+  bombarder: { shardCost: 100 },
   deluxeBombarder: { shardCost: 600 },
-  rift: { shardCost: 32 },
-  volt: { shardCost: 36 },
-  tesla: { shardCost: 58 },
-  bastion: { shardCost: 48 },
-  photon: { shardCost: 52 },
-  citadel: { shardCost: 72 },
+  rift: { shardCost: 64 },
+  volt: { shardCost: 72 },
+  tesla: { shardCost: 116 },
+  bastion: { shardCost: 96 },
+  photon: { shardCost: 104 },
+  citadel: { shardCost: 144 },
 };
 
 const MENU_UNLOCK_TOWER_IDS = [
@@ -1305,7 +1305,7 @@ const HALF_ROWS = (ROWS - 1) / 2;
 const TOWER_TYPES = {
   spikes: {
     name: "Rift Spikes",
-    cost: 260,
+    cost: 130,
     range: 1.04,
     damage: 12,
     fireInterval: 0.46,
@@ -1322,7 +1322,7 @@ const TOWER_TYPES = {
   },
   pulse: {
     name: "Pulse",
-    cost: 260,
+    cost: 130,
     range: 9.6,
     damage: 24,
     fireInterval: 0.52,
@@ -1336,7 +1336,7 @@ const TOWER_TYPES = {
   },
   swarm: {
     name: "Swarm",
-    cost: 490,
+    cost: 245,
     range: 8.8,
     damage: 14,
     fireInterval: 0.165,
@@ -1350,7 +1350,7 @@ const TOWER_TYPES = {
   },
   lance: {
     name: "Lance",
-    cost: 780,
+    cost: 390,
     range: 17.8,
     damage: 122,
     fireInterval: 1.02,
@@ -1364,7 +1364,7 @@ const TOWER_TYPES = {
   },
   ember: {
     name: "Ember",
-    cost: 920,
+    cost: 460,
     range: 12.2,
     damage: 68,
     fireInterval: 0.4,
@@ -1378,7 +1378,7 @@ const TOWER_TYPES = {
   },
   nova: {
     name: "Nova",
-    cost: 1480,
+    cost: 740,
     range: 11.6,
     damage: 64,
     fireInterval: 0.2,
@@ -1392,7 +1392,7 @@ const TOWER_TYPES = {
   },
   sentinel: {
     name: "Sentinel",
-    cost: 2360,
+    cost: 1180,
     range: 22.5,
     damage: 468,
     fireInterval: 1.75,
@@ -1406,7 +1406,7 @@ const TOWER_TYPES = {
   },
   volt: {
     name: "Volt",
-    cost: 1080,
+    cost: 540,
     range: 11.2,
     damage: 36,
     fireInterval: 0.21,
@@ -1420,7 +1420,7 @@ const TOWER_TYPES = {
   },
   tesla: {
     name: "Stormcoil",
-    cost: 1720,
+    cost: 860,
     range: 12.8,
     damage: 58,
     fireInterval: 0.5,
@@ -1436,7 +1436,7 @@ const TOWER_TYPES = {
   },
   frost: {
     name: "Frost",
-    cost: 1000,
+    cost: 500,
     range: 10,
     damage: 31,
     fireInterval: 0.19,
@@ -1450,7 +1450,7 @@ const TOWER_TYPES = {
   },
   ion: {
     name: "Ion",
-    cost: 1520,
+    cost: 760,
     range: 20.8,
     damage: 258,
     fireInterval: 1.2,
@@ -1464,7 +1464,7 @@ const TOWER_TYPES = {
   },
   quarry: {
     name: "Quarry",
-    cost: 1840,
+    cost: 920,
     range: 15.4,
     damage: 342,
     fireInterval: 1.45,
@@ -1478,7 +1478,7 @@ const TOWER_TYPES = {
   },
   bombarder: {
     name: "Bombarder",
-    cost: 1960,
+    cost: 980,
     range: 30,
     minRange: 9.6,
     damage: 428,
@@ -1523,7 +1523,7 @@ const TOWER_TYPES = {
   },
   rift: {
     name: "Rift",
-    cost: 1360,
+    cost: 680,
     range: 7.8,
     damage: 80,
     fireInterval: 0.25,
@@ -1537,7 +1537,7 @@ const TOWER_TYPES = {
   },
   bastion: {
     name: "Bastion",
-    cost: 1960,
+    cost: 980,
     range: 13.2,
     damage: 236,
     fireInterval: 0.72,
@@ -1551,7 +1551,7 @@ const TOWER_TYPES = {
   },
   photon: {
     name: "Photon",
-    cost: 1440,
+    cost: 720,
     range: 13.6,
     damage: 58,
     fireInterval: 0.16,
@@ -1565,7 +1565,7 @@ const TOWER_TYPES = {
   },
   citadel: {
     name: "Citadel",
-    cost: 2840,
+    cost: 1420,
     range: 19.6,
     damage: 684,
     fireInterval: 2.05,
@@ -9723,6 +9723,232 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     group.add(glowPlate);
 
     return { group, turret: null, muzzle: null, spinNode: spikeRing };
+  }
+
+  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
+    const isDeluxe = towerTypeId === "deluxeBombarder";
+    const group = new THREE.Group();
+    const bodyBase = new THREE.Color(bodyColor);
+    const coreBase = new THREE.Color(coreColor);
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: bodyBase.clone().lerp(new THREE.Color("#f7ead9"), 0.08),
+      emissive: bodyBase.clone().multiplyScalar(0.3),
+      emissiveIntensity: 0.9,
+      roughness: 0.38,
+      metalness: 0.74,
+    });
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: coreBase.clone().lerp(new THREE.Color("#f4d6b5"), 0.12),
+      emissive: coreBase.clone().multiplyScalar(0.34),
+      emissiveIntensity: 0.88,
+      roughness: 0.3,
+      metalness: 0.8,
+    });
+    const darkMat = new THREE.MeshStandardMaterial({
+      color: "#1a2735",
+      emissive: "#0e1620",
+      emissiveIntensity: 0.46,
+      roughness: 0.56,
+      metalness: 0.62,
+    });
+    const glowMat = new THREE.MeshStandardMaterial({
+      color: bodyBase.clone().lerp(new THREE.Color("#ffffff"), 0.28),
+      emissive: bodyBase.clone().multiplyScalar(0.42),
+      emissiveIntensity: 1.12,
+      roughness: 0.2,
+      metalness: 0.78,
+    });
+    const beaconMat = new THREE.MeshBasicMaterial({
+      color: bodyBase.clone().lerp(new THREE.Color("#ffffff"), 0.44),
+    });
+
+    const cast = (mesh) => {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    };
+
+    const footprintRadius = isDeluxe ? CELL_SIZE * 0.72 : 1.52;
+    const baseRadiusTop = footprintRadius * (isDeluxe ? 0.9 : 0.86);
+    const baseRadiusBottom = footprintRadius * (isDeluxe ? 0.98 : 0.95);
+
+    const foundation = cast(new THREE.Mesh(new THREE.CylinderGeometry(baseRadiusTop, baseRadiusBottom, 2.28, 40), darkMat));
+    foundation.position.y = -0.74;
+    group.add(foundation);
+
+    const baseSkirt = cast(
+      new THREE.Mesh(new THREE.CylinderGeometry(footprintRadius * 0.94, footprintRadius * 0.88, isDeluxe ? 0.34 : 0.28, 36), bodyMat)
+    );
+    baseSkirt.position.y = 0.14;
+    group.add(baseSkirt);
+
+    const deckPlate = cast(
+      new THREE.Mesh(new THREE.CylinderGeometry(footprintRadius * 0.78, footprintRadius * 0.84, isDeluxe ? 0.24 : 0.2, 36), coreMat)
+    );
+    deckPlate.position.y = 0.36;
+    group.add(deckPlate);
+
+    const deckRing = cast(new THREE.Mesh(new THREE.TorusGeometry(footprintRadius * 0.62, isDeluxe ? 0.08 : 0.065, 12, 46), glowMat));
+    deckRing.rotation.x = Math.PI / 2;
+    deckRing.position.y = 0.44;
+    group.add(deckRing);
+
+    const outriggerCount = isDeluxe ? 8 : 6;
+    const outriggerRadius = footprintRadius * (isDeluxe ? 0.78 : 0.74);
+    for (let i = 0; i < outriggerCount; i += 1) {
+      const angle = (i / outriggerCount) * Math.PI * 2;
+      const arm = cast(
+        new THREE.Mesh(
+          new THREE.BoxGeometry(isDeluxe ? 0.18 : 0.15, isDeluxe ? 0.28 : 0.24, footprintRadius * (isDeluxe ? 0.32 : 0.28)),
+          darkMat
+        )
+      );
+      arm.position.set(Math.cos(angle) * outriggerRadius, 0.34, Math.sin(angle) * outriggerRadius);
+      arm.rotation.y = angle;
+      group.add(arm);
+
+      const anchor = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.32, 10), coreMat));
+      anchor.position.set(Math.cos(angle) * (outriggerRadius * 1.16), 0.2, Math.sin(angle) * (outriggerRadius * 1.16));
+      group.add(anchor);
+    }
+
+    const hullColumn = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(isDeluxe ? 0.88 : 0.66, isDeluxe ? 0.98 : 0.76, isDeluxe ? 1.78 : 1.52, 28),
+        bodyMat
+      )
+    );
+    hullColumn.position.y = isDeluxe ? 1.26 : 1.06;
+    group.add(hullColumn);
+
+    const hullShoulder = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(isDeluxe ? 0.7 : 0.54, isDeluxe ? 0.8 : 0.62, isDeluxe ? 0.44 : 0.34, 24),
+        coreMat
+      )
+    );
+    hullShoulder.position.y = isDeluxe ? 2.2 : 1.82;
+    group.add(hullShoulder);
+
+    const turret = new THREE.Group();
+    turret.position.y = isDeluxe ? 2.42 : 2.08;
+    group.add(turret);
+
+    const turretBody = cast(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(isDeluxe ? 1.52 : 1.16, isDeluxe ? 0.98 : 0.76, isDeluxe ? 1.72 : 1.28),
+        bodyMat
+      )
+    );
+    turretBody.position.y = 0.42;
+    turret.add(turretBody);
+
+    const turretCollar = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(isDeluxe ? 0.52 : 0.4, isDeluxe ? 0.62 : 0.48, isDeluxe ? 0.36 : 0.3, 16),
+        coreMat
+      )
+    );
+    turretCollar.position.y = 0.56;
+    turret.add(turretCollar);
+
+    const sidePlateLeft = cast(
+      new THREE.Mesh(new THREE.BoxGeometry(isDeluxe ? 0.14 : 0.11, isDeluxe ? 0.62 : 0.5, isDeluxe ? 1.24 : 0.94), darkMat)
+    );
+    sidePlateLeft.position.set(isDeluxe ? -0.72 : -0.56, 0.34, 0.34);
+    turret.add(sidePlateLeft);
+    const sidePlateRight = cast(
+      new THREE.Mesh(new THREE.BoxGeometry(isDeluxe ? 0.14 : 0.11, isDeluxe ? 0.62 : 0.5, isDeluxe ? 1.24 : 0.94), darkMat)
+    );
+    sidePlateRight.position.set(isDeluxe ? 0.72 : 0.56, 0.34, 0.34);
+    turret.add(sidePlateRight);
+
+    const counterMass = cast(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(isDeluxe ? 0.86 : 0.66, isDeluxe ? 0.44 : 0.34, isDeluxe ? 0.56 : 0.46),
+        darkMat
+      )
+    );
+    counterMass.position.set(0, 0.3, isDeluxe ? -0.64 : -0.54);
+    turret.add(counterMass);
+
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(isDeluxe ? 0.12 : 0.1, 12, 12), beaconMat);
+    beacon.position.set(0, isDeluxe ? 1.04 : 0.88, 0.12);
+    turret.add(beacon);
+
+    const barrelRig = new THREE.Group();
+    barrelRig.position.set(0, isDeluxe ? 0.76 : 0.64, 0.78);
+    barrelRig.rotation.x = -0.22;
+    turret.add(barrelRig);
+
+    const breech = cast(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(isDeluxe ? 1.02 : 0.58, isDeluxe ? 0.44 : 0.34, isDeluxe ? 0.74 : 0.62),
+        coreMat
+      )
+    );
+    breech.position.set(0, 0.08, 0.32);
+    barrelRig.add(breech);
+
+    if (isDeluxe) {
+      const leftSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 1.04, 14), darkMat));
+      leftSleeve.rotation.x = Math.PI / 2;
+      leftSleeve.position.set(-0.24, 0.08, 1.18);
+      barrelRig.add(leftSleeve);
+
+      const rightSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 1.04, 14), darkMat));
+      rightSleeve.rotation.x = Math.PI / 2;
+      rightSleeve.position.set(0.24, 0.08, 1.18);
+      barrelRig.add(rightSleeve);
+
+      const leftTube = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 2.58, 14), coreMat));
+      leftTube.rotation.x = Math.PI / 2;
+      leftTube.position.set(-0.24, 0.08, 2.04);
+      barrelRig.add(leftTube);
+
+      const rightTube = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 2.58, 14), coreMat));
+      rightTube.rotation.x = Math.PI / 2;
+      rightTube.position.set(0.24, 0.08, 2.04);
+      barrelRig.add(rightTube);
+
+      const stabilizer = cast(new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.14, 0.46), darkMat));
+      stabilizer.position.set(0, 0.08, 1.5);
+      barrelRig.add(stabilizer);
+
+      const frontShroud = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.4, 0.42, 14), bodyMat));
+      frontShroud.rotation.x = Math.PI / 2;
+      frontShroud.position.set(0, 0.08, 3.34);
+      barrelRig.add(frontShroud);
+    } else {
+      const sleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.31, 0.98, 14), darkMat));
+      sleeve.rotation.x = Math.PI / 2;
+      sleeve.position.set(0, 0.08, 1.06);
+      barrelRig.add(sleeve);
+
+      const barrelTube = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 2.46, 14), coreMat));
+      barrelTube.rotation.x = Math.PI / 2;
+      barrelTube.position.set(0, 0.08, 1.98);
+      barrelRig.add(barrelTube);
+
+      const muzzleBrake = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.24, 0.4, 14), bodyMat));
+      muzzleBrake.rotation.x = Math.PI / 2;
+      muzzleBrake.position.set(0, 0.08, 3.28);
+      barrelRig.add(muzzleBrake);
+
+      const ventLeft = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.42), glowMat));
+      ventLeft.position.set(-0.24, 0.08, 3.28);
+      barrelRig.add(ventLeft);
+      const ventRight = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.42), glowMat));
+      ventRight.position.set(0.24, 0.08, 3.28);
+      barrelRig.add(ventRight);
+    }
+
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(0, 0.08, isDeluxe ? 3.52 : 3.48);
+    barrelRig.add(muzzle);
+
+    return { group, turret, muzzle, spinNode: null, barrelRig };
   }
 
   const group = new THREE.Group();
