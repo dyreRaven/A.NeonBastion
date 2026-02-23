@@ -1217,6 +1217,7 @@ const TOWER_UNLOCKS = {
   deluxeBombarder: { shardCost: 600 },
   rift: { shardCost: 32 },
   volt: { shardCost: 36 },
+  tesla: { shardCost: 58 },
   bastion: { shardCost: 48 },
   photon: { shardCost: 52 },
   citadel: { shardCost: 72 },
@@ -1230,6 +1231,7 @@ const MENU_UNLOCK_TOWER_IDS = [
   "deluxeBombarder",
   "rift",
   "volt",
+  "tesla",
   "bastion",
   "photon",
   "citadel",
@@ -1246,6 +1248,7 @@ const BASE_TOWER_PLACE_CAPS = {
   nova: 2,
   sentinel: 1,
   volt: 3,
+  tesla: 2,
   frost: 3,
   ion: 1,
   quarry: 1,
@@ -1404,6 +1407,22 @@ const TOWER_TYPES = {
     bodyColor: "#64d9ff",
     coreColor: "#16394f",
     summary: "Arc burst",
+  },
+  tesla: {
+    name: "Tesla",
+    cost: 860,
+    range: 12.8,
+    damage: 58,
+    fireInterval: 0.5,
+    turnSpeed: 6.6,
+    projectileSpeed: 52,
+    projectileRadius: 0.22,
+    projectileColor: "#b7f3ff",
+    bodyColor: "#79ddff",
+    coreColor: "#1a4661",
+    summary: "Chain lightning",
+    multiTargetCount: 4,
+    multiTargetDamageFalloff: 0.78,
   },
   frost: {
     name: "Frost",
@@ -2287,6 +2306,17 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   tower.projectileSpeed = config.projectileSpeed;
   tower.projectileRadius = config.projectileRadius;
   tower.projectileColor = config.projectileColor;
+  tower.multiTargetCount = Math.max(1, Math.floor(config.multiTargetCount || 1));
+  tower.multiTargetDamageFalloff =
+    tower.multiTargetCount > 1
+      ? THREE.MathUtils.clamp(
+          Number.isFinite(config.multiTargetDamageFalloff)
+            ? config.multiTargetDamageFalloff
+            : tower.multiTargetDamageFalloff || 0.8,
+          0.35,
+          1
+        )
+      : 1;
   tower.meshScale = Number.isFinite(config.meshScale) ? Math.max(0.6, config.meshScale) : 1;
   if (tower.mesh && !tower.isTrap) {
     tower.mesh.scale.set(tower.meshScale, tower.meshScale, tower.meshScale);
@@ -4995,6 +5025,7 @@ const pointerNdc = new THREE.Vector2();
 const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const hitPoint = new THREE.Vector3();
 const PROJECTILE_FORWARD = new THREE.Vector3(0, 0, 1);
+const ZAP_BEAM_UP = new THREE.Vector3(0, 1, 0);
 
 const game = {
   started: false,
@@ -9807,7 +9838,14 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       if (towerTypeId === "citadel") muzzle.position.set(0, 0.44, 3.78);
       turret.add(muzzle);
     }
-  } else if (towerTypeId === "swarm" || towerTypeId === "volt" || towerTypeId === "frost" || towerTypeId === "nova" || towerTypeId === "photon") {
+  } else if (
+    towerTypeId === "swarm" ||
+    towerTypeId === "volt" ||
+    towerTypeId === "tesla" ||
+    towerTypeId === "frost" ||
+    towerTypeId === "nova" ||
+    towerTypeId === "photon"
+  ) {
     turret.position.y = 1.78;
 
     const hub = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.45, 0.62, 20), coreMat));
@@ -9861,6 +9899,37 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const rearCell = cast(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), glowMat));
       rearCell.position.set(0, 0.22, -0.42);
       turret.add(rearCell);
+    } else if (towerTypeId === "tesla") {
+      const coilStem = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.92, 12), coreMat));
+      coilStem.rotation.x = Math.PI / 2;
+      coilStem.position.set(0, 0.42, 1.18);
+      turret.add(coilStem);
+
+      const lowerCoil = cast(new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.06, 10, 30), glowMat));
+      lowerCoil.rotation.x = Math.PI / 2;
+      lowerCoil.position.set(0, 0.34, 0.84);
+      turret.add(lowerCoil);
+
+      const upperCoil = cast(new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.05, 10, 26), coreMat));
+      upperCoil.rotation.x = Math.PI / 2;
+      upperCoil.position.set(0, 0.62, 1.02);
+      turret.add(upperCoil);
+
+      for (let i = 0; i < 4; i += 1) {
+        const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const prong = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.54), coreMat));
+        prong.position.set(Math.cos(angle) * 0.28, 0.62, Math.sin(angle) * 0.28 + 1.26);
+        prong.rotation.y = angle;
+        turret.add(prong);
+      }
+
+      const arcEmitter = cast(new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), glowMat));
+      arcEmitter.position.set(0, 0.8, 1.54);
+      turret.add(arcEmitter);
+
+      const rearNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), glowMat));
+      rearNode.position.set(0, 0.22, -0.46);
+      turret.add(rearNode);
     } else if (towerTypeId === "frost") {
       for (let i = 0; i < 6; i += 1) {
         const angle = (i / 6) * Math.PI * 2;
@@ -9942,6 +10011,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle = new THREE.Object3D();
     muzzle.position.set(0, 0.22, 1.5);
     if (towerTypeId === "volt") muzzle.position.set(0, 0.24, 1.7);
+    if (towerTypeId === "tesla") muzzle.position.set(0, 0.4, 1.72);
     if (towerTypeId === "frost") muzzle.position.set(0, 0.24, 1.56);
     if (towerTypeId === "nova") muzzle.position.set(0, 0.22, 1.78);
     if (towerTypeId === "photon") muzzle.position.set(0, 0.24, 1.98);
@@ -10923,6 +10993,11 @@ class Tower {
     this.projectileSpeed = config.projectileSpeed;
     this.projectileRadius = config.projectileRadius;
     this.projectileColor = config.projectileColor;
+    this.multiTargetCount = Math.max(1, Math.floor(config.multiTargetCount || 1));
+    this.multiTargetDamageFalloff =
+      this.multiTargetCount > 1
+        ? THREE.MathUtils.clamp(Number(config.multiTargetDamageFalloff || 0.8), 0.35, 1)
+        : 1;
     this.meshScale = Number.isFinite(config.meshScale) ? Math.max(0.6, config.meshScale) : 1;
     this.trapTriggerRadius = this.isTrap ? Math.max(0.5, Number(config.trapTriggerRadius || config.range || 1)) : 0;
     this.trapDurabilityMax = this.isTrap ? Math.max(1, Math.floor(config.trapDurability || 10)) : 0;
@@ -11230,14 +11305,28 @@ class Tower {
       return;
     }
 
+    const isChainTower = this.multiTargetCount > 1;
+    const chainTargets = isChainTower ? [] : null;
     let target = null;
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
       const d = Math.hypot(enemy.x - this.x, enemy.z - this.z);
       if (d > this.range) continue;
+      if (chainTargets) chainTargets.push(enemy);
       if (!target || enemy.progressScore > target.progressScore) {
         target = enemy;
       }
+    }
+
+    if (chainTargets && chainTargets.length > 1) {
+      chainTargets.sort((a, b) => {
+        const progressDelta = b.progressScore - a.progressScore;
+        if (Math.abs(progressDelta) > 1e-6) return progressDelta;
+        const distanceA = Math.hypot(a.x - this.x, a.z - this.z);
+        const distanceB = Math.hypot(b.x - this.x, b.z - this.z);
+        return distanceA - distanceB;
+      });
+      target = chainTargets[0] || target;
     }
 
     let aimError = 0;
@@ -11259,6 +11348,31 @@ class Tower {
     else origin.set(this.x, this.y + 1.1, this.z);
 
     this.cooldown = this.fireInterval;
+    if (chainTargets && chainTargets.length > 0) {
+      audioSystem.playTowerShot(this.damage * 0.96);
+      const hitLimit = Math.min(Math.max(1, this.multiTargetCount), chainTargets.length);
+      const damageFalloff = THREE.MathUtils.clamp(this.multiTargetDamageFalloff, 0.35, 1);
+      const aimPoint = new THREE.Vector3();
+      let damageScale = 1;
+      for (let i = 0; i < hitLimit; i += 1) {
+        const chainedTarget = chainTargets[i];
+        if (!chainedTarget || !chainedTarget.alive) continue;
+        const zapDamage = Math.max(1, Math.round(this.damage * damageScale));
+        const killed = chainedTarget.applyDamage(zapDamage);
+        if (killed) handleEnemyDefeated(chainedTarget);
+        game.debris.push(
+          new ZapBeamEffect(
+            origin,
+            chainedTarget.getAimPoint(aimPoint),
+            this.projectileColor,
+            Math.max(0.05, this.projectileRadius * (1.2 - i * 0.14))
+          )
+        );
+        damageScale *= damageFalloff;
+      }
+      return;
+    }
+
     audioSystem.playTowerShot(this.damage);
     game.projectiles.push(
       new Projectile(
@@ -11435,6 +11549,71 @@ class Projectile {
 
   dispose() {
     scene.remove(this.group);
+  }
+}
+
+class ZapBeamEffect {
+  constructor(origin, targetPoint, color, thickness = 0.12) {
+    const start = origin?.clone ? origin.clone() : new THREE.Vector3();
+    const end = targetPoint?.clone ? targetPoint.clone() : start.clone();
+    const toTarget = end.clone().sub(start);
+    const length = Math.max(0.08, toTarget.length());
+    if (toTarget.lengthSq() > 1e-8) toTarget.multiplyScalar(1 / Math.max(1e-6, toTarget.length()));
+    else toTarget.set(0, 1, 0);
+
+    this.age = 0;
+    this.life = 0.1;
+    this.seed = Math.random() * Math.PI * 2;
+    this.group = new THREE.Group();
+    this.group.position.copy(start).lerp(end, 0.5);
+    this.group.quaternion.setFromUnitVectors(ZAP_BEAM_UP, toTarget);
+
+    const beamRadius = Math.max(0.03, Number(thickness) || 0.03);
+    const beamColor = new THREE.Color(color).lerp(new THREE.Color("#e9fcff"), 0.24);
+    const coreColor = beamColor.clone().lerp(new THREE.Color("#ffffff"), 0.42);
+
+    this.glowMat = new THREE.MeshBasicMaterial({
+      color: beamColor,
+      transparent: true,
+      opacity: 0.46,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.coreMat = new THREE.MeshBasicMaterial({
+      color: coreColor,
+      transparent: true,
+      opacity: 0.86,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    this.glow = new THREE.Mesh(
+      new THREE.CylinderGeometry(beamRadius * 1.4, beamRadius * 1.6, length * 1.02, 8, 1, true),
+      this.glowMat
+    );
+    this.core = new THREE.Mesh(
+      new THREE.CylinderGeometry(beamRadius * 0.5, beamRadius * 0.64, length, 8, 1, true),
+      this.coreMat
+    );
+    this.group.add(this.glow);
+    this.group.add(this.core);
+    scene.add(this.group);
+  }
+
+  update(dt) {
+    this.age += dt;
+    const t = THREE.MathUtils.clamp(this.age / this.life, 0, 1);
+    const flicker = 0.84 + Math.sin(this.age * 120 + this.seed) * 0.16;
+    this.core.scale.set(flicker, 1, flicker);
+    this.glow.scale.set(1 + t * 0.5, 1, 1 + t * 0.5);
+    this.coreMat.opacity = Math.max(0, 0.86 * (1 - t * 1.38));
+    this.glowMat.opacity = Math.max(0, 0.46 * (1 - t * 1.16));
+    return t < 1;
+  }
+
+  dispose() {
+    disposeSceneObject(this.group);
+    this.group = null;
   }
 }
 
@@ -14008,6 +14187,8 @@ function renderShop() {
         ? `Trap DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
         : type.manualAreaTargeting
           ? `DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
+        : type.multiTargetCount > 1
+          ? `DMG ${type.damage} | RNG ${type.range.toFixed(1)} | ARC ${Math.max(2, Math.floor(type.multiTargetCount || 2))}`
         : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     fragments.push(`
       <div class="${cardClasses}" data-tower-type="${towerTypeId}" role="button" tabindex="0" aria-label="${escapeHtml(type.name)}">
@@ -14362,6 +14543,8 @@ function renderLoadoutMenu() {
         ? `Trap | DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
         : type.manualAreaTargeting
           ? `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
+        : type.multiTargetCount > 1
+          ? `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)} | ARC ${Math.max(2, Math.floor(type.multiTargetCount || 2))}`
         : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     const options = isUpgradeOpen ? getLoadoutUpgradeOptions(towerTypeId) : [];
     const upgradePanel = isUpgradeOpen
@@ -14849,7 +15032,11 @@ function renderMenuShop() {
     const unlock = TOWER_UNLOCKS[towerTypeId];
     const unlocked = isTowerUnlocked(towerTypeId);
     const canAfford = game.shards >= unlock.shardCost;
-    const splashLabel = type.manualAreaTargeting ? ` | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}` : "";
+    const detailSuffix = type.manualAreaTargeting
+      ? ` | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
+      : type.multiTargetCount > 1
+        ? ` | ARC ${Math.max(2, Math.floor(type.multiTargetCount || 2))}`
+      : "";
     const itemClasses = [
       "menu-unlock-item",
       unlocked ? "unlocked" : "",
@@ -14862,7 +15049,7 @@ function renderMenuShop() {
       <div class="${itemClasses}">
         <div>
           <strong>${type.name}</strong>
-          <span>${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}${splashLabel}</span>
+          <span>${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}${detailSuffix}</span>
         </div>
         <button
           class="unlock-action"
