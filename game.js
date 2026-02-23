@@ -8910,92 +8910,172 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     faceGeometry.dispose();
   } else if (setup.shape === "wireframeNexus") {
     const frameRadius = Math.max(0.8, setup.radius || 2.32);
-    const frameRoot = new THREE.Group();
-    group.add(frameRoot);
-    spinNode = frameRoot;
+    const nexusRoot = new THREE.Group();
+    group.add(nexusRoot);
+    spinNode = nexusRoot;
 
-    const wireColor = primary.clone().lerp(new THREE.Color("#ffb77f"), 0.38);
-    const connectorColor = secondary.clone().lerp(new THREE.Color("#fff0dd"), 0.46);
-    const wireMat = new THREE.MeshPhysicalMaterial({
-      color: wireColor,
-      emissive: wireColor.clone().multiplyScalar(0.24),
-      emissiveIntensity: 0.58,
-      roughness: 0.022,
+    const brightOrange = primary.clone().lerp(new THREE.Color("#ffbe82"), 0.42);
+    const warmGlass = secondary.clone().lerp(new THREE.Color("#fff1de"), 0.48);
+    const deepOrange = primary.clone().lerp(new THREE.Color("#8d2c00"), 0.38);
+
+    const cageMat = new THREE.MeshPhysicalMaterial({
+      color: brightOrange,
+      emissive: deepOrange.clone().multiplyScalar(0.7),
+      emissiveIntensity: 0.7,
+      roughness: 0.02,
       metalness: 0,
       transmission: 1,
       ior: 1.5,
-      thickness: 0.46 * glassIntensity,
-      attenuationColor: connectorColor.clone(),
-      attenuationDistance: 0.88,
+      thickness: 0.48 * glassIntensity,
+      attenuationColor: warmGlass.clone(),
+      attenuationDistance: 0.84,
       clearcoat: 1,
-      clearcoatRoughness: 0.02,
-      envMapIntensity: 2.2,
+      clearcoatRoughness: 0.018,
+      envMapIntensity: 2.24,
       transparent: true,
       opacity: 0.9,
       wireframe: true,
       depthWrite: false,
     });
-    const connectorMat = new THREE.MeshPhysicalMaterial({
-      color: connectorColor,
-      emissive: connectorColor.clone().multiplyScalar(0.18),
-      emissiveIntensity: 0.5,
+    const latticeMat = new THREE.MeshPhysicalMaterial({
+      color: warmGlass,
+      emissive: brightOrange.clone().multiplyScalar(0.36),
+      emissiveIntensity: 0.6,
       roughness: 0.03,
       metalness: 0,
       transmission: 1,
-      ior: 1.48,
-      thickness: 0.34 * glassIntensity,
-      attenuationColor: wireColor.clone().lerp(new THREE.Color("#ffd4a6"), 0.45),
-      attenuationDistance: 0.78,
+      ior: 1.49,
+      thickness: 0.36 * glassIntensity,
+      attenuationColor: brightOrange.clone().lerp(new THREE.Color("#ffd5a1"), 0.52),
+      attenuationDistance: 0.74,
+      clearcoat: 1,
+      clearcoatRoughness: 0.026,
+      envMapIntensity: 2.12,
+      transparent: true,
+      opacity: 0.84,
+      wireframe: true,
+      depthWrite: false,
+    });
+    const strutMat = new THREE.MeshPhysicalMaterial({
+      color: warmGlass.clone().lerp(new THREE.Color("#ffd49f"), 0.5),
+      emissive: brightOrange.clone().multiplyScalar(0.2),
+      emissiveIntensity: 0.45,
+      roughness: 0.024,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.47,
+      thickness: 0.28 * glassIntensity,
+      attenuationColor: brightOrange.clone(),
+      attenuationDistance: 0.7,
       clearcoat: 1,
       clearcoatRoughness: 0.03,
-      envMapIntensity: 2.05,
+      envMapIntensity: 2.04,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.8,
+      depthWrite: false,
+    });
+    const nodeMat = new THREE.MeshPhysicalMaterial({
+      color: warmGlass.clone(),
+      emissive: brightOrange.clone().multiplyScalar(0.55),
+      emissiveIntensity: 0.88,
+      roughness: 0.02,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.5,
+      thickness: 0.6 * glassIntensity,
+      attenuationColor: brightOrange.clone(),
+      attenuationDistance: 0.62,
+      clearcoat: 1,
+      clearcoatRoughness: 0.014,
+      envMapIntensity: 2.3,
+      transparent: true,
+      opacity: 0.92,
       depthWrite: false,
     });
     const shellMat = new THREE.MeshPhysicalMaterial({
-      color: connectorColor.clone().lerp(new THREE.Color("#ffdfa9"), 0.34),
-      emissive: wireColor.clone().multiplyScalar(0.12),
-      emissiveIntensity: 0.42,
+      color: warmGlass.clone().lerp(new THREE.Color("#ffe6be"), 0.3),
+      emissive: brightOrange.clone().multiplyScalar(0.16),
+      emissiveIntensity: 0.52,
       roughness: 0.02,
       metalness: 0,
       transmission: 1,
       ior: 1.52,
-      thickness: 0.66 * glassIntensity,
-      attenuationColor: wireColor.clone().lerp(new THREE.Color("#ffcf97"), 0.52),
-      attenuationDistance: 1.16,
+      thickness: 0.7 * glassIntensity,
+      attenuationColor: brightOrange.clone().lerp(new THREE.Color("#ffcb89"), 0.6),
+      attenuationDistance: 1.15,
       clearcoat: 1,
       clearcoatRoughness: 0.012,
-      envMapIntensity: 2.16,
+      envMapIntensity: 2.18,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.22,
+      depthWrite: false,
+    });
+    const orbitMat = new THREE.MeshPhysicalMaterial({
+      color: brightOrange.clone().lerp(new THREE.Color("#ffe7c5"), 0.28),
+      emissive: brightOrange.clone().multiplyScalar(0.34),
+      emissiveIntensity: 0.66,
+      roughness: 0.024,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.48,
+      thickness: 0.26 * glassIntensity,
+      attenuationColor: warmGlass.clone(),
+      attenuationDistance: 0.82,
+      clearcoat: 1,
+      clearcoatRoughness: 0.02,
+      envMapIntensity: 2.08,
+      transparent: true,
+      opacity: 0.78,
+      wireframe: true,
+      depthWrite: false,
+    });
+    const coreMat = new THREE.MeshPhysicalMaterial({
+      color: warmGlass.clone(),
+      emissive: brightOrange.clone().multiplyScalar(0.42),
+      emissiveIntensity: 1.05,
+      roughness: 0.018,
+      metalness: 0,
+      transmission: 1,
+      ior: 1.52,
+      thickness: 0.95 * glassIntensity,
+      attenuationColor: brightOrange.clone(),
+      attenuationDistance: 0.56,
+      clearcoat: 1,
+      clearcoatRoughness: 0.01,
+      envMapIntensity: 2.35,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    });
+    const pulseMat = new THREE.MeshBasicMaterial({
+      color: brightOrange.clone().lerp(new THREE.Color("#fff4e4"), 0.45),
+      transparent: true,
+      opacity: 0.4,
       depthWrite: false,
     });
 
-    const outerFrame = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(frameRadius, 0),
-      wireMat
-    );
-    outerFrame.rotation.y = Math.PI / 10;
-    frameRoot.add(outerFrame);
+    const outerCagePivot = new THREE.Group();
+    const midCagePivot = new THREE.Group();
+    const innerCagePivot = new THREE.Group();
+    nexusRoot.add(outerCagePivot, midCagePivot, innerCagePivot);
 
-    const midFrame = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(frameRadius * 0.76, 0),
-      connectorMat
-    );
-    midFrame.rotation.x = Math.PI / 8;
-    midFrame.rotation.z = Math.PI / 12;
-    frameRoot.add(midFrame);
+    const outerCage = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(frameRadius, 0), cageMat));
+    outerCage.rotation.y = Math.PI / 10;
+    outerCagePivot.add(outerCage);
 
-    const innerFrame = new THREE.Mesh(
-      new THREE.OctahedronGeometry(frameRadius * 0.5, 0),
-      connectorMat
-    );
-    innerFrame.rotation.y = Math.PI / 4;
-    frameRoot.add(innerFrame);
+    const midCage = cast(new THREE.Mesh(new THREE.DodecahedronGeometry(frameRadius * 0.78, 0), latticeMat));
+    midCage.rotation.x = Math.PI / 8;
+    midCage.rotation.z = Math.PI / 13;
+    midCagePivot.add(midCage);
 
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(frameRadius * 0.9, 28, 28), shellMat);
-    frameRoot.add(shell);
+    const innerCage = cast(new THREE.Mesh(new THREE.OctahedronGeometry(frameRadius * 0.53, 0), latticeMat));
+    innerCage.rotation.y = Math.PI / 4;
+    innerCagePivot.add(innerCage);
+
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(frameRadius * 0.9, 34, 34), shellMat);
+    shell.castShadow = false;
+    shell.receiveShadow = true;
+    nexusRoot.add(shell);
 
     const outerTemplate = new THREE.IcosahedronGeometry(frameRadius, 0);
     const outerPos = outerTemplate.getAttribute("position");
@@ -9015,63 +9095,98 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     outerTemplate.dispose();
 
     const upAxis = new THREE.Vector3(0, 1, 0);
-    const unitStrutGeometry = new THREE.CylinderGeometry(0.024, 0.024, 1, 6);
-    const unitStrutInnerGeometry = new THREE.CylinderGeometry(0.018, 0.018, 1, 6);
+    const strutWideGeometry = new THREE.CylinderGeometry(0.028, 0.028, 1, 8);
+    const strutThinGeometry = new THREE.CylinderGeometry(0.02, 0.02, 1, 8);
     const addGlassStrut = (a, b, material, geometry) => {
       const strutDir = b.clone().sub(a);
       const length = strutDir.length();
-      if (length < 1e-4) return;
+      if (length < 1e-4) return null;
       const strut = cast(new THREE.Mesh(geometry, material));
       strut.position.copy(a).add(b).multiplyScalar(0.5);
       strut.quaternion.setFromUnitVectors(upAxis, strutDir.multiplyScalar(1 / length));
       strut.scale.y = length;
-      frameRoot.add(strut);
+      nexusRoot.add(strut);
+      return strut;
     };
 
-    const innerRadius = frameRadius * 0.42;
-    const midRadius = frameRadius * 0.7;
+    const shardPivots = [];
+    const innerRadius = frameRadius * 0.36;
+    const bridgeRadius = frameRadius * 0.67;
     for (let i = 0; i < vertexDirs.length; i += 1) {
       const dir = vertexDirs[i];
       const outerPoint = dir.clone().multiplyScalar(frameRadius * 0.98);
       const innerPoint = dir.clone().multiplyScalar(innerRadius);
-      addGlassStrut(outerPoint, innerPoint, connectorMat, unitStrutGeometry);
+      addGlassStrut(outerPoint, innerPoint, strutMat, strutWideGeometry);
 
-      const nextDir = vertexDirs[(i + 3) % vertexDirs.length];
-      const latticePoint = nextDir.clone().add(dir).normalize().multiplyScalar(midRadius);
-      addGlassStrut(innerPoint, latticePoint, wireMat, unitStrutInnerGeometry);
+      const crossDir = vertexDirs[(i * 5 + 7) % vertexDirs.length];
+      const bridgePoint = crossDir.clone().add(dir).normalize().multiplyScalar(bridgeRadius);
+      addGlassStrut(innerPoint, bridgePoint, strutMat, strutThinGeometry);
+
+      const node = cast(new THREE.Mesh(new THREE.SphereGeometry(frameRadius * 0.034, 10, 10), nodeMat));
+      node.position.copy(outerPoint);
+      nexusRoot.add(node);
+
+      if (i < 8) {
+        const shardPivot = new THREE.Group();
+        shardPivot.userData.baseDir = dir.clone();
+        shardPivot.userData.baseRadius = frameRadius * (0.56 + (i % 3) * 0.04);
+        shardPivot.position.copy(dir).multiplyScalar(shardPivot.userData.baseRadius);
+        const shard = cast(new THREE.Mesh(new THREE.TetrahedronGeometry(frameRadius * 0.08, 0), nodeMat));
+        shard.rotation.set(i * 0.42, i * 0.37, i * 0.21);
+        shardPivot.add(shard);
+        nexusRoot.add(shardPivot);
+        shardPivots.push(shardPivot);
+      }
     }
 
-    const orbitMat = new THREE.MeshPhysicalMaterial({
-      color: wireColor.clone().lerp(new THREE.Color("#ffffff"), 0.2),
-      emissive: wireColor.clone().multiplyScalar(0.2),
-      emissiveIntensity: 0.58,
-      roughness: 0.02,
-      metalness: 0,
-      transmission: 1,
-      ior: 1.47,
-      thickness: 0.3 * glassIntensity,
-      attenuationColor: connectorColor.clone(),
-      attenuationDistance: 0.84,
-      clearcoat: 1,
-      clearcoatRoughness: 0.02,
-      envMapIntensity: 2.04,
-      transparent: true,
-      opacity: 0.78,
-      wireframe: true,
-      depthWrite: false,
-    });
-    const equator = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.86, 0.03, 8, 56), orbitMat);
-    equator.rotation.x = Math.PI / 2;
-    frameRoot.add(equator);
+    const orbitA = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.91, 0.03, 10, 96), orbitMat);
+    orbitA.rotation.x = Math.PI / 2;
+    nexusRoot.add(orbitA);
 
-    const tiltedOrbit = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.68, 0.025, 8, 44), orbitMat);
-    tiltedOrbit.rotation.x = Math.PI / 5;
-    tiltedOrbit.rotation.z = Math.PI / 2.7;
-    frameRoot.add(tiltedOrbit);
+    const orbitB = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.74, 0.026, 10, 84), orbitMat);
+    orbitB.rotation.x = Math.PI / 4.5;
+    orbitB.rotation.z = Math.PI / 2.8;
+    nexusRoot.add(orbitB);
 
-    const core = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(frameRadius * 0.22, 0), accentMat));
+    const orbitC = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.58, 0.022, 10, 72), orbitMat);
+    orbitC.rotation.x = -Math.PI / 3.2;
+    orbitC.rotation.y = Math.PI / 6;
+    nexusRoot.add(orbitC);
+
+    const corePivot = new THREE.Group();
+    nexusRoot.add(corePivot);
+
+    const core = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(frameRadius * 0.24, 1), coreMat));
     core.rotation.y = Math.PI / 10;
-    group.add(core);
+    corePivot.add(core);
+
+    const corePulse = new THREE.Mesh(new THREE.SphereGeometry(frameRadius * 0.29, 20, 20), pulseMat);
+    corePulse.castShadow = false;
+    corePulse.receiveShadow = false;
+    corePulse.renderOrder = 4;
+    corePivot.add(corePulse);
+
+    const coreRing = new THREE.Mesh(
+      new THREE.TorusKnotGeometry(frameRadius * 0.18, frameRadius * 0.018, 120, 16, 2, 3),
+      orbitMat
+    );
+    coreRing.rotation.x = Math.PI / 6;
+    coreRing.rotation.y = Math.PI / 4;
+    corePivot.add(coreRing);
+
+    group.userData.wireframeAnim = {
+      outerCagePivot,
+      midCagePivot,
+      innerCagePivot,
+      orbitA,
+      orbitB,
+      orbitC,
+      corePivot,
+      corePulse,
+      corePulseMat: pulseMat,
+      shellMat,
+      shardPivots,
+    };
   } else if (setup.shape === "diamondSigil") {
     const radius = Math.max(0.5, setup.radius || 1.36);
     const topHeight = Math.max(0.45, setup.heightTop || 1.12);
@@ -10170,6 +10285,67 @@ function getEnemySpinSpeed(typeId) {
   return 2.8;
 }
 
+function updateEnemySpecialVisuals(enemy, dt) {
+  if (!enemy || !enemy.mesh) return;
+  const anim = enemy.mesh.userData?.wireframeAnim;
+  if (!anim) return;
+  const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  const t = game.time + (Number.isFinite(enemy.animSeed) ? enemy.animSeed : 0);
+
+  if (anim.outerCagePivot) {
+    anim.outerCagePivot.rotation.x += safeDt * 0.24;
+    anim.outerCagePivot.rotation.z += safeDt * 0.11;
+  }
+  if (anim.midCagePivot) {
+    anim.midCagePivot.rotation.y -= safeDt * 0.42;
+    anim.midCagePivot.rotation.x += safeDt * 0.13;
+  }
+  if (anim.innerCagePivot) {
+    anim.innerCagePivot.rotation.y += safeDt * 0.72;
+    anim.innerCagePivot.rotation.z -= safeDt * 0.21;
+  }
+  if (anim.orbitA) {
+    anim.orbitA.rotation.z += safeDt * 0.28;
+    anim.orbitA.rotation.y += safeDt * 0.18;
+  }
+  if (anim.orbitB) {
+    anim.orbitB.rotation.y -= safeDt * 0.37;
+    anim.orbitB.rotation.x += safeDt * 0.14;
+  }
+  if (anim.orbitC) {
+    anim.orbitC.rotation.x -= safeDt * 0.31;
+    anim.orbitC.rotation.z += safeDt * 0.22;
+  }
+  if (anim.corePivot) {
+    anim.corePivot.rotation.y += safeDt * 0.64;
+    anim.corePivot.rotation.x = Math.sin(t * 0.8) * 0.2;
+  }
+
+  const pulse = 0.5 + Math.sin(t * 2.14) * 0.5;
+  if (anim.corePulseMat) anim.corePulseMat.opacity = 0.2 + pulse * 0.42;
+  if (anim.corePulse) {
+    const pulseScale = 0.86 + pulse * 0.24;
+    anim.corePulse.scale.setScalar(pulseScale);
+  }
+  if (anim.shellMat) anim.shellMat.opacity = 0.11 + pulse * 0.12;
+
+  if (Array.isArray(anim.shardPivots)) {
+    for (let i = 0; i < anim.shardPivots.length; i += 1) {
+      const pivot = anim.shardPivots[i];
+      if (!pivot) continue;
+      const phase = t * (0.9 + i * 0.05) + i * 0.72;
+      pivot.rotation.y += safeDt * (0.7 + i * 0.06);
+      pivot.rotation.x -= safeDt * (0.48 + i * 0.04);
+      const baseDir = pivot.userData?.baseDir;
+      const baseRadius = Number.isFinite(pivot.userData?.baseRadius) ? pivot.userData.baseRadius : 0.58;
+      if (baseDir?.x !== undefined && baseDir?.y !== undefined && baseDir?.z !== undefined) {
+        const wobble = 1 + Math.sin(phase) * 0.08;
+        pivot.position.copy(baseDir).multiplyScalar(baseRadius * wobble);
+      }
+    }
+  }
+}
+
 class Enemy {
   constructor(stats) {
     this.pathIndex = 0;
@@ -10288,6 +10464,7 @@ class Enemy {
     if (this.spinNode) {
       this.spinNode.rotation.y += dt * getEnemySpinSpeed(this.typeId);
     }
+    updateEnemySpecialVisuals(this, dt);
 
     this.updateHealthBar();
   }
@@ -16314,6 +16491,7 @@ function updateClientReplicaEnemy(enemy, dt) {
   }
 
   if (enemy.spinNode) enemy.spinNode.rotation.y += dt * getEnemySpinSpeed(enemy.typeId);
+  updateEnemySpecialVisuals(enemy, dt);
   if (enemy.healthBarRoot?.visible) enemy.updateHealthBar();
 }
 
