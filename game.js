@@ -229,7 +229,7 @@ const ACCOUNT_UPDATE_SUBMIT_COOLDOWN_MS = 1200;
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-20-82";
+const BUILD_ID = "2026-02-23-11";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
