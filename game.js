@@ -1805,6 +1805,20 @@ const ENEMY_TYPES = {
     colorB: "#fff7b8",
     hoverHeight: 1.62,
   },
+  wireframe: {
+    name: "Wireframe Nexus",
+    hp: 96800,
+    speed: 0.72,
+    reward: 1200,
+    radius: 2.52,
+    coreDamage: 44,
+    hpGrowth: 0,
+    speedGrowth: 0,
+    rewardGrowth: 0,
+    colorA: "#79dcff",
+    colorB: "#ffe4b1",
+    hoverHeight: 1.68,
+  },
   solarshard: {
     name: "Solar Shard",
     hp: 6200,
@@ -1850,7 +1864,10 @@ const ENEMY_TYPES = {
 };
 
 const SPAWNER_TOWER_PREFIX = "spawner_";
-const BOSS_ENEMY_IDS = new Set(["icosahedron", "rhombus", "star"]);
+const EMBER_BOSS_WAVE = 40;
+const MARS_BOSS_WAVE = 50;
+const MARS_BOSS_TYPE_ID = "wireframe";
+const BOSS_ENEMY_IDS = new Set(["icosahedron", "rhombus", "star", MARS_BOSS_TYPE_ID]);
 const SOLAR_SHARD_TYPE_ID = "solarshard";
 const SOLAR_SHARD_COUNT = 2;
 const ALLY_COLOR_A = "#2cff72";
@@ -2513,7 +2530,8 @@ function rebalanceEmberQueueByStrength(queue, effectiveWave) {
 
 function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
   if (level === 1 && wave === 20) return ["icosahedron"];
-  if (level >= 3 && wave === 40) return ["star"];
+  if (level >= 4 && wave === MARS_BOSS_WAVE) return [MARS_BOSS_TYPE_ID];
+  if (level === 3 && wave === EMBER_BOSS_WAVE) return ["star"];
   if (level === 2 && wave === 30) {
     const betweenEscortBlock = Array(6).fill("rhombusMinus");
     return ["rhombus", ...betweenEscortBlock, "rhombus"];
@@ -2581,7 +2599,8 @@ function buildWaveSpawnQueue(wave, count, level = game.currentLevel) {
 function isBossWave(level = game.currentLevel, wave = game.wave) {
   if (level === 1 && wave === 20) return true;
   if (level === 2 && wave === 30) return true;
-  if (level >= 3 && wave === 40) return true;
+  if (level === 3 && wave === EMBER_BOSS_WAVE) return true;
+  if (level >= 4 && wave === MARS_BOSS_WAVE) return true;
   return false;
 }
 
@@ -2597,10 +2616,19 @@ function createEnemyStats(typeId, wave, level = game.currentLevel, options = nul
   const scaledHp = Math.round(type.hp * (1 + type.hpGrowth * waveFactor) * profile.hpMultiplier);
   let scaledSpeed = type.speed * (1 + type.speedGrowth * waveFactor) * profile.speedMultiplier;
   let coreDamage = Math.max(1, Math.round(type.coreDamage * profile.coreDamageMultiplier));
-  let hp = typeId === "rhombus" ? 7424 : typeId === "rhombusMinus" ? 1320 : typeId === "star" ? 77508 : scaledHp;
+  let hp =
+    typeId === "rhombus"
+      ? 7424
+      : typeId === "rhombusMinus"
+        ? 1320
+        : typeId === "star"
+          ? 77508
+          : typeId === MARS_BOSS_TYPE_ID
+            ? 96800
+            : scaledHp;
   if (!forAlly && isBossWave(level, wave)) hp = Math.max(1, Math.round(hp * BOSS_WAVE_DIFFICULTY_MULTIPLIER));
-  if (!forAlly && level >= 3 && typeId === "star") hp = Math.max(1, Math.round(hp * 2));
-  if (!forAlly && typeId === "star") scaledSpeed *= 2;
+  if (!forAlly && level === 3 && typeId === "star") hp = Math.max(1, Math.round(hp * 2));
+  if (!forAlly && level === 3 && typeId === "star") scaledSpeed *= 2;
   if (!forAlly && emberLevel && (typeId === "trapiziod" || typeId === "cross")) {
     coreDamage = Math.max(1, Math.round(coreDamage * 0.5));
   }
@@ -2621,7 +2649,10 @@ function createEnemyStats(typeId, wave, level = game.currentLevel, options = nul
 
 function waveThreatLabel(wave, level = game.currentLevel) {
   if (level >= 4) {
-    if (wave === 40) return "Mars threat: Apex Tyrant detected in a full dustfront. Visibility collapsing across the route.";
+    if (wave === MARS_BOSS_WAVE) {
+      return "Mars threat: Wireframe Nexus apex boss detected. Interlocked lattice shields saturating the route.";
+    }
+    if (wave >= 45) return "Mars threat: Sensor ghosting increasing. Interlocked wireframe signals converging on the core.";
     if (wave >= 24) return "Mars threat: Diamond Archon elites and Monolith command cores pushing through sandstorms.";
     if (wave >= 18) return "Mars threat: Pyramidion spearheads advancing under heavy dust cover.";
     if (wave >= 10) return "Mars threat: Trapiziod and Cross assault frames slicing through dune lanes.";
@@ -2633,7 +2664,7 @@ function waveThreatLabel(wave, level = game.currentLevel) {
     return "Mars threat: Forward sensors degraded by constant dust flow.";
   }
   if (level >= 3) {
-    if (wave === 40) return "Ember threat: Solar Tyrant apex boss detected. Massive HP, extremely slow advance.";
+    if (wave === EMBER_BOSS_WAVE) return "Ember threat: Solar Tyrant apex boss detected. Massive HP, extremely slow advance.";
     if (wave >= 24) return "Ember threat: Diamond Archon elites and Monolith command cores breaching the rift.";
     if (wave >= 18) return "Ember threat: Pyramidion spearheads carving through frontline defenses.";
     if (wave >= 10) return "Ember threat: Trapiziod and Cross assault frames cutting through the rift.";
@@ -4625,7 +4656,7 @@ class EmberMeteorDecorEffect {
 
 function isEmberWave40BossFightActive() {
   if (!game.started || game.over || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return false;
-  if (game.currentLevel !== 3 || game.wave !== 40 || !game.inWave) return false;
+  if (game.currentLevel !== 3 || game.wave !== EMBER_BOSS_WAVE || !game.inWave) return false;
   return game.enemies.some((enemy) => enemy.alive && enemy.typeId === "star");
 }
 
@@ -8431,6 +8462,7 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     trapiziod: 1.46,
     cross: 1.52,
     star: 1.9,
+    wireframe: 2.1,
     rhombus: 1.64,
     rhombusMinus: 1.36,
   }[typeId] || 1;
@@ -8614,6 +8646,13 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
       ringRadius: 0,
       coreRadius: 0,
       coreY: 0.12,
+    },
+    wireframe: {
+      shape: "wireframeNexus",
+      radius: 2.32,
+      ringRadius: 0,
+      coreRadius: 0,
+      coreY: 0,
     },
     solarshard: {
       shape: "triangle",
@@ -8838,6 +8877,100 @@ function createEnemyMesh(typeId, colorA, colorB, options = null) {
     }
     coreGeometry.dispose();
     faceGeometry.dispose();
+  } else if (setup.shape === "wireframeNexus") {
+    const frameRadius = Math.max(0.8, setup.radius || 2.32);
+    const frameRoot = new THREE.Group();
+    group.add(frameRoot);
+    spinNode = frameRoot;
+
+    const wireColor = secondary.clone().lerp(new THREE.Color("#dff3ff"), 0.52);
+    const connectorColor = primary.clone().lerp(new THREE.Color("#ffd8a3"), 0.35);
+    const wireMat = new THREE.LineBasicMaterial({
+      color: wireColor,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const connectorMat = new THREE.LineBasicMaterial({
+      color: connectorColor,
+      transparent: true,
+      opacity: 0.82,
+    });
+
+    const outerFrame = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(frameRadius, 0)),
+      wireMat
+    );
+    outerFrame.rotation.y = Math.PI / 10;
+    frameRoot.add(outerFrame);
+
+    const midFrame = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.DodecahedronGeometry(frameRadius * 0.76, 0)),
+      wireMat
+    );
+    midFrame.rotation.x = Math.PI / 8;
+    midFrame.rotation.z = Math.PI / 12;
+    frameRoot.add(midFrame);
+
+    const innerFrame = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.OctahedronGeometry(frameRadius * 0.5, 0)),
+      wireMat
+    );
+    innerFrame.rotation.y = Math.PI / 4;
+    frameRoot.add(innerFrame);
+
+    const outerTemplate = new THREE.IcosahedronGeometry(frameRadius, 0);
+    const outerPos = outerTemplate.getAttribute("position");
+    const vertexDirs = [];
+    const scratchDir = new THREE.Vector3();
+    for (let i = 0; i < outerPos.count; i += 1) {
+      scratchDir.set(outerPos.getX(i), outerPos.getY(i), outerPos.getZ(i)).normalize();
+      let exists = false;
+      for (const stored of vertexDirs) {
+        if (stored.dot(scratchDir) > 0.9985) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) vertexDirs.push(scratchDir.clone());
+    }
+    outerTemplate.dispose();
+
+    const connectorPositions = [];
+    const innerRadius = frameRadius * 0.42;
+    const midRadius = frameRadius * 0.7;
+    for (let i = 0; i < vertexDirs.length; i += 1) {
+      const dir = vertexDirs[i];
+      const outerPoint = dir.clone().multiplyScalar(frameRadius * 0.98);
+      const innerPoint = dir.clone().multiplyScalar(innerRadius);
+      connectorPositions.push(outerPoint.x, outerPoint.y, outerPoint.z, innerPoint.x, innerPoint.y, innerPoint.z);
+
+      const nextDir = vertexDirs[(i + 3) % vertexDirs.length];
+      const latticePoint = nextDir.clone().add(dir).normalize().multiplyScalar(midRadius);
+      connectorPositions.push(innerPoint.x, innerPoint.y, innerPoint.z, latticePoint.x, latticePoint.y, latticePoint.z);
+    }
+    const connectorGeometry = new THREE.BufferGeometry();
+    connectorGeometry.setAttribute("position", new THREE.Float32BufferAttribute(connectorPositions, 3));
+    const connectorLines = new THREE.LineSegments(connectorGeometry, connectorMat);
+    frameRoot.add(connectorLines);
+
+    const orbitMat = new THREE.MeshBasicMaterial({
+      color: wireColor.clone().lerp(new THREE.Color("#ffffff"), 0.2),
+      transparent: true,
+      opacity: 0.74,
+      wireframe: true,
+    });
+    const equator = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.86, 0.03, 8, 56), orbitMat);
+    equator.rotation.x = Math.PI / 2;
+    frameRoot.add(equator);
+
+    const tiltedOrbit = new THREE.Mesh(new THREE.TorusGeometry(frameRadius * 0.68, 0.025, 8, 44), orbitMat);
+    tiltedOrbit.rotation.x = Math.PI / 5;
+    tiltedOrbit.rotation.z = Math.PI / 2.7;
+    frameRoot.add(tiltedOrbit);
+
+    const core = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(frameRadius * 0.22, 0), accentMat));
+    core.rotation.y = Math.PI / 10;
+    group.add(core);
   } else if (setup.shape === "diamondSigil") {
     const radius = Math.max(0.5, setup.radius || 1.36);
     const topHeight = Math.max(0.45, setup.heightTop || 1.12);
@@ -9925,6 +10058,7 @@ function getEnemySpinSpeed(typeId) {
   if (typeId === "pyramidion") return 1.3;
   if (typeId === "diamondarchon") return 0.94;
   if (typeId === "star") return 0.48;
+  if (typeId === MARS_BOSS_TYPE_ID) return 0.62;
   if (typeId === SOLAR_SHARD_TYPE_ID) return 1.86;
   if (typeId === "rhombus") return 1.05;
   if (typeId === "rhombusMinus") return 1.22;
@@ -10146,7 +10280,7 @@ class Enemy {
   shatter() {
     if (this.shattered) return;
     this.shattered = true;
-    audioSystem.playEnemyShatter(this.radius, this.typeId === "icosahedron" || this.typeId === "rhombus" || this.typeId === "star");
+    audioSystem.playEnemyShatter(this.radius, isBossEnemyType(this.typeId));
 
     const origin = this.mesh.position.clone();
     const colorA = new THREE.Color(this.colorA);
@@ -12597,9 +12731,7 @@ function startAccountLoginCooldown(durationMs) {
 }
 
 function getActiveBossEnemies() {
-  return game.enemies.filter(
-    (enemy) => enemy.alive && (enemy.typeId === "icosahedron" || enemy.typeId === "rhombus" || enemy.typeId === "star")
-  );
+  return game.enemies.filter((enemy) => enemy.alive && isBossEnemyType(enemy.typeId));
 }
 
 function updateBossBar() {
@@ -12711,7 +12843,7 @@ function onSolarTyrantDefeated() {
   if (game.currentLevel === 3) {
     completeCurrentLevel(
       4,
-      40,
+      EMBER_BOSS_WAVE,
       "Solar Tyrant neutralized. Level 4 unlocked. +40 shards.",
       "Solar Tyrant and both Solar Shards destroyed. Access to Level 4 unlocked. +40 shards awarded."
     );
@@ -13271,8 +13403,10 @@ function handleEnemyDefeated(enemy) {
   if (!enemy || !enemy.alive) return;
   const wasIcosahedronBoss = enemy.typeId === "icosahedron" && game.currentLevel === 1;
   const wasRhombusBoss = enemy.typeId === "rhombus" && game.currentLevel === 2;
-  const wasSolarTyrantBoss = enemy.typeId === "star" && game.currentLevel >= 3 && game.wave >= 40;
-  const wasSolarShard = enemy.typeId === SOLAR_SHARD_TYPE_ID && game.currentLevel >= 3 && game.wave >= 40;
+  const wasSolarTyrantBoss = enemy.typeId === "star" && game.currentLevel === 3 && game.wave >= EMBER_BOSS_WAVE;
+  const wasSolarShard = enemy.typeId === SOLAR_SHARD_TYPE_ID && game.currentLevel === 3 && game.wave >= EMBER_BOSS_WAVE;
+  const wasMarsWireframeBoss =
+    enemy.typeId === MARS_BOSS_TYPE_ID && game.currentLevel >= 4 && game.wave >= MARS_BOSS_WAVE;
   enemy.alive = false;
   enemy.shatter();
   game.money += enemy.reward;
@@ -13289,6 +13423,7 @@ function handleEnemyDefeated(enemy) {
       setStatus(`Solar Tyrant split into ${spawned} Solar Shards. Destroy both!`, true);
     }
   }
+  if (wasMarsWireframeBoss) onSolarTyrantDefeated();
   if (wasSolarShard) {
     const anySolarShardsAlive = game.enemies.some((entry) => entry.alive && entry.typeId === SOLAR_SHARD_TYPE_ID);
     const solarTyrantAlive = game.enemies.some((entry) => entry.alive && entry.typeId === "star");
@@ -15665,7 +15800,7 @@ function spawnEnemy(overrideTypeId = null) {
   const enemy = new Enemy(stats);
   if (fromQueue) game.spawnLeft = game.spawnQueue.length;
   game.enemies.push(enemy);
-  if (typeId === "icosahedron" || typeId === "rhombus" || typeId === "star") game.bossEnemy = enemy;
+  if (isBossEnemyType(typeId)) game.bossEnemy = enemy;
   return typeId;
 }
 
