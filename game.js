@@ -3350,17 +3350,25 @@ function getTowerWorldPosition(cellX, cellY, footprintWidth = 1, footprintHeight
 function getTowerBaseY(cellX, cellY, footprintWidth = 1, footprintHeight = 1) {
   let sum = 0;
   let count = 0;
+  let maxHeight = Number.NEGATIVE_INFINITY;
   for (let dy = 0; dy < footprintHeight; dy += 1) {
     for (let dx = 0; dx < footprintWidth; dx += 1) {
       const testX = cellX + dx;
       const testY = cellY + dy;
       if (!inBounds(testX, testY)) continue;
-      sum += getCellTopY(testX, testY);
+      const cellTop = getCellTopY(testX, testY);
+      sum += cellTop;
+      if (cellTop > maxHeight) maxHeight = cellTop;
       count += 1;
     }
   }
   if (count <= 0) return getCellTopY(cellX, cellY);
-  return sum / count;
+  const averageHeight = sum / count;
+  if (footprintWidth > 1 || footprintHeight > 1) {
+    // Keep larger footprints from clipping into higher neighboring tile columns.
+    return Math.max(averageHeight, maxHeight - 0.03);
+  }
+  return averageHeight;
 }
 
 function updateTowerWorldTransform(tower) {
@@ -9089,7 +9097,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     footprintDisk.position.y = 0.12;
     group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.65, 0.08, 12, 48), glowMat));
+    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.52, 0.06, 12, 48), glowMat));
     footprintRing.rotation.x = Math.PI / 2;
     footprintRing.position.y = 0.21;
     group.add(footprintRing);
@@ -9101,7 +9109,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     superHull.position.y = 1.16;
     group.add(superHull);
 
-    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.46, 0.07, 12, 42), coreMat));
+    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.36, 0.055, 12, 42), coreMat));
     superHullRing.rotation.x = Math.PI / 2;
     superHullRing.position.y = 1.66;
     group.add(superHullRing);
