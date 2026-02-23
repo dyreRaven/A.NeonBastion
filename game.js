@@ -82,10 +82,16 @@ const accountCreatePasswordInputEl = $id("accountCreatePasswordInput");
 const accountCreatePasswordConfirmInputEl = $id("accountCreatePasswordConfirmInput");
 const accountLoginUsernameInputEl = $id("accountLoginUsernameInput");
 const accountLoginPasswordInputEl = $id("accountLoginPasswordInput");
+const accountUpdateDisplayNameInputEl = $id("accountUpdateDisplayNameInput");
+const accountUpdateEmailInputEl = $id("accountUpdateEmailInput");
+const accountUpdateCurrentPasswordInputEl = $id("accountUpdateCurrentPasswordInput");
+const accountUpdatePasswordInputEl = $id("accountUpdatePasswordInput");
+const accountUpdatePasswordConfirmInputEl = $id("accountUpdatePasswordConfirmInput");
 const accountRequirePasswordOnStartupToggleEl = $id("accountRequirePasswordOnStartupToggle");
 const accountCloudSignOutBtn = $id("accountCloudSignOutBtn");
 const createAccountBtn = $id("createAccountBtn");
 const loginAccountBtn = $id("loginAccountBtn");
+const updateAccountBtn = $id("updateAccountBtn");
 const menuAccountNoteEl = $id("menuAccountNote");
 const menuAccountActionStatusEl = $id("menuAccountActionStatus");
 
@@ -218,6 +224,9 @@ const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
+const ACCOUNT_UPDATE_SUBMIT_COOLDOWN_MS = 1200;
+const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
+const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
 const BUILD_ID = "2026-02-20-82";
 
@@ -5145,12 +5154,18 @@ let soloHudRefreshTimer = 0;
 let loadoutSearchRenderTimer = null;
 let accountCreateRequestInFlight = false;
 let accountLoginRequestInFlight = false;
+let accountUpdateRequestInFlight = false;
 let accountCreateCooldownUntil = 0;
 let accountLoginCooldownUntil = 0;
+let accountUpdateCooldownUntil = 0;
 let accountCreateCooldownTimer = 0;
 let accountLoginCooldownTimer = 0;
+let accountUpdateCooldownTimer = 0;
 
 function sanitizeRoomCode(rawCode) {
+  if (multiplayerUtils && typeof multiplayerUtils.sanitizeRoomCode === "function") {
+    return multiplayerUtils.sanitizeRoomCode(rawCode, 16);
+  }
   return String(rawCode || "")
     .toUpperCase()
     .replace(/[^A-Z0-9_-]/g, "")
@@ -5158,6 +5173,9 @@ function sanitizeRoomCode(rawCode) {
 }
 
 function normalizeMultiplayerServerUrl(rawUrl) {
+  if (multiplayerUtils && typeof multiplayerUtils.normalizeServerUrl === "function") {
+    return multiplayerUtils.normalizeServerUrl(rawUrl);
+  }
   const text = String(rawUrl || "").trim();
   if (!text) return "";
   try {
@@ -5171,6 +5189,9 @@ function normalizeMultiplayerServerUrl(rawUrl) {
 }
 
 function getDefaultMultiplayerServerUrl() {
+  if (multiplayerUtils && typeof multiplayerUtils.getDefaultServerUrl === "function") {
+    return multiplayerUtils.getDefaultServerUrl(window.location);
+  }
   const host = window.location?.hostname || "";
   const isLocalHost = host === "localhost" || host === "127.0.0.1";
   if (!isLocalHost) return "wss://neon-bastion-multiplayer.onrender.com";
@@ -5293,6 +5314,9 @@ function getMultiplayerLabel() {
 }
 
 function getMultiplayerLogTimestamp() {
+  if (multiplayerUtils && typeof multiplayerUtils.formatClockTime === "function") {
+    return multiplayerUtils.formatClockTime(Date.now());
+  }
   const now = new Date();
   const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
@@ -5300,6 +5324,9 @@ function getMultiplayerLogTimestamp() {
 }
 
 function sanitizeMultiplayerChatText(rawText) {
+  if (multiplayerUtils && typeof multiplayerUtils.sanitizeChatText === "function") {
+    return multiplayerUtils.sanitizeChatText(rawText, MULTIPLAYER_CHAT_LIMIT);
+  }
   return String(rawText || "")
     .replace(/\s+/g, " ")
     .trim()
@@ -5307,6 +5334,9 @@ function sanitizeMultiplayerChatText(rawText) {
 }
 
 function formatMultiplayerChatTimestamp(rawTime) {
+  if (multiplayerUtils && typeof multiplayerUtils.formatClockTime === "function") {
+    return multiplayerUtils.formatClockTime(Number.isFinite(rawTime) ? rawTime : Date.now());
+  }
   const date = new Date(Number.isFinite(rawTime) ? rawTime : Date.now());
   if (!Number.isFinite(date.getTime())) return "--:--";
   const hours = String(date.getHours()).padStart(2, "0");
@@ -6285,7 +6315,7 @@ let progressRecoveredFromBackup = false;
 let progressRecoveredFromIndexedDb = false;
 let progressRecoveredFromRuntimeFile = false;
 const ACCOUNT_NOTE_BASE_TEXT =
-  "Use a username + email + password for cloud accounts. Progress syncs per account across devices.";
+  "Use a username + email + password for cloud accounts. You can edit username, email, and password later in Manage Account.";
 const cloudAuth = {
   enabled: false,
   initialized: false,
@@ -6580,6 +6610,9 @@ function clearCloudAuthRuntimeSessionSnapshot() {
 }
 
 function normalizePersistedCloudAuthSession(rawSession) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.normalizePersistedCloudAuthSession === "function") {
+    return cloudAuthUtils.normalizePersistedCloudAuthSession(rawSession, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   if (!rawSession || typeof rawSession !== "object") return null;
   const accessToken = String(rawSession.accessToken || rawSession.access_token || "").trim();
   const refreshToken = String(rawSession.refreshToken || rawSession.refresh_token || "").trim();
@@ -6599,6 +6632,9 @@ function normalizePersistedCloudAuthSession(rawSession) {
 }
 
 function extractPersistedCloudAuthSessionFromStorageString(rawValue) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.extractPersistedCloudAuthSessionFromStorageString === "function") {
+    return cloudAuthUtils.extractPersistedCloudAuthSessionFromStorageString(rawValue, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   if (typeof rawValue !== "string" || !rawValue.trim()) return null;
   try {
     const parsed = JSON.parse(rawValue);
@@ -6983,11 +7019,17 @@ function isCloudAuthConfigured() {
 }
 
 function isEmailAddress(value) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.isEmailAddress === "function") {
+    return cloudAuthUtils.isEmailAddress(value, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   const normalized = sanitizeAccountUsername(value);
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
 function resolveCloudUserEmail(user, fallback = "") {
+  if (cloudAuthUtils && typeof cloudAuthUtils.resolveCloudUserEmail === "function") {
+    return cloudAuthUtils.resolveCloudUserEmail(user, fallback, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   const candidates = [
     user?.email,
     user?.user_metadata?.email,
@@ -7359,6 +7401,7 @@ async function loadCloudProgressForUser(user, quiet = false, fallbackEmail = "")
     if (signedInEmail && accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = signedInEmail;
     if (signedInEmail && accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = signedInEmail;
     if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
+    populateAccountUpdateInputs(getCurrentAccountRecord());
     if (!quiet) setStatus(`Cloud progress loaded for ${signedInEmail || "your account"}.`);
     return true;
   } catch (_) {
@@ -7487,6 +7530,7 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
         if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
         if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
         if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || displayName;
+        populateAccountUpdateInputs(getCurrentAccountRecord());
         if (cloudAuth.profileTableMissing) {
           setAccountStatus(`Account exists for ${email}, logged in, but table setup is missing. Run supabase_setup.sql.`, true);
         } else if (!cloudReady) {
@@ -7526,6 +7570,7 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
             if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
             if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
             if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || displayName;
+            populateAccountUpdateInputs(getCurrentAccountRecord());
             if (cloudAuth.profileTableMissing) {
               setAccountStatus(`Signup throttled, but account login succeeded for ${email}. Run supabase_setup.sql.`, true);
             } else if (!cloudReady) {
@@ -7577,6 +7622,7 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
     if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
     if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
     if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = displayName;
+    populateAccountUpdateInputs(account);
     if (cloudAuth.profileTableMissing) {
       setAccountStatus(`Cloud login is active for ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
@@ -7639,6 +7685,7 @@ async function loginCloudAccountFromInput(emailInput, password) {
     if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
     if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
     if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
+    populateAccountUpdateInputs(account);
     if (cloudAuth.profileTableMissing) {
       setAccountStatus(`Logged in as ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
@@ -7650,6 +7697,123 @@ async function loginCloudAccountFromInput(emailInput, password) {
     logCloudError("login.exception", error);
     setAccountStatus(appendCloudErrorDebugToMessage("Cloud login failed due to a network error.", error), true);
   }
+}
+
+async function updateCurrentAccountProfile(options = {}) {
+  const account = options?.account || getCurrentAccountRecord();
+  if (!account) {
+    setAccountStatus("No account is selected.", true);
+    return false;
+  }
+
+  const currentDisplayName =
+    sanitizeAccountName(getAccountDisplayName(account, game.accountName || "Commander"), ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
+    || "Commander";
+  const currentEmail = sanitizeAccountUsername(getAccountEmail(account) || getCloudSignedInEmail());
+  const nextDisplayName = sanitizeAccountName(options?.nextDisplayName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
+  const nextEmail = sanitizeAccountUsername(options?.nextEmail || "");
+  const currentPassword = String(options?.currentPassword || "");
+  const newPassword = String(options?.newPassword || "");
+
+  const wantsDisplayNameChange = !!nextDisplayName && nextDisplayName !== currentDisplayName;
+  const wantsEmailChange = !!nextEmail && nextEmail !== currentEmail;
+  const wantsPasswordChange = !!newPassword;
+  const wantsCredentialChange = wantsEmailChange || wantsPasswordChange;
+  let emailConfirmationPending = false;
+
+  if (wantsCredentialChange) {
+    if (!cloudAuth.enabled || !cloudAuth.client || !cloudAuth.user?.id) {
+      setAccountStatus("Login to your cloud account before changing email or password.", true);
+      return false;
+    }
+    if (!currentEmail || !isEmailAddress(currentEmail)) {
+      setAccountStatus("Current account email is missing. Login again before changing credentials.", true);
+      return false;
+    }
+    if (!currentPassword) {
+      setAccountStatus("Enter your current password to change email or password.", true);
+      return false;
+    }
+
+    try {
+      const reauth = await cloudAuth.client.auth.signInWithPassword({
+        email: currentEmail,
+        password: currentPassword,
+      });
+      if (reauth?.error) {
+        logCloudError("update.reauth", reauth.error);
+        setAccountStatus(
+          appendCloudErrorDebugToMessage(`Current password is incorrect: ${formatCloudErrorMessage(reauth.error)}`, reauth.error),
+          true
+        );
+        return false;
+      }
+
+      const updatePayload = {};
+      if (wantsEmailChange) updatePayload.email = nextEmail;
+      if (wantsPasswordChange) updatePayload.password = newPassword;
+      const { data: updateData, error: updateError } = await cloudAuth.client.auth.updateUser(updatePayload);
+      if (updateError) {
+        logCloudError("update.auth_update", updateError);
+        setAccountStatus(
+          appendCloudErrorDebugToMessage(`Account update failed: ${formatCloudErrorMessage(updateError)}`, updateError),
+          true
+        );
+        return false;
+      }
+
+      const updatedUser = updateData?.user || reauth?.data?.user || reauth?.data?.session?.user || cloudAuth.user;
+      if (updatedUser) cloudAuth.user = updatedUser;
+
+      const resolvedCloudEmail = sanitizeAccountUsername(resolveCloudUserEmail(cloudAuth.user, ""));
+      if (wantsEmailChange && resolvedCloudEmail !== nextEmail) {
+        emailConfirmationPending = true;
+      }
+    } catch (error) {
+      logCloudError("update.exception", error);
+      setAccountStatus(appendCloudErrorDebugToMessage("Account update failed due to a network error.", error), true);
+      return false;
+    }
+  }
+
+  if (wantsDisplayNameChange) {
+    account.name = nextDisplayName;
+  }
+  const finalEmail = wantsEmailChange ? nextEmail : currentEmail;
+  if (wantsEmailChange) {
+    account.email = finalEmail;
+  }
+  if (wantsCredentialChange) {
+    const passwordForHash = wantsPasswordChange ? newPassword : currentPassword;
+    if (finalEmail && passwordForHash) {
+      account.passwordHash = hashAccountPassword(finalEmail, passwordForHash);
+    }
+  }
+
+  progressData.currentAccountId = account.id;
+  progressData.lastAuthenticatedAccountId = account.id;
+  clearStartupAuthenticationRequirement(account.id);
+  applyAccountToGame(account);
+  savePlayerProgress();
+  if (cloudAuth.enabled && cloudAuth.client && cloudAuth.user?.id && !cloudAuth.loadingRemote) {
+    await syncCloudProgressNow(false);
+  }
+
+  refreshAccountAndMenuUi();
+  const preferredAuthEmail = getAccountEmail(account) || getCloudSignedInEmail();
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = preferredAuthEmail || "";
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail || "";
+  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = getAccountDisplayName(account);
+  populateAccountUpdateInputs(account);
+
+  const updatedFields = [];
+  if (wantsDisplayNameChange) updatedFields.push("username");
+  if (wantsEmailChange) updatedFields.push("email");
+  if (wantsPasswordChange) updatedFields.push("password");
+  const updatedText = updatedFields.length > 0 ? updatedFields.join(", ") : "account";
+  const suffix = emailConfirmationPending ? " Check your inbox to confirm the new email." : "";
+  setAccountStatus(`Updated ${updatedText} for ${getAccountDisplayName(account)}.${suffix}`);
+  return true;
 }
 
 async function signOutCloudAccount() {
@@ -7810,6 +7974,9 @@ async function initializeCloudAuth() {
 }
 
 function sanitizeAccountName(name, maxLength = ACCOUNT_DISPLAY_NAME_MAX_LENGTH) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.sanitizeAccountName === "function") {
+    return cloudAuthUtils.sanitizeAccountName(name, maxLength);
+  }
   return String(name || "")
     .replace(/[^\w\s@.+-]/g, "")
     .replace(/\s+/g, " ")
@@ -7820,10 +7987,20 @@ function sanitizeAccountName(name, maxLength = ACCOUNT_DISPLAY_NAME_MAX_LENGTH) 
 const MIN_ACCOUNT_PASSWORD_LENGTH = 6;
 
 function sanitizeAccountUsername(username) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.sanitizeAccountUsername === "function") {
+    return cloudAuthUtils.sanitizeAccountUsername(username, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   return sanitizeAccountName(username, ACCOUNT_USERNAME_MAX_LENGTH).replace(/\s+/g, "");
 }
 
 function deriveAccountDisplayNameFromEmail(email) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.deriveAccountDisplayNameFromEmail === "function") {
+    return cloudAuthUtils.deriveAccountDisplayNameFromEmail(
+      email,
+      ACCOUNT_DISPLAY_NAME_MAX_LENGTH,
+      ACCOUNT_USERNAME_MAX_LENGTH
+    );
+  }
   const normalizedEmail = sanitizeAccountUsername(email);
   if (!isEmailAddress(normalizedEmail)) return "";
   const localPart = normalizedEmail.split("@")[0] || "";
@@ -7850,10 +8027,16 @@ function getAccountDisplayName(account, fallback = "Commander") {
 }
 
 function getLegacyAccountUsernameKey(username) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.getLegacyAccountUsernameKey === "function") {
+    return cloudAuthUtils.getLegacyAccountUsernameKey(username, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   return sanitizeAccountUsername(username).toLowerCase();
 }
 
 function getAccountUsernameKey(username) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.getAccountUsernameKey === "function") {
+    return cloudAuthUtils.getAccountUsernameKey(username, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   const normalized = getLegacyAccountUsernameKey(username);
   if (!normalized) return "";
   const gmailMatch = normalized.match(/^([^@]+)@(gmail\.com|googlemail\.com)$/);
@@ -7868,6 +8051,9 @@ function getAccountUsernameKey(username) {
 }
 
 function hashAccountPassword(username, password, legacyMode = false) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.hashAccountPassword === "function") {
+    return cloudAuthUtils.hashAccountPassword(username, password, legacyMode, ACCOUNT_USERNAME_MAX_LENGTH);
+  }
   const usernameKey = legacyMode ? getLegacyAccountUsernameKey(username) : getAccountUsernameKey(username);
   const source = `${usernameKey}::${String(password || "")}`;
   let hash = 2166136261;
@@ -7879,6 +8065,9 @@ function hashAccountPassword(username, password, legacyMode = false) {
 }
 
 function normalizeStoredPasswordHash(rawHash) {
+  if (cloudAuthUtils && typeof cloudAuthUtils.normalizeStoredPasswordHash === "function") {
+    return cloudAuthUtils.normalizeStoredPasswordHash(rawHash);
+  }
   const hash = String(rawHash || "").trim().toLowerCase();
   if (!/^[a-f0-9]{8,128}$/.test(hash)) return "";
   return hash;
@@ -7998,12 +8187,36 @@ function clearAccountAuthInputs(options = {}) {
   const keepCreateDisplayName = !!options.keepCreateDisplayName;
   const keepCreateUsername = !!options.keepCreateUsername;
   const keepLoginUsername = !!options.keepLoginUsername;
+  const keepUpdateDisplayName = !!options.keepUpdateDisplayName;
+  const keepUpdateEmail = !!options.keepUpdateEmail;
   if (accountCreateDisplayNameInputEl && !keepCreateDisplayName) accountCreateDisplayNameInputEl.value = "";
   if (accountCreateUsernameInputEl && !keepCreateUsername) accountCreateUsernameInputEl.value = "";
   if (accountCreatePasswordInputEl) accountCreatePasswordInputEl.value = "";
   if (accountCreatePasswordConfirmInputEl) accountCreatePasswordConfirmInputEl.value = "";
   if (accountLoginUsernameInputEl && !keepLoginUsername) accountLoginUsernameInputEl.value = "";
   if (accountLoginPasswordInputEl) accountLoginPasswordInputEl.value = "";
+  if (accountUpdateDisplayNameInputEl && !keepUpdateDisplayName) accountUpdateDisplayNameInputEl.value = "";
+  if (accountUpdateEmailInputEl && !keepUpdateEmail) accountUpdateEmailInputEl.value = "";
+  if (accountUpdateCurrentPasswordInputEl) accountUpdateCurrentPasswordInputEl.value = "";
+  if (accountUpdatePasswordInputEl) accountUpdatePasswordInputEl.value = "";
+  if (accountUpdatePasswordConfirmInputEl) accountUpdatePasswordConfirmInputEl.value = "";
+}
+
+function populateAccountUpdateInputs(account = null, options = {}) {
+  const targetAccount = account || getCurrentAccountRecord();
+  const keepPasswords = !!options.keepPasswords;
+  const displayName = sanitizeAccountName(
+    getAccountDisplayName(targetAccount, game.accountName || "Commander"),
+    ACCOUNT_DISPLAY_NAME_MAX_LENGTH
+  );
+  const email = getAccountEmail(targetAccount) || sanitizeAccountUsername(getCloudSignedInEmail());
+  if (accountUpdateDisplayNameInputEl) accountUpdateDisplayNameInputEl.value = displayName || "";
+  if (accountUpdateEmailInputEl) accountUpdateEmailInputEl.value = email || "";
+  if (!keepPasswords) {
+    if (accountUpdateCurrentPasswordInputEl) accountUpdateCurrentPasswordInputEl.value = "";
+    if (accountUpdatePasswordInputEl) accountUpdatePasswordInputEl.value = "";
+    if (accountUpdatePasswordConfirmInputEl) accountUpdatePasswordConfirmInputEl.value = "";
+  }
 }
 
 function createAccountId() {
@@ -13133,6 +13346,10 @@ function getAccountLoginCooldownRemainingMs() {
   return Math.max(0, accountLoginCooldownUntil - Date.now());
 }
 
+function getAccountUpdateCooldownRemainingMs() {
+  return Math.max(0, accountUpdateCooldownUntil - Date.now());
+}
+
 function refreshAccountAuthButtons() {
   const createRemainingMs = getAccountCreateCooldownRemainingMs();
   if (createAccountBtn) {
@@ -13148,6 +13365,14 @@ function refreshAccountAuthButtons() {
     if (accountLoginRequestInFlight) loginAccountBtn.textContent = "Logging In...";
     else if (loginRemainingMs > 0) loginAccountBtn.textContent = `Login (${Math.ceil(loginRemainingMs / 1000)}s)`;
     else loginAccountBtn.textContent = "Login";
+  }
+
+  const updateRemainingMs = getAccountUpdateCooldownRemainingMs();
+  if (updateAccountBtn) {
+    updateAccountBtn.disabled = accountUpdateRequestInFlight || updateRemainingMs > 0;
+    if (accountUpdateRequestInFlight) updateAccountBtn.textContent = "Updating...";
+    else if (updateRemainingMs > 0) updateAccountBtn.textContent = `Update (${Math.ceil(updateRemainingMs / 1000)}s)`;
+    else updateAccountBtn.textContent = "Update Account";
   }
 }
 
@@ -13184,6 +13409,24 @@ function startAccountLoginCooldown(durationMs) {
     refreshAccountAuthButtons();
   };
   accountLoginCooldownTimer = window.setTimeout(tick, 250);
+  refreshAccountAuthButtons();
+}
+
+function startAccountUpdateCooldown(durationMs) {
+  const duration = Math.max(0, Math.floor(Number(durationMs) || 0));
+  if (duration <= 0) return;
+  accountUpdateCooldownUntil = Math.max(accountUpdateCooldownUntil, Date.now() + duration);
+  if (accountUpdateCooldownTimer) clearTimeout(accountUpdateCooldownTimer);
+  const tick = () => {
+    refreshAccountAuthButtons();
+    if (getAccountUpdateCooldownRemainingMs() > 0) {
+      accountUpdateCooldownTimer = window.setTimeout(tick, 250);
+      return;
+    }
+    accountUpdateCooldownTimer = 0;
+    refreshAccountAuthButtons();
+  };
+  accountUpdateCooldownTimer = window.setTimeout(tick, 250);
   refreshAccountAuthButtons();
 }
 
@@ -14864,6 +15107,7 @@ function deleteAccountById(accountId) {
   if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = currentEmail || "";
   if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = currentEmail || "";
   if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
+  populateAccountUpdateInputs(getCurrentAccountRecord());
   setStatus(`Deleted account ${getAccountDisplayName(removed)}.`);
 }
 
@@ -14892,6 +15136,7 @@ function switchToAccount(accountId, quiet = false) {
   if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = accountEmail || "";
   if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = accountEmail || "";
   if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = getAccountDisplayName(account);
+  populateAccountUpdateInputs(account);
   if (!quiet) setStatus(`Switched to account ${getAccountDisplayName(account)}.`);
 }
 
@@ -14991,6 +15236,84 @@ function loginAccountFromInput() {
       await loginCloudAccountFromInput(email, password);
     } finally {
       accountLoginRequestInFlight = false;
+      refreshAccountAuthButtons();
+    }
+  })();
+}
+
+function updateAccountFromInput() {
+  if (accountUpdateRequestInFlight) {
+    setAccountStatus("Update already submitted. Please wait...", true);
+    return;
+  }
+  const updateCooldownRemainingMs = getAccountUpdateCooldownRemainingMs();
+  if (updateCooldownRemainingMs > 0) {
+    setAccountStatus(`Update already submitted. Try again in ${Math.ceil(updateCooldownRemainingMs / 1000)}s.`, true);
+    refreshAccountAuthButtons();
+    return;
+  }
+
+  const account = getCurrentAccountRecord();
+  if (!account) {
+    setAccountStatus("No account selected to update.", true);
+    return;
+  }
+
+  const currentDisplayName =
+    sanitizeAccountName(getAccountDisplayName(account, game.accountName || "Commander"), ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
+    || "Commander";
+  const currentEmail = sanitizeAccountUsername(getAccountEmail(account) || getCloudSignedInEmail());
+  const nextDisplayName = sanitizeAccountName(
+    accountUpdateDisplayNameInputEl ? accountUpdateDisplayNameInputEl.value : "",
+    ACCOUNT_DISPLAY_NAME_MAX_LENGTH
+  );
+  const nextEmail = sanitizeAccountUsername(accountUpdateEmailInputEl ? accountUpdateEmailInputEl.value : "");
+  const currentPassword = accountUpdateCurrentPasswordInputEl ? accountUpdateCurrentPasswordInputEl.value : "";
+  const newPassword = accountUpdatePasswordInputEl ? accountUpdatePasswordInputEl.value : "";
+  const newPasswordConfirm = accountUpdatePasswordConfirmInputEl ? accountUpdatePasswordConfirmInputEl.value : "";
+
+  const wantsDisplayNameChange = !!nextDisplayName && nextDisplayName !== currentDisplayName;
+  const wantsEmailChange = !!nextEmail && nextEmail !== currentEmail;
+  const wantsPasswordChange = !!newPassword || !!newPasswordConfirm;
+
+  if (!wantsDisplayNameChange && !wantsEmailChange && !wantsPasswordChange) {
+    setAccountStatus("No account changes detected.");
+    return;
+  }
+  if (wantsEmailChange && !isEmailAddress(nextEmail)) {
+    setAccountStatus("Use a valid email address for account email changes.", true);
+    return;
+  }
+  if (wantsPasswordChange) {
+    if (newPassword.length < MIN_ACCOUNT_PASSWORD_LENGTH) {
+      setAccountStatus(`New password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setAccountStatus("New password confirmation does not match.", true);
+      return;
+    }
+  }
+  if ((wantsEmailChange || wantsPasswordChange) && !currentPassword) {
+    setAccountStatus("Enter your current password to change email or password.", true);
+    return;
+  }
+
+  accountUpdateRequestInFlight = true;
+  startAccountUpdateCooldown(ACCOUNT_UPDATE_SUBMIT_COOLDOWN_MS);
+  refreshAccountAuthButtons();
+  setAccountActionStatus("Update submitted. Applying account changes...");
+  void (async () => {
+    try {
+      await updateCurrentAccountProfile({
+        account,
+        nextDisplayName,
+        nextEmail,
+        currentPassword,
+        newPassword: newPassword || "",
+      });
+    } finally {
+      accountUpdateRequestInFlight = false;
       refreshAccountAuthButtons();
     }
   })();
@@ -15421,12 +15744,13 @@ function openAccountMenu() {
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
   refreshAccountAuthButtons();
   clearAccountAuthInputs();
-  setAccountActionStatus("Create uses username + email. Login uses email + password. Enable Stay Signed In to avoid relogging on this device.");
+  setAccountActionStatus("Create with username + email. Login with email + password. Use Manage Account to change username, email, or password later.");
   const currentAccount = getCurrentAccountRecord();
   const preferredAuthEmail = getCloudSignedInEmail() || getAccountEmail(currentAccount);
   const preferredDisplayName = sanitizeAccountName(game.accountName || getAccountDisplayName(currentAccount), ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
   if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = preferredDisplayName || "";
   if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail;
+  populateAccountUpdateInputs(currentAccount);
   if (accountLoginUsernameInputEl) {
     accountLoginUsernameInputEl.value = preferredAuthEmail;
     accountLoginUsernameInputEl.focus();
@@ -17071,6 +17395,7 @@ if (statusEl) {
 }
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
 if (loginAccountBtn) loginAccountBtn.addEventListener("click", loginAccountFromInput);
+if (updateAccountBtn) updateAccountBtn.addEventListener("click", updateAccountFromInput);
 if (accountCloudSignOutBtn) {
   accountCloudSignOutBtn.addEventListener("click", () => {
     void signOutCloudAccount();
@@ -17125,6 +17450,24 @@ for (const inputEl of [accountLoginUsernameInputEl, accountLoginPasswordInputEl]
     if (event.key === "Enter") {
       event.preventDefault();
       loginAccountFromInput();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeAccountMenu();
+    }
+  });
+}
+for (const inputEl of [
+  accountUpdateDisplayNameInputEl,
+  accountUpdateEmailInputEl,
+  accountUpdateCurrentPasswordInputEl,
+  accountUpdatePasswordInputEl,
+  accountUpdatePasswordConfirmInputEl,
+]) {
+  if (!inputEl) continue;
+  inputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      updateAccountFromInput();
     } else if (event.key === "Escape") {
       event.preventDefault();
       closeAccountMenu();
@@ -17237,7 +17580,12 @@ window.addEventListener("keydown", (event) => {
     (accountCreatePasswordInputEl && document.activeElement === accountCreatePasswordInputEl) ||
     (accountCreatePasswordConfirmInputEl && document.activeElement === accountCreatePasswordConfirmInputEl) ||
     (accountLoginUsernameInputEl && document.activeElement === accountLoginUsernameInputEl) ||
-    (accountLoginPasswordInputEl && document.activeElement === accountLoginPasswordInputEl)
+    (accountLoginPasswordInputEl && document.activeElement === accountLoginPasswordInputEl) ||
+    (accountUpdateDisplayNameInputEl && document.activeElement === accountUpdateDisplayNameInputEl) ||
+    (accountUpdateEmailInputEl && document.activeElement === accountUpdateEmailInputEl) ||
+    (accountUpdateCurrentPasswordInputEl && document.activeElement === accountUpdateCurrentPasswordInputEl) ||
+    (accountUpdatePasswordInputEl && document.activeElement === accountUpdatePasswordInputEl) ||
+    (accountUpdatePasswordConfirmInputEl && document.activeElement === accountUpdatePasswordConfirmInputEl)
   ) {
     if (event.key === "Escape") {
       event.preventDefault();

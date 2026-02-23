@@ -40,6 +40,14 @@ The game UI now supports real network rooms through a WebSocket server.
    - Internet-hosted server: `wss://<your-server-domain>`
 5. Use the same room code on all devices.
 
+## Automated Checks
+
+- Server smoke tests:
+  - `cd server`
+  - `npm install`
+  - `npm test`
+- CI runs the same server smoke tests on every push and pull request via `.github/workflows/ci.yml`.
+
 ## Deploy Server (for Internet play)
 
 Use Render/Railway/Fly.io and deploy the `server/` folder as a Node service.

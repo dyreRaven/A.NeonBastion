@@ -112,6 +112,50 @@
               />
               <button id="loginAccountBtn" type="button">Login</button>
             </section>
+            <section class="menu-account-form" aria-label="Manage account">
+              <h3>Manage Account</h3>
+              <input
+                id="accountUpdateDisplayNameInput"
+                type="text"
+                autocomplete="nickname"
+                spellcheck="false"
+                maxlength="24"
+                placeholder="New username"
+              />
+              <input
+                id="accountUpdateEmailInput"
+                type="text"
+                autocomplete="email"
+                spellcheck="false"
+                maxlength="64"
+                placeholder="New email"
+              />
+              <input
+                id="accountUpdateCurrentPasswordInput"
+                type="password"
+                autocomplete="current-password"
+                spellcheck="false"
+                maxlength="48"
+                placeholder="Current password"
+              />
+              <input
+                id="accountUpdatePasswordInput"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                maxlength="48"
+                placeholder="New password (optional)"
+              />
+              <input
+                id="accountUpdatePasswordConfirmInput"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                maxlength="48"
+                placeholder="Confirm new password"
+              />
+              <button id="updateAccountBtn" type="button">Update Account</button>
+            </section>
           </div>
           <div class="menu-account-startup-auth">
             <label for="accountRequirePasswordOnStartupToggle">
@@ -120,7 +164,7 @@
             </label>
           </div>
           <div id="menuAccountList" class="menu-shop-list"></div>
-          <p id="menuAccountNote" class="menu-shop-note">Use a username + email + password for cloud accounts. Progress syncs per account across devices.</p>
+          <p id="menuAccountNote" class="menu-shop-note">Use a username + email + password for cloud accounts. You can edit username, email, and password later in Manage Account.</p>
           <div class="menu-shop-actions">
             <button id="accountCloudSignOutBtn" type="button" hidden>Cloud Sign Out</button>
             <button id="closeAccountBtn" class="menu-play-btn" type="button">Menu Page</button>
@@ -447,6 +491,8 @@
 
     <script src="vendor/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="scripts/game/multiplayer-utils.js?v=20260223a"></script>
+    <script src="scripts/game/cloud-auth-utils.js?v=20260223a"></script>
     <script>
       if ("serviceWorker" in navigator && window.isSecureContext) {
         window.addEventListener("load", () => {
@@ -454,6 +500,6 @@
         });
       }
     </script>
-    <script src="game.js?v=20260221f"></script>
+    <script src="game.js?v=20260223a"></script>
   </body>
 </html>

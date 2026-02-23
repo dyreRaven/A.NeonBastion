@@ -8,9 +8,14 @@ const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
 const SERVER_BUILD_ID = process.env.RENDER_GIT_COMMIT || "2026-02-21-portrait-darken-fix-v2";
 const ROOM_CODE_LIMIT = 16;
+const ROOM_PEER_LIMIT = 8;
+const ROOMS_LIMIT = 200;
 const PEER_ID_LIMIT = 48;
 const DISPLAY_NAME_LIMIT = 24;
 const HEARTBEAT_MS = 25000;
+const WS_MAX_PAYLOAD_BYTES = 1024 * 1024;
+const RELAY_PACKET_TYPE_LIMIT = 40;
+const RELAY_PAYLOAD_MAX_KEYS = 128;
 const RELAY_CHAT_LIMIT = 140;
 const RELAY_CHAT_MIN_INTERVAL_MS = 450;
 const RELAY_CHAT_BURST_WINDOW_MS = 6000;
@@ -24,6 +29,7 @@ const STATIC_MIME_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".map": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
@@ -66,6 +72,39 @@ function sanitizeRelayChatText(raw) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, RELAY_CHAT_LIMIT);
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidPacketType(type) {
+  return type === "joinRoom" || type === "leaveRoom" || type === "relay";
+}
+
+function normalizeRelayPayload(rawPayload) {
+  if (!isPlainObject(rawPayload)) {
+    return { ok: false, message: "Invalid relay payload.", payload: null };
+  }
+
+  const keys = Object.keys(rawPayload);
+  if (keys.length > RELAY_PAYLOAD_MAX_KEYS) {
+    return { ok: false, message: "Relay payload has too many fields.", payload: null };
+  }
+
+  const normalizedType = String(rawPayload.type || "").trim().slice(0, RELAY_PACKET_TYPE_LIMIT);
+  if (!normalizedType) {
+    return { ok: false, message: "Relay payload type is required.", payload: null };
+  }
+
+  return {
+    ok: true,
+    message: "",
+    payload: {
+      ...rawPayload,
+      type: normalizedType,
+    },
+  };
 }
 
 function createRelayChatRateState() {
@@ -315,7 +354,7 @@ const server = createServer(async (req, res) => {
   res.end("Not found.\n");
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, maxPayload: WS_MAX_PAYLOAD_BYTES });
 
 wss.on("connection", (socket) => {
   socket.isAlive = true;
@@ -337,8 +376,16 @@ wss.on("connection", (socket) => {
     }
 
     if (!packet || typeof packet !== "object") return;
+    const packetType = String(packet.type || "");
+    if (!isValidPacketType(packetType)) {
+      sendPacket(socket, {
+        type: "roomError",
+        message: "Invalid packet type.",
+      });
+      return;
+    }
 
-    if (packet.type === "joinRoom") {
+    if (packetType === "joinRoom") {
       const roomCode = sanitizeRoomCode(packet.roomCode);
       const role = normalizeRole(packet.role);
       const peerId = sanitizePeerId(packet.peerId || `peer_${Math.random().toString(36).slice(2, 10)}`);
@@ -354,6 +401,14 @@ wss.on("connection", (socket) => {
       const existing = socketMeta.get(socket);
       if (existing) leaveRoom(socket, "switchRoom");
 
+      if (!rooms.has(roomCode) && rooms.size >= ROOMS_LIMIT) {
+        sendPacket(socket, {
+          type: "roomError",
+          message: "Server is full. Try again soon.",
+        });
+        return;
+      }
+
       const room = makeRoom(roomCode);
       if (role === "host" && room.hostPeerId && room.hostPeerId !== peerId) {
         sendPacket(socket, {
@@ -367,6 +422,14 @@ wss.on("connection", (socket) => {
         sendPacket(socket, {
           type: "roomError",
           message: "Peer ID already exists in this room.",
+        });
+        return;
+      }
+
+      if (!room.peers.has(peerId) && room.peers.size >= ROOM_PEER_LIMIT) {
+        sendPacket(socket, {
+          type: "roomError",
+          message: "Room is full.",
         });
         return;
       }
@@ -416,12 +479,12 @@ wss.on("connection", (socket) => {
       return;
     }
 
-    if (packet.type === "leaveRoom") {
+    if (packetType === "leaveRoom") {
       leaveRoom(socket, "leaveRequest");
       return;
     }
 
-    if (packet.type === "relay") {
+    if (packetType === "relay") {
       const meta = socketMeta.get(socket);
       if (!meta) {
         sendPacket(socket, {
@@ -431,7 +494,16 @@ wss.on("connection", (socket) => {
         return;
       }
 
-      let payload = packet.payload && typeof packet.payload === "object" ? packet.payload : {};
+      const normalizedRelay = normalizeRelayPayload(packet.payload);
+      if (!normalizedRelay.ok) {
+        sendPacket(socket, {
+          type: "roomError",
+          message: normalizedRelay.message,
+        });
+        return;
+      }
+
+      let payload = normalizedRelay.payload;
       const roomCode = sanitizeRoomCode(packet.roomCode || meta.roomCode || payload.roomCode);
       if (!roomCode || roomCode !== meta.roomCode) {
         sendPacket(socket, {

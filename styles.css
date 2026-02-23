@@ -1118,7 +1118,7 @@ body:not(.menu-active) .menu-screen {
 
 .menu-account-auth {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.52rem;
   align-items: start;
 }
@@ -1171,6 +1171,11 @@ body:not(.menu-active) .menu-screen {
 #accountCreatePasswordConfirmInput,
 #accountLoginUsernameInput,
 #accountLoginPasswordInput,
+#accountUpdateDisplayNameInput,
+#accountUpdateEmailInput,
+#accountUpdateCurrentPasswordInput,
+#accountUpdatePasswordInput,
+#accountUpdatePasswordConfirmInput,
 #menuLoadoutSearch,
 #multiplayerServerInput,
 #multiplayerRoomInput {
@@ -1190,6 +1195,11 @@ body:not(.menu-active) .menu-screen {
 #accountCreatePasswordConfirmInput:focus,
 #accountLoginUsernameInput:focus,
 #accountLoginPasswordInput:focus,
+#accountUpdateDisplayNameInput:focus,
+#accountUpdateEmailInput:focus,
+#accountUpdateCurrentPasswordInput:focus,
+#accountUpdatePasswordInput:focus,
+#accountUpdatePasswordConfirmInput:focus,
 #menuLoadoutSearch:focus,
 #multiplayerServerInput:focus,
 #multiplayerRoomInput:focus {
@@ -1198,7 +1208,8 @@ body:not(.menu-active) .menu-screen {
 }
 
 #createAccountBtn,
-#loginAccountBtn {
+#loginAccountBtn,
+#updateAccountBtn {
   min-height: 2.1rem;
   border-radius: 8px;
   padding: 0.34rem 0.62rem;
