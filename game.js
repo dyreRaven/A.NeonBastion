@@ -1451,7 +1451,7 @@ const TOWER_TYPES = {
     name: "Bombarder",
     cost: 980,
     range: 30,
-    minRange: 8.8,
+    minRange: 9.6,
     damage: 428,
     fireInterval: 2.35,
     turnSpeed: 2.4,
@@ -1468,7 +1468,7 @@ const TOWER_TYPES = {
     name: "Deluxe Bombarder",
     cost: 1780,
     range: 29.5,
-    minRange: 8.8,
+    minRange: 9.6,
     damage: 472,
     fireInterval: 0.12,
     turnSpeed: 3.4,
@@ -3259,6 +3259,7 @@ const mapState = {
   vignetteMaterial: null,
   shadowWashMaterial: null,
   cellTopY: Array.from({ length: ROWS }, () => Array(COLS).fill(0)),
+  surfacePanelsByCell: new Map(),
   meteorEffects: [],
   meteorStorm: {
     active: false,
@@ -3411,6 +3412,30 @@ function towerOccupiesCell(tower, cellX, cellY) {
   );
 }
 
+function refreshBombarderSurfacePanelMask() {
+  const panelMap = mapState.surfacePanelsByCell;
+  if (!panelMap || panelMap.size === 0) return;
+
+  const blockedCells = new Set();
+  for (const tower of game.towers) {
+    if (!tower || tower.destroyed) continue;
+    const isBombarderFamily = tower.towerTypeId === "bombarder" || tower.towerTypeId === "deluxeBombarder";
+    if (!isBombarderFamily) continue;
+    const { width, height } = getTowerFootprintForPlacedTower(tower);
+    if (width <= 1 && height <= 1) continue;
+    for (let dy = 0; dy < height; dy += 1) {
+      for (let dx = 0; dx < width; dx += 1) {
+        blockedCells.add(cellKey(tower.cellX + dx, tower.cellY + dy));
+      }
+    }
+  }
+
+  for (const [cell, panel] of panelMap.entries()) {
+    if (!panel) continue;
+    panel.visible = !blockedCells.has(cell);
+  }
+}
+
 function rebuildWorld() {
   const geometries = new Set();
   const materials = new Set();
@@ -3447,6 +3472,7 @@ function rebuildWorld() {
   mapState.vignetteMaterial = null;
   mapState.shadowWashMaterial = null;
   mapState.cellTopY = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  mapState.surfacePanelsByCell = new Map();
   mapState.meteorEffects = [];
   mapState.meteorStorm.active = false;
   mapState.meteorStorm.spawnTimer = 0;
@@ -3458,6 +3484,7 @@ function rebuildWorld() {
   for (const tower of game.towers) {
     updateTowerWorldTransform(tower);
   }
+  refreshBombarderSurfacePanelMask();
 }
 
 function buildMap() {
@@ -3794,6 +3821,7 @@ function buildMap() {
           );
           panel.rotation.y = noise2d(x, y, 39) * Math.PI;
           worldGroup.add(panel);
+          mapState.surfacePanelsByCell.set(key, panel);
         }
       }
     }
@@ -15437,6 +15465,7 @@ function tryPlaceTowerAtCell(cellX, cellY, towerTypeId = game.selectedTowerType,
   game.money -= selectedTower.cost;
   const placedTower = new Tower(targetCellX, targetCellY, towerTypeId);
   game.towers.push(placedTower);
+  refreshBombarderSurfacePanelMask();
   const updatedPlacement = getTowerPlacementStats(towerTypeId);
   const placedLabel = isTrapTowerId(towerTypeId) ? "trap armed" : "tower deployed";
   const requiresAreaTarget = !!selectedTower.manualAreaTargeting;
@@ -15590,6 +15619,7 @@ function purgeDestroyedTowers() {
   }
   game.towers = survivors;
   if (removedActiveBombarder) game.bombarderTargetingTower = null;
+  if (removed > 0) refreshBombarderSurfacePanelMask();
   return removed;
 }
 
@@ -15605,6 +15635,7 @@ function sellTowerAtCell(cellX, cellY) {
   if (tower === game.bombarderTargetingTower) game.bombarderTargetingTower = null;
   tower.dispose();
   game.towers = game.towers.filter((entry) => entry !== tower);
+  refreshBombarderSurfacePanelMask();
   setStatus(`${tower.name} tower sold for ${refund} credits.`);
   updateHud();
 }
