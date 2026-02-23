@@ -9097,7 +9097,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     footprintDisk.position.y = 0.12;
     group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.52, 0.06, 12, 48), glowMat));
+    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.44, 0.05, 12, 48), glowMat));
     footprintRing.rotation.x = Math.PI / 2;
     footprintRing.position.y = 0.21;
     group.add(footprintRing);
@@ -9160,6 +9160,15 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     neck.position.y = 1.86;
     ring.scale.set(0.68, 1, 0.68);
     ring.position.y = 1.56;
+  }
+
+  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
+    // Ground sleeve intentionally passes through terrain so the base never appears to float.
+    const sleeveRadiusTop = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.64 : 1.02;
+    const sleeveRadiusBottom = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.7 : 1.1;
+    const sleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(sleeveRadiusTop, sleeveRadiusBottom, 1.9, 24), darkMat));
+    sleeve.position.y = -0.72;
+    group.add(sleeve);
   }
 
   turret = new THREE.Group();
@@ -9281,10 +9290,6 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       trunnion.rotation.z = Math.PI / 2;
       trunnion.position.set(0, 0.68, 0.58);
       turret.add(trunnion);
-
-      const recoilHousing = cast(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.32, 0.56), darkMat));
-      recoilHousing.position.set(0, 0.48, -0.08);
-      turret.add(recoilHousing);
 
       barrelRig = new THREE.Group();
       barrelRig.position.set(0, 0.84, 0.72);
@@ -9664,13 +9669,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   mastLight.position.y = 2.08;
   group.add(mastLight);
 
-  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
-    // Keep the model clear of terrain while preventing a visible floating gap.
-    group.updateMatrixWorld(true);
-    const bounds = new THREE.Box3().setFromObject(group);
-    const desiredMinY = 0.03;
-    group.position.y += desiredMinY - bounds.min.y;
-  }
+  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") group.position.y -= 0.04;
 
   return { group, turret, muzzle, spinNode, barrelRig };
 }
