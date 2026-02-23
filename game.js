@@ -11626,10 +11626,27 @@ class Tower {
     }
   }
 
-  updateBombardBarrelAim(targetX, targetY, targetZ, dt) {
+  updateBombardBarrelAim(targetX, targetY, targetZ, dt, options = null) {
     if (!this.barrelRig) return;
     const safeDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
     if (safeDt <= 0) return;
+    const optionBag = options && typeof options === "object" ? options : {};
+    const pitchMin = Number.isFinite(optionBag.minPitch)
+      ? optionBag.minPitch
+      : this.towerTypeId === "bombarder"
+        ? -0.72
+        : -0.45;
+    const pitchMax = Number.isFinite(optionBag.maxPitch)
+      ? optionBag.maxPitch
+      : this.towerTypeId === "bombarder"
+        ? 1.05
+        : 0.7;
+    const responseRate = Number.isFinite(optionBag.responseRate)
+      ? Math.max(1, optionBag.responseRate)
+      : this.towerTypeId === "bombarder"
+        ? 16
+        : 9;
+    const snapToAim = !!optionBag.snapToAim;
 
     const origin = this.barrelAimOrigin || new THREE.Vector3();
     if (this.muzzle) this.muzzle.getWorldPosition(origin);
@@ -11641,8 +11658,12 @@ class Tower {
     if (horizontalDistance < 1e-4) return;
 
     const dy = targetY - origin.y;
-    const desiredPitch = THREE.MathUtils.clamp(-Math.atan2(dy, horizontalDistance), -0.45, 0.7);
-    const blend = 1 - Math.exp(-9 * safeDt);
+    const desiredPitch = THREE.MathUtils.clamp(-Math.atan2(dy, horizontalDistance), pitchMin, pitchMax);
+    if (snapToAim) {
+      this.barrelRig.rotation.x = desiredPitch;
+      return;
+    }
+    const blend = 1 - Math.exp(-responseRate * safeDt);
     this.barrelRig.rotation.x += (desiredPitch - this.barrelRig.rotation.x) * blend;
   }
 
@@ -11746,6 +11767,16 @@ class Tower {
 
       if (this.cooldown > 0) return;
       if (this.turret && aimError > 0.26) return;
+
+      if (this.towerTypeId === "bombarder") {
+        this.updateBombardBarrelAim(
+          target.x,
+          (Number.isFinite(target.currentY) ? target.currentY : target.y) + (Number.isFinite(target.aimOffsetY) ? target.aimOffsetY : 0),
+          target.z,
+          dt,
+          { snapToAim: true }
+        );
+      }
 
       let splashX = target.x + (Math.random() * 2 - 1) * this.sprayRadius;
       let splashZ = target.z + (Math.random() * 2 - 1) * this.sprayRadius;
@@ -11851,6 +11882,10 @@ class Tower {
       if (!game.inWave) return;
       if (this.cooldown > 0) return;
       if (this.turret && aimError > 0.26) return;
+
+      if (this.towerTypeId === "bombarder") {
+        this.updateBombardBarrelAim(this.areaTargetX, this.areaTargetY, this.areaTargetZ, dt, { snapToAim: true });
+      }
 
       const origin = new THREE.Vector3();
       if (this.muzzle) this.muzzle.getWorldPosition(origin);
