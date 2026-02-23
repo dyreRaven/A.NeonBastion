@@ -1489,6 +1489,8 @@ const TOWER_TYPES = {
     bombardImpactSfxInterval: 0.18,
     bombardImpactFxInterval: 0.2,
     bombardImpactShrapnelScale: 0.22,
+    bombardFireDuration: 2,
+    bombardPauseDuration: 1,
   },
   rift: {
     name: "Rift",
@@ -2287,6 +2289,23 @@ function applyTowerTypeConfigToPlacedTower(tower) {
     tower.autoBombard && Number.isFinite(config.bombardImpactShrapnelScale)
       ? Math.max(0, Math.min(1, config.bombardImpactShrapnelScale))
       : 1;
+  tower.bombardFireDuration =
+    tower.autoBombard && Number.isFinite(config.bombardFireDuration) ? Math.max(0, config.bombardFireDuration) : 0;
+  tower.bombardPauseDuration =
+    tower.autoBombard && Number.isFinite(config.bombardPauseDuration) ? Math.max(0, config.bombardPauseDuration) : 0;
+  const bombardCycleEnabled = tower.bombardFireDuration > 0 && tower.bombardPauseDuration > 0;
+  if (!bombardCycleEnabled) {
+    tower.bombardCycleIsFiring = true;
+    tower.bombardCycleTimeLeft = 0;
+  } else {
+    if (typeof tower.bombardCycleIsFiring !== "boolean") tower.bombardCycleIsFiring = true;
+    const phaseDuration = tower.bombardCycleIsFiring ? tower.bombardFireDuration : tower.bombardPauseDuration;
+    if (!Number.isFinite(tower.bombardCycleTimeLeft) || tower.bombardCycleTimeLeft <= 0) {
+      tower.bombardCycleTimeLeft = phaseDuration;
+    } else {
+      tower.bombardCycleTimeLeft = Math.min(phaseDuration, tower.bombardCycleTimeLeft);
+    }
+  }
   if (!Number.isFinite(tower.nextBombardShotSfxAt)) tower.nextBombardShotSfxAt = 0;
   if (!Number.isFinite(tower.nextBombardMuzzleFxAt)) tower.nextBombardMuzzleFxAt = 0;
   if (!Number.isFinite(tower.nextBombardImpactSfxAt)) tower.nextBombardImpactSfxAt = 0;
@@ -9296,10 +9315,6 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       barrelRig.rotation.x = -0.24;
       turret.add(barrelRig);
 
-      const breech = cast(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.52), darkMat));
-      breech.position.set(0, -0.02, -0.16);
-      barrelRig.add(breech);
-
       const recoilSleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.31, 0.78, 14), bodyMat));
       recoilSleeve.rotation.x = Math.PI / 2;
       recoilSleeve.position.set(0, 0.08, 0.4);
@@ -10490,6 +10505,12 @@ class Tower {
       this.autoBombard && Number.isFinite(config.bombardImpactShrapnelScale)
         ? Math.max(0, Math.min(1, config.bombardImpactShrapnelScale))
         : 1;
+    this.bombardFireDuration =
+      this.autoBombard && Number.isFinite(config.bombardFireDuration) ? Math.max(0, config.bombardFireDuration) : 0;
+    this.bombardPauseDuration =
+      this.autoBombard && Number.isFinite(config.bombardPauseDuration) ? Math.max(0, config.bombardPauseDuration) : 0;
+    this.bombardCycleIsFiring = true;
+    this.bombardCycleTimeLeft = this.bombardFireDuration > 0 && this.bombardPauseDuration > 0 ? this.bombardFireDuration : 0;
     this.nextBombardShotSfxAt = 0;
     this.nextBombardMuzzleFxAt = 0;
     this.nextBombardImpactSfxAt = 0;
@@ -10593,6 +10614,26 @@ class Tower {
 
     if (this.autoBombard) {
       if (!game.inWave) return;
+      if (this.bombardFireDuration > 0 && this.bombardPauseDuration > 0) {
+        let timeLeft = Number.isFinite(this.bombardCycleTimeLeft) ? this.bombardCycleTimeLeft : 0;
+        if (timeLeft <= 0) {
+          this.bombardCycleIsFiring = true;
+          timeLeft = this.bombardFireDuration;
+        }
+        timeLeft -= Math.max(0, dt);
+        while (timeLeft <= 0) {
+          if (this.bombardCycleIsFiring) {
+            this.bombardCycleIsFiring = false;
+            timeLeft += this.bombardPauseDuration;
+          } else {
+            this.bombardCycleIsFiring = true;
+            timeLeft += this.bombardFireDuration;
+          }
+        }
+        this.bombardCycleTimeLeft = timeLeft;
+        if (!this.bombardCycleIsFiring) return;
+      }
+
       let target = null;
       const minRange = Math.max(0, this.minRange || 0);
       for (const enemy of game.enemies) {
