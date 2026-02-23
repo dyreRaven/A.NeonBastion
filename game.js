@@ -1332,7 +1332,7 @@ const TOWER_TYPES = {
     projectileColor: "#fff8a5",
     bodyColor: "#58f8d6",
     coreColor: "#0f3b43",
-    summary: "Balanced",
+    summary: "Balanced | Resonance arcs",
   },
   swarm: {
     name: "Swarm",
@@ -1346,7 +1346,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffe38f",
     bodyColor: "#ffd166",
     coreColor: "#5a3b13",
-    summary: "Rapid fire",
+    summary: "Rapid fire | Split shot",
   },
   lance: {
     name: "Lance",
@@ -1360,7 +1360,7 @@ const TOWER_TYPES = {
     projectileColor: "#b6ddff",
     bodyColor: "#8dbdff",
     coreColor: "#1a2f57",
-    summary: "Long range",
+    summary: "Long range | First-strike",
   },
   ember: {
     name: "Ember",
@@ -1374,7 +1374,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffd1a5",
     bodyColor: "#ff9d67",
     coreColor: "#5a2612",
-    summary: "Heavy burst",
+    summary: "Heavy burst | Burn",
   },
   nova: {
     name: "Nova",
@@ -1388,7 +1388,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffd4f2",
     bodyColor: "#ff82cc",
     coreColor: "#5a1f4f",
-    summary: "Plasma storm",
+    summary: "Plasma storm | Shock splash",
   },
   sentinel: {
     name: "Sentinel",
@@ -1402,7 +1402,7 @@ const TOWER_TYPES = {
     projectileColor: "#c9f0ff",
     bodyColor: "#81d7ff",
     coreColor: "#1a3b56",
-    summary: "Apex cannon",
+    summary: "Apex cannon | Boss breaker",
   },
   volt: {
     name: "Volt",
@@ -1416,7 +1416,7 @@ const TOWER_TYPES = {
     projectileColor: "#b3f8ff",
     bodyColor: "#64d9ff",
     coreColor: "#16394f",
-    summary: "Arc burst",
+    summary: "Arc burst | Chain proc",
   },
   tesla: {
     name: "Stormcoil",
@@ -1446,7 +1446,7 @@ const TOWER_TYPES = {
     projectileColor: "#d7f7ff",
     bodyColor: "#8ecfff",
     coreColor: "#25486a",
-    summary: "Steady stream",
+    summary: "Steady stream | Slow",
   },
   ion: {
     name: "Ion",
@@ -1460,7 +1460,7 @@ const TOWER_TYPES = {
     projectileColor: "#dfd8ff",
     bodyColor: "#b39fff",
     coreColor: "#2d2157",
-    summary: "Hyper sniper",
+    summary: "Hyper sniper | Crit beam",
   },
   quarry: {
     name: "Quarry",
@@ -1474,7 +1474,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffd8bf",
     bodyColor: "#dcb48e",
     coreColor: "#4f341f",
-    summary: "Siege impact",
+    summary: "Siege impact | Rubble splash",
   },
   bombarder: {
     name: "Bombarder",
@@ -1533,7 +1533,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffc8ff",
     bodyColor: "#ff8ce7",
     coreColor: "#5a2458",
-    summary: "Close burst",
+    summary: "Close burst | Expose",
   },
   bastion: {
     name: "Bastion",
@@ -1547,7 +1547,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffe0bd",
     bodyColor: "#ffb67d",
     coreColor: "#5c361a",
-    summary: "Heavy platform",
+    summary: "Heavy platform | Fortified volleys",
   },
   photon: {
     name: "Photon",
@@ -1561,7 +1561,7 @@ const TOWER_TYPES = {
     projectileColor: "#fff2a6",
     bodyColor: "#d8ff70",
     coreColor: "#4a5b12",
-    summary: "Laser stream",
+    summary: "Laser stream | Prism chain",
   },
   citadel: {
     name: "Citadel",
@@ -1575,7 +1575,7 @@ const TOWER_TYPES = {
     projectileColor: "#ffe1b6",
     bodyColor: "#ffc38a",
     coreColor: "#5e361c",
-    summary: "Fortress cannon",
+    summary: "Fortress cannon | Seismic blast",
   },
 };
 
@@ -2316,6 +2316,7 @@ function applyTowerTypeConfigToPlacedTower(tower) {
   tower.projectileSpeed = config.projectileSpeed;
   tower.projectileRadius = config.projectileRadius;
   tower.projectileColor = config.projectileColor;
+  if (!Number.isFinite(tower.shotsFired)) tower.shotsFired = 0;
   tower.multiTargetCount = Math.max(1, Math.floor(config.multiTargetCount || 1));
   tower.multiTargetDamageFalloff =
     tower.multiTargetCount > 1
@@ -10698,6 +10699,13 @@ class Enemy {
     this.animSeed = Math.random() * Math.PI * 2;
     this.headingX = 1;
     this.headingZ = 0;
+    this.burnDps = 0;
+    this.burnUntil = 0;
+    this.burnDamageCarry = 0;
+    this.slowMultiplier = 1;
+    this.slowUntil = 0;
+    this.damageAmpMultiplier = 1;
+    this.damageAmpUntil = 0;
 
     const enemyVisual = createEnemyMesh(stats.typeId, stats.colorA, stats.colorB);
     this.mesh = enemyVisual.group;
@@ -10731,9 +10739,14 @@ class Enemy {
       this.updateHealthBar();
       return;
     }
+    this.tickStatusEffects(dt);
+    if (!this.alive) {
+      this.updateHealthBar();
+      return;
+    }
     const prevX = this.x;
     const prevZ = this.z;
-    let remaining = this.speed * dt;
+    let remaining = this.speed * this.getSpeedMultiplier() * dt;
 
     while (remaining > 0 && this.pathIndex < pathPoints.length - 1) {
       const to = pathPoints[this.pathIndex + 1];
@@ -10796,6 +10809,74 @@ class Enemy {
     updateEnemySpecialVisuals(this, dt);
 
     this.updateHealthBar();
+  }
+
+  tickStatusEffects(dt) {
+    const now = game.time;
+
+    if (this.burnUntil > now && this.burnDps > 0) {
+      this.burnDamageCarry += this.burnDps * Math.max(0, dt);
+      const burnDamage = Math.floor(this.burnDamageCarry);
+      if (burnDamage > 0) {
+        this.burnDamageCarry -= burnDamage;
+        const killed = this.applyDamage(burnDamage);
+        if (killed) {
+          handleEnemyDefeated(this);
+          return;
+        }
+      }
+    } else {
+      this.burnDps = 0;
+      this.burnUntil = 0;
+      this.burnDamageCarry = 0;
+    }
+
+    if (this.slowUntil <= now) {
+      this.slowMultiplier = 1;
+      this.slowUntil = 0;
+    }
+    if (this.damageAmpUntil <= now) {
+      this.damageAmpMultiplier = 1;
+      this.damageAmpUntil = 0;
+    }
+  }
+
+  applyBurn(dps, duration) {
+    if (!this.alive) return;
+    const safeDps = Math.max(0, Number(dps) || 0);
+    const safeDuration = Math.max(0, Number(duration) || 0);
+    if (safeDps <= 0 || safeDuration <= 0) return;
+    const until = game.time + safeDuration;
+    this.burnDps = Math.max(this.burnDps, safeDps);
+    this.burnUntil = Math.max(this.burnUntil, until);
+  }
+
+  applySlow(multiplier, duration) {
+    if (!this.alive) return;
+    const safeMultiplier = THREE.MathUtils.clamp(Number(multiplier) || 1, 0.2, 1);
+    const safeDuration = Math.max(0, Number(duration) || 0);
+    if (safeMultiplier >= 1 || safeDuration <= 0) return;
+    const until = game.time + safeDuration;
+    this.slowMultiplier = Math.min(this.slowMultiplier, safeMultiplier);
+    this.slowUntil = Math.max(this.slowUntil, until);
+  }
+
+  applyDamageAmp(multiplier, duration) {
+    if (!this.alive) return;
+    const safeMultiplier = Math.max(1, Number(multiplier) || 1);
+    const safeDuration = Math.max(0, Number(duration) || 0);
+    if (safeMultiplier <= 1 || safeDuration <= 0) return;
+    const until = game.time + safeDuration;
+    this.damageAmpMultiplier = Math.max(this.damageAmpMultiplier, safeMultiplier);
+    this.damageAmpUntil = Math.max(this.damageAmpUntil, until);
+  }
+
+  getSpeedMultiplier() {
+    return this.slowUntil > game.time ? this.slowMultiplier : 1;
+  }
+
+  getDamageTakenMultiplier() {
+    return this.damageAmpUntil > game.time ? this.damageAmpMultiplier : 1;
   }
 
   getAimPoint(out = new THREE.Vector3()) {
@@ -10861,7 +10942,8 @@ class Enemy {
 
   applyDamage(amount) {
     if (!this.alive || amount <= 0) return false;
-    this.hp = Math.max(0, this.hp - amount);
+    const scaledDamage = Math.max(1, Math.round((Number(amount) || 0) * this.getDamageTakenMultiplier()));
+    this.hp = Math.max(0, this.hp - scaledDamage);
     this.healthBarVisibleUntil = game.time + HEALTH_BAR_SHOW_TIME;
     this.updateHealthBar();
     return this.hp <= 0;
@@ -11248,6 +11330,7 @@ class Tower {
     this.damage = config.damage;
     this.turnSpeed = config.turnSpeed ?? 5.2;
     this.cooldown = 0;
+    this.shotsFired = 0;
     this.fireInterval = config.fireInterval;
     this.projectileSpeed = config.projectileSpeed;
     this.projectileRadius = config.projectileRadius;
@@ -11632,17 +11715,35 @@ class Tower {
       return;
     }
 
-    audioSystem.playTowerShot(this.damage);
-    game.projectiles.push(
-      new Projectile(
-        origin,
-        target,
-        this.damage,
-        this.projectileSpeed,
-        this.projectileColor,
-        this.projectileRadius
-      )
-    );
+    this.shotsFired = (Number.isFinite(this.shotsFired) ? this.shotsFired : 0) + 1;
+    const shotProfile = getTowerShotProfile(this, target, this.shotsFired);
+    const projectilePlans = [shotProfile];
+    if (this.towerTypeId === "swarm" && Math.random() < 0.32) {
+      projectilePlans.push(getTowerShotProfile(this, target, this.shotsFired, true));
+    }
+
+    audioSystem.playTowerShot(this.damage * (projectilePlans.length > 1 ? 1.06 : 1));
+    for (const plan of projectilePlans) {
+      if (!plan) continue;
+      const damageScale = Number.isFinite(plan.damageScale) ? plan.damageScale : 1;
+      const speedScale = Number.isFinite(plan.speedScale) ? plan.speedScale : 1;
+      const radiusScale = Number.isFinite(plan.radiusScale) ? plan.radiusScale : 1;
+      const shotDamage = Math.max(1, Math.round(this.damage * damageScale));
+      game.projectiles.push(
+        new Projectile(
+          origin,
+          target,
+          shotDamage,
+          this.projectileSpeed * speedScale,
+          this.projectileColor,
+          this.projectileRadius * radiusScale,
+          {
+            sourceTowerTypeId: this.towerTypeId,
+            onHit: plan.onHit || null,
+          }
+        )
+      );
+    }
   }
 
   setTrapDurability(nextDurability) {
@@ -11707,12 +11808,15 @@ class Tower {
 }
 
 class Projectile {
-  constructor(origin, target, damage, speed, color, radius) {
+  constructor(origin, target, damage, speed, color, radius, options = null) {
+    const optionBag = options && typeof options === "object" ? options : {};
     this.target = target;
     this.damage = damage;
     this.speed = speed;
     this.color = color;
     this.radius = radius;
+    this.sourceTowerTypeId = typeof optionBag.sourceTowerTypeId === "string" ? optionBag.sourceTowerTypeId : "";
+    this.onHit = optionBag.onHit && typeof optionBag.onHit === "object" ? optionBag.onHit : null;
     this.alive = true;
     this.position = origin.clone();
     this.renderPosition = origin.clone();
@@ -11777,8 +11881,10 @@ class Projectile {
     const dist = this.toTarget.length();
 
     if (dist <= this.speed * dt || dist < this.target.radius + this.radius) {
-      const killed = this.target.applyDamage(this.damage);
+      const impactDamage = Math.max(1, Math.round(this.damage));
+      const killed = this.target.applyDamage(impactDamage);
       if (killed) handleEnemyDefeated(this.target);
+      applyProjectileImpactEffects(this, this.target, targetPoint, impactDamage);
       this.alive = false;
       return;
     }
@@ -11808,6 +11914,185 @@ class Projectile {
 
   dispose() {
     scene.remove(this.group);
+  }
+}
+
+function getTowerShotProfile(tower, target, shotNumber, bonusShot = false) {
+  const profile = {
+    damageScale: 1,
+    speedScale: 1,
+    radiusScale: 1,
+    onHit: null,
+  };
+  if (!tower || !target) return profile;
+
+  const onHit = {};
+  const towerTypeId = tower.towerTypeId;
+  const targetHpRatio = target.maxHp > 0 ? target.hp / target.maxHp : 0;
+
+  if (bonusShot && towerTypeId === "swarm") {
+    profile.damageScale = 0.46;
+    profile.speedScale = 1.12;
+    profile.radiusScale = 0.82;
+  }
+
+  if (towerTypeId === "pulse") {
+    if (!bonusShot && shotNumber % 4 === 0) {
+      onHit.arcCount = 2;
+      onHit.arcDamageScale = 0.55;
+      onHit.arcRange = Math.max(2.8, tower.range * 0.44);
+      onHit.arcBeamThickness = Math.max(0.045, tower.projectileRadius * 0.72);
+    }
+  } else if (towerTypeId === "lance") {
+    if (targetHpRatio >= 0.7) profile.damageScale *= 1.38;
+  } else if (towerTypeId === "ember") {
+    onHit.burnDps = 18;
+    onHit.burnDuration = 2.4;
+  } else if (towerTypeId === "nova") {
+    onHit.splashRadius = 2.2;
+    onHit.splashDamageScale = 0.35;
+  } else if (towerTypeId === "sentinel") {
+    if (isBossEnemyType(target.typeId)) profile.damageScale *= 1.32;
+    onHit.splashRadius = 1.8;
+    onHit.splashDamageScale = 0.28;
+  } else if (towerTypeId === "volt") {
+    if (Math.random() < 0.25) {
+      onHit.arcCount = 1;
+      onHit.arcDamageScale = 0.6;
+      onHit.arcRange = Math.max(2.4, tower.range * 0.4);
+      onHit.arcBeamThickness = Math.max(0.045, tower.projectileRadius * 0.76);
+    }
+  } else if (towerTypeId === "frost") {
+    onHit.slowMultiplier = 0.72;
+    onHit.slowDuration = 1.6;
+  } else if (towerTypeId === "ion") {
+    if (Math.random() < 0.22) profile.damageScale *= 1.9;
+  } else if (towerTypeId === "quarry") {
+    onHit.splashRadius = 2.4;
+    onHit.splashDamageScale = 0.4;
+  } else if (towerTypeId === "rift") {
+    onHit.damageAmpMultiplier = 1.2;
+    onHit.damageAmpDuration = 2;
+  } else if (towerTypeId === "bastion") {
+    if (!bonusShot && shotNumber % 5 === 0) {
+      profile.damageScale *= 1.65;
+      onHit.splashRadius = 1.5;
+      onHit.splashDamageScale = 0.25;
+    }
+  } else if (towerTypeId === "photon") {
+    onHit.arcCount = 2;
+    onHit.arcDamageScale = 0.42;
+    onHit.arcRange = Math.max(2.8, tower.range * 0.5);
+    onHit.arcBeamThickness = Math.max(0.05, tower.projectileRadius * 0.8);
+  } else if (towerTypeId === "citadel") {
+    onHit.splashRadius = 2.8;
+    onHit.splashDamageScale = 0.48;
+  }
+
+  if (Object.keys(onHit).length > 0) profile.onHit = onHit;
+  return profile;
+}
+
+function applyRadialProjectileDamage(centerX, centerZ, damage, radius, options = {}) {
+  const baseDamage = Math.max(1, Math.round(Number(damage) || 1));
+  const splashRadius = Math.max(0.4, Number(radius) || 0.4);
+  const excludedEnemy = options.excludeEnemy || null;
+  const minFalloff = THREE.MathUtils.clamp(Number(options.minFalloff) || 0.55, 0.1, 1);
+  for (const enemy of game.enemies) {
+    if (!enemy.alive) continue;
+    if (excludedEnemy && enemy === excludedEnemy) continue;
+    const dx = enemy.x - centerX;
+    const dz = enemy.z - centerZ;
+    const hitRadius = splashRadius + Math.max(0.15, enemy.radius * 0.35);
+    const distSq = dx * dx + dz * dz;
+    if (distSq > hitRadius * hitRadius) continue;
+    const dist = Math.sqrt(distSq);
+    const ratio = Math.min(1, dist / Math.max(0.001, splashRadius));
+    const falloff = THREE.MathUtils.lerp(1, minFalloff, ratio);
+    const splashDamage = Math.max(1, Math.round(baseDamage * falloff));
+    const killed = enemy.applyDamage(splashDamage);
+    if (killed) handleEnemyDefeated(enemy);
+  }
+}
+
+function applyArcProjectileDamage(sourceX, sourceZ, originPoint, baseDamage, color, options = {}) {
+  const maxTargets = Math.max(0, Math.floor(Number(options.maxTargets) || 0));
+  if (maxTargets <= 0) return;
+  const arcRange = Math.max(0.4, Number(options.arcRange) || 0.4);
+  const beamThickness = Math.max(0.03, Number(options.beamThickness) || 0.08);
+  const damageFalloff = THREE.MathUtils.clamp(Number(options.damageFalloff) || 0.8, 0.35, 1);
+  const excludedEnemy = options.excludeEnemy || null;
+  const sourceOrigin = originPoint?.clone ? originPoint.clone() : new THREE.Vector3(sourceX, 0, sourceZ);
+  const candidates = [];
+  for (const enemy of game.enemies) {
+    if (!enemy.alive) continue;
+    if (excludedEnemy && enemy === excludedEnemy) continue;
+    const dx = enemy.x - sourceX;
+    const dz = enemy.z - sourceZ;
+    const distance = Math.hypot(dx, dz);
+    if (distance > arcRange + Math.max(0.1, enemy.radius * 0.4)) continue;
+    candidates.push({ enemy, distance });
+  }
+  candidates.sort((a, b) => {
+    const progressDelta = b.enemy.progressScore - a.enemy.progressScore;
+    if (Math.abs(progressDelta) > 1e-6) return progressDelta;
+    return a.distance - b.distance;
+  });
+
+  let damageScale = 1;
+  const hitCount = Math.min(maxTargets, candidates.length);
+  const endPoint = new THREE.Vector3();
+  for (let i = 0; i < hitCount; i += 1) {
+    const chainedTarget = candidates[i].enemy;
+    if (!chainedTarget?.alive) continue;
+    const arcDamage = Math.max(1, Math.round(baseDamage * damageScale));
+    const killed = chainedTarget.applyDamage(arcDamage);
+    if (killed) handleEnemyDefeated(chainedTarget);
+    game.debris.push(
+      new ZapBeamEffect(
+        sourceOrigin,
+        chainedTarget.getAimPoint(endPoint),
+        color,
+        beamThickness
+      )
+    );
+    damageScale *= damageFalloff;
+  }
+}
+
+function applyProjectileImpactEffects(projectile, target, impactPoint, impactDamage) {
+  const onHit = projectile?.onHit;
+  if (!onHit || typeof onHit !== "object") return;
+
+  if (target?.alive) {
+    if (Number.isFinite(onHit.burnDps) && Number.isFinite(onHit.burnDuration)) {
+      target.applyBurn(onHit.burnDps, onHit.burnDuration);
+    }
+    if (Number.isFinite(onHit.slowMultiplier) && Number.isFinite(onHit.slowDuration)) {
+      target.applySlow(onHit.slowMultiplier, onHit.slowDuration);
+    }
+    if (Number.isFinite(onHit.damageAmpMultiplier) && Number.isFinite(onHit.damageAmpDuration)) {
+      target.applyDamageAmp(onHit.damageAmpMultiplier, onHit.damageAmpDuration);
+    }
+  }
+
+  if (Number.isFinite(onHit.splashRadius) && Number.isFinite(onHit.splashDamageScale)) {
+    const splashDamage = Math.max(1, Math.round(impactDamage * onHit.splashDamageScale));
+    applyRadialProjectileDamage(impactPoint.x, impactPoint.z, splashDamage, onHit.splashRadius, {
+      excludeEnemy: target,
+      minFalloff: 0.6,
+    });
+  }
+
+  if (Number.isFinite(onHit.arcCount) && Number.isFinite(onHit.arcDamageScale)) {
+    const arcDamage = Math.max(1, Math.round(impactDamage * onHit.arcDamageScale));
+    applyArcProjectileDamage(target.x, target.z, impactPoint, arcDamage, projectile.color, {
+      maxTargets: onHit.arcCount,
+      arcRange: Number.isFinite(onHit.arcRange) ? onHit.arcRange : 2.8,
+      beamThickness: Number.isFinite(onHit.arcBeamThickness) ? onHit.arcBeamThickness : projectile.radius * 0.7,
+      damageFalloff: 0.82,
+      excludeEnemy: target,
+    });
   }
 }
 
