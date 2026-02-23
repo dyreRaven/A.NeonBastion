@@ -1,10 +1,10 @@
-const STATIC_CACHE = "neon-bastion-static-v2026-02-23-12";
-const RUNTIME_CACHE = "neon-bastion-runtime-v2026-02-23-12";
+const STATIC_CACHE = "neon-bastion-static-v2026-02-23-13";
+const RUNTIME_CACHE = "neon-bastion-runtime-v2026-02-23-13";
 
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./styles.css?v=20260221e",
+  "./styles.css?v=20260223d",
   "./scripts/game/multiplayer-utils.js?v=20260223c",
   "./scripts/game/cloud-auth-utils.js?v=20260223c",
   "./game.js?v=20260223c",

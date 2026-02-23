@@ -1118,20 +1118,38 @@ body:not(.menu-active) .menu-screen {
 
 .menu-account-auth {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.52rem;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+  gap: 0.56rem;
   align-items: start;
+}
+
+.menu-account-auth-col {
+  display: grid;
+  gap: 0.52rem;
+  min-width: 0;
 }
 
 .menu-account-form {
   border: 1px solid rgba(176, 222, 249, 0.22);
   border-radius: 10px;
   background: linear-gradient(145deg, rgba(103, 166, 209, 0.1), rgba(16, 34, 52, 0.28));
-  padding: 0.5rem;
+  padding: 0.58rem;
   display: grid;
-  gap: 0.38rem;
+  gap: 0.4rem;
   align-content: start;
   min-width: 0;
+}
+
+.menu-account-form-create {
+  border-color: rgba(151, 221, 254, 0.34);
+}
+
+.menu-account-form-login {
+  border-color: rgba(142, 245, 205, 0.34);
+}
+
+.menu-account-form-manage {
+  border-color: rgba(255, 206, 151, 0.36);
 }
 
 .menu-account-form h3 {
@@ -1140,6 +1158,13 @@ body:not(.menu-active) .menu-screen {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #d8eeff;
+}
+
+.menu-account-form-subtitle {
+  margin: -0.04rem 0 0.02rem;
+  font-size: 0.68rem;
+  line-height: 1.32;
+  color: #a9c9de;
 }
 
 .menu-account-startup-auth {
@@ -1216,6 +1241,10 @@ body:not(.menu-active) .menu-screen {
   border-radius: 8px;
   padding: 0.34rem 0.62rem;
   font-size: 0.84rem;
+  min-width: 132px;
+  width: auto;
+  justify-self: start;
+  align-self: start;
 }
 
 .menu-account-form-note {
@@ -1257,6 +1286,16 @@ body:not(.menu-active) .menu-screen {
   border-radius: 9px;
   background: linear-gradient(145deg, rgba(89, 146, 188, 0.1), rgba(11, 27, 42, 0.28));
   overflow-wrap: anywhere;
+}
+
+#menuAccountPanel .menu-shop-actions {
+  justify-content: flex-end;
+}
+
+#menuAccountPanel .menu-shop-actions button {
+  min-width: 124px;
+  width: auto;
+  flex: 0 0 auto;
 }
 
 .menu-account-item {
@@ -2618,6 +2657,10 @@ canvas {
     grid-template-columns: 1fr;
   }
 
+  .menu-account-auth-col {
+    gap: 0.44rem;
+  }
+
   .menu-multiplayer-panels {
     grid-template-columns: 1fr;
     gap: 0.44rem;
@@ -2643,6 +2686,11 @@ canvas {
     width: 100%;
     min-width: 0;
     min-height: 2.35rem;
+  }
+
+  #menuAccountPanel .menu-shop-actions .menu-play-btn {
+    width: auto;
+    min-width: 122px;
   }
 
   #menuShop,
