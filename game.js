@@ -9151,12 +9151,12 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
 
     // Raised central chassis so the 2x2 variant reads taller instead of bulky.
     const superHull = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.5, CELL_SIZE * 0.56, 1.32, 34), bodyMat)
+      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.42, CELL_SIZE * 0.48, 1.3, 34), bodyMat)
     );
     superHull.position.y = 1.16;
     group.add(superHull);
 
-    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.36, 0.055, 12, 42), coreMat));
+    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.3, 0.045, 12, 42), coreMat));
     superHullRing.rotation.x = Math.PI / 2;
     superHullRing.position.y = 1.66;
     group.add(superHullRing);
@@ -9199,20 +9199,20 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     ring.scale.set(0.58, 1, 0.58);
     ring.position.y = 1.54;
   } else if (towerTypeId === "deluxeBombarder") {
-    base.scale.set(0.98, 1.12, 0.98);
+    base.scale.set(0.92, 1.12, 0.92);
     base.position.y = 0.27;
-    lowerCore.scale.set(0.96, 1.34, 0.96);
+    lowerCore.scale.set(0.82, 1.34, 0.82);
     lowerCore.position.y = 1.09;
-    neck.scale.set(0.94, 1.44, 0.94);
+    neck.scale.set(0.8, 1.44, 0.8);
     neck.position.y = 1.86;
-    ring.scale.set(0.68, 1, 0.68);
+    ring.scale.set(0.56, 1, 0.56);
     ring.position.y = 1.56;
   }
 
   if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
     // Ground sleeve intentionally passes through terrain so the base never appears to float.
-    const sleeveRadiusTop = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.64 : 1.02;
-    const sleeveRadiusBottom = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.7 : 1.1;
+    const sleeveRadiusTop = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.54 : 1.02;
+    const sleeveRadiusBottom = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.6 : 1.1;
     const sleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(sleeveRadiusTop, sleeveRadiusBottom, 1.9, 24), darkMat));
     sleeve.position.y = -0.72;
     group.add(sleeve);
@@ -9318,14 +9318,32 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       tail.position.set(0, 0.34, -0.56);
       beacon.position.set(0, 1.05, 0.02);
 
-      const turretCollar = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.38, 0.28, 14), bodyMat));
-      turretCollar.position.set(0, 0.62, 0.48);
+      const mountTopRadius = towerTypeId === "deluxeBombarder" ? 0.38 : 0.31;
+      const mountBottomRadius = towerTypeId === "deluxeBombarder" ? 0.48 : 0.38;
+      const mountHeight = towerTypeId === "deluxeBombarder" ? 0.34 : 0.28;
+      const turretCollar = cast(new THREE.Mesh(new THREE.CylinderGeometry(mountTopRadius, mountBottomRadius, mountHeight, 14), bodyMat));
+      turretCollar.position.set(0, 0.64, 0.48);
       turret.add(turretCollar);
 
-      const trunnion = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.68, 12), coreMat));
+      const trunnionRadius = towerTypeId === "deluxeBombarder" ? 0.16 : 0.12;
+      const trunnionLength = towerTypeId === "deluxeBombarder" ? 0.98 : 0.68;
+      const trunnion = cast(new THREE.Mesh(new THREE.CylinderGeometry(trunnionRadius, trunnionRadius, trunnionLength, 12), coreMat));
       trunnion.rotation.z = Math.PI / 2;
       trunnion.position.set(0, 0.68, 0.58);
       turret.add(trunnion);
+
+      if (towerTypeId === "deluxeBombarder") {
+        const mountShoulder = cast(new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.22, 0.44), coreMat));
+        mountShoulder.position.set(0, 0.72, 0.58);
+        turret.add(mountShoulder);
+
+        const mountBraceL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.26, 0.36), bodyMat));
+        mountBraceL.position.set(-0.24, 0.66, 0.58);
+        turret.add(mountBraceL);
+        const mountBraceR = cast(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.26, 0.36), bodyMat));
+        mountBraceR.position.set(0.24, 0.66, 0.58);
+        turret.add(mountBraceR);
+      }
 
       barrelRig = new THREE.Group();
       barrelRig.position.set(0, 0.84, 0.72);
@@ -9369,7 +9387,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(serviceHatch);
 
       if (towerTypeId === "deluxeBombarder") {
-        turret.scale.set(1.46, 1.56, 1.72);
+        turret.scale.set(1.28, 1.54, 1.42);
         turret.position.y = 2.36;
       }
     } else if (towerTypeId === "sentinel") {
