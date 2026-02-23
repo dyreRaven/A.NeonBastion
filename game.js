@@ -229,7 +229,7 @@ const ACCOUNT_UPDATE_SUBMIT_COOLDOWN_MS = 1200;
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-23-11";
+const BUILD_ID = "2026-02-23-12";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -14632,27 +14632,43 @@ function grantShardsByCommand(amount = 999999) {
   setStatus(`Command applied: +${shardAmount} shards.`);
 }
 
+const CONSOLE_SECRET_RESET_COMMAND = "nxb://hard-reset/7f4c";
+const CONSOLE_SECRET_SHARD_COMMAND = "nxb://grant-shards/9a1d";
+const CONSOLE_SECRET_WAVE_PREFIX = "nxb://jump-wave/";
+const CONSOLE_SECRET_WAVE_SUFFIX = "/k3";
+
+function parseSecretWaveCommand(command) {
+  if (!command || !command.startsWith(CONSOLE_SECRET_WAVE_PREFIX)) return null;
+  if (!command.endsWith(CONSOLE_SECRET_WAVE_SUFFIX)) return null;
+  const rawWave = command
+    .slice(CONSOLE_SECRET_WAVE_PREFIX.length, command.length - CONSOLE_SECRET_WAVE_SUFFIX.length)
+    .trim();
+  if (!/^\d+$/.test(rawWave)) return null;
+  const waveNumber = parseInt(rawWave, 10);
+  return Number.isFinite(waveNumber) ? waveNumber : null;
+}
+
 function executeConsoleCommand(rawCommand) {
   const command = String(rawCommand || "").trim();
   if (!command) return;
 
-  if (/^@reset$/i.test(command)) {
+  if (command === CONSOLE_SECRET_RESET_COMMAND) {
     resetAllProgressFromCommand();
     return;
   }
 
-  if (/^getshard$/i.test(command)) {
+  if (command === CONSOLE_SECRET_SHARD_COMMAND) {
     grantShardsByCommand(999999);
     return;
   }
 
-  const waveMatch = /^wave\s*(\d+)$/i.exec(command);
-  if (waveMatch) {
-    skipToWaveByCommand(parseInt(waveMatch[1], 10));
+  const targetWave = parseSecretWaveCommand(command);
+  if (Number.isFinite(targetWave)) {
+    skipToWaveByCommand(targetWave);
     return;
   }
 
-  setStatus(`Unknown command: ${command}`, true);
+  setStatus("Unknown command.", true);
 }
 
 function runConsoleCommandFromInput() {
