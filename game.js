@@ -82,6 +82,7 @@ const accountCreatePasswordInputEl = $id("accountCreatePasswordInput");
 const accountCreatePasswordConfirmInputEl = $id("accountCreatePasswordConfirmInput");
 const accountLoginUsernameInputEl = $id("accountLoginUsernameInput");
 const accountLoginPasswordInputEl = $id("accountLoginPasswordInput");
+const accountUpdateCurrentEmailInputEl = $id("accountUpdateCurrentEmailInput");
 const accountUpdateDisplayNameInputEl = $id("accountUpdateDisplayNameInput");
 const accountUpdateEmailInputEl = $id("accountUpdateEmailInput");
 const accountUpdateCurrentPasswordInputEl = $id("accountUpdateCurrentPasswordInput");
@@ -6315,7 +6316,7 @@ let progressRecoveredFromBackup = false;
 let progressRecoveredFromIndexedDb = false;
 let progressRecoveredFromRuntimeFile = false;
 const ACCOUNT_NOTE_BASE_TEXT =
-  "Use a username + email + password for cloud accounts. You can edit username, email, and password later in Manage Account.";
+  "Use a username + email + password for cloud accounts. In Manage Account, Current Email is required and New Email is optional.";
 const cloudAuth = {
   enabled: false,
   initialized: false,
@@ -7398,10 +7399,10 @@ async function loadCloudProgressForUser(user, quiet = false, fallbackEmail = "")
     applyAccountToGame(getCurrentAccountRecord());
     savePlayerProgress();
     refreshAccountAndMenuUi();
-    if (signedInEmail && accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = signedInEmail;
-    if (signedInEmail && accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = signedInEmail;
-    if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
-    populateAccountUpdateInputs(getCurrentAccountRecord());
+    syncAccountAuthFormInputs(getCurrentAccountRecord(), {
+      preferredEmail: signedInEmail,
+      preferredDisplayName: game.accountName || "",
+    });
     if (!quiet) setStatus(`Cloud progress loaded for ${signedInEmail || "your account"}.`);
     return true;
   } catch (_) {
@@ -7527,10 +7528,10 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
       if (existingUser) {
         const cloudReady = await syncCloudSessionUser(existingUser, true, email);
         clearAccountAuthInputs();
-        if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
-        if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
-        if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || displayName;
-        populateAccountUpdateInputs(getCurrentAccountRecord());
+        syncAccountAuthFormInputs(getCurrentAccountRecord(), {
+          preferredEmail: email,
+          preferredDisplayName: game.accountName || displayName,
+        });
         if (cloudAuth.profileTableMissing) {
           setAccountStatus(`Account exists for ${email}, logged in, but table setup is missing. Run supabase_setup.sql.`, true);
         } else if (!cloudReady) {
@@ -7567,10 +7568,10 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
           if (retryUser) {
             const cloudReady = await syncCloudSessionUser(retryUser, true, email);
             clearAccountAuthInputs();
-            if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
-            if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
-            if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || displayName;
-            populateAccountUpdateInputs(getCurrentAccountRecord());
+            syncAccountAuthFormInputs(getCurrentAccountRecord(), {
+              preferredEmail: email,
+              preferredDisplayName: game.accountName || displayName,
+            });
             if (cloudAuth.profileTableMissing) {
               setAccountStatus(`Signup throttled, but account login succeeded for ${email}. Run supabase_setup.sql.`, true);
             } else if (!cloudReady) {
@@ -7619,10 +7620,10 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
     }
     const cloudReady = await syncCloudSessionUser(sessionUser, true, email);
     clearAccountAuthInputs();
-    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
-    if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
-    if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = displayName;
-    populateAccountUpdateInputs(account);
+    syncAccountAuthFormInputs(account, {
+      preferredEmail: email,
+      preferredDisplayName: displayName,
+    });
     if (cloudAuth.profileTableMissing) {
       setAccountStatus(`Cloud login is active for ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
@@ -7682,10 +7683,10 @@ async function loginCloudAccountFromInput(emailInput, password) {
 
     const cloudReady = await syncCloudSessionUser(user, true, email);
     clearAccountAuthInputs();
-    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = email;
-    if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = email;
-    if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
-    populateAccountUpdateInputs(account);
+    syncAccountAuthFormInputs(account, {
+      preferredEmail: email,
+      preferredDisplayName: game.accountName || "",
+    });
     if (cloudAuth.profileTableMissing) {
       setAccountStatus(`Logged in as ${email}, but table setup is missing. Run supabase_setup.sql.`, true);
     } else if (!cloudReady) {
@@ -7710,24 +7711,39 @@ async function updateCurrentAccountProfile(options = {}) {
     sanitizeAccountName(getAccountDisplayName(account, game.accountName || "Commander"), ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
     || "Commander";
   const currentEmail = sanitizeAccountUsername(getAccountEmail(account) || getCloudSignedInEmail());
+  const enteredCurrentEmail = sanitizeAccountUsername(options?.currentEmail || "");
   const nextDisplayName = sanitizeAccountName(options?.nextDisplayName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
   const nextEmail = sanitizeAccountUsername(options?.nextEmail || "");
   const currentPassword = String(options?.currentPassword || "");
   const newPassword = String(options?.newPassword || "");
 
+  if (!enteredCurrentEmail) {
+    setAccountStatus("Enter your current email to update your account.", true);
+    return false;
+  }
+  if (!isEmailAddress(enteredCurrentEmail)) {
+    setAccountStatus("Use a valid current email address before updating your account.", true);
+    return false;
+  }
+  if (!currentEmail || !isEmailAddress(currentEmail)) {
+    setAccountStatus("Current account email is missing. Login again before changing account details.", true);
+    return false;
+  }
+  if (enteredCurrentEmail !== currentEmail) {
+    setAccountStatus("Current email does not match the active account email.", true);
+    return false;
+  }
+
   const wantsDisplayNameChange = !!nextDisplayName && nextDisplayName !== currentDisplayName;
   const wantsEmailChange = !!nextEmail && nextEmail !== currentEmail;
   const wantsPasswordChange = !!newPassword;
   const wantsCredentialChange = wantsEmailChange || wantsPasswordChange;
+  let resolvedAccountEmail = currentEmail;
   let emailConfirmationPending = false;
 
   if (wantsCredentialChange) {
     if (!cloudAuth.enabled || !cloudAuth.client || !cloudAuth.user?.id) {
       setAccountStatus("Login to your cloud account before changing email or password.", true);
-      return false;
-    }
-    if (!currentEmail || !isEmailAddress(currentEmail)) {
-      setAccountStatus("Current account email is missing. Login again before changing credentials.", true);
       return false;
     }
     if (!currentPassword) {
@@ -7737,7 +7753,7 @@ async function updateCurrentAccountProfile(options = {}) {
 
     try {
       const reauth = await cloudAuth.client.auth.signInWithPassword({
-        email: currentEmail,
+        email: enteredCurrentEmail,
         password: currentPassword,
       });
       if (reauth?.error) {
@@ -7766,8 +7782,13 @@ async function updateCurrentAccountProfile(options = {}) {
       if (updatedUser) cloudAuth.user = updatedUser;
 
       const resolvedCloudEmail = sanitizeAccountUsername(resolveCloudUserEmail(cloudAuth.user, ""));
-      if (wantsEmailChange && resolvedCloudEmail !== nextEmail) {
-        emailConfirmationPending = true;
+      if (wantsEmailChange) {
+        if (resolvedCloudEmail === nextEmail) {
+          resolvedAccountEmail = nextEmail;
+        } else {
+          emailConfirmationPending = true;
+          resolvedAccountEmail = currentEmail;
+        }
       }
     } catch (error) {
       logCloudError("update.exception", error);
@@ -7779,14 +7800,13 @@ async function updateCurrentAccountProfile(options = {}) {
   if (wantsDisplayNameChange) {
     account.name = nextDisplayName;
   }
-  const finalEmail = wantsEmailChange ? nextEmail : currentEmail;
-  if (wantsEmailChange) {
-    account.email = finalEmail;
+  if (wantsEmailChange && resolvedAccountEmail !== currentEmail) {
+    account.email = resolvedAccountEmail;
   }
   if (wantsCredentialChange) {
     const passwordForHash = wantsPasswordChange ? newPassword : currentPassword;
-    if (finalEmail && passwordForHash) {
-      account.passwordHash = hashAccountPassword(finalEmail, passwordForHash);
+    if (resolvedAccountEmail && passwordForHash) {
+      account.passwordHash = hashAccountPassword(resolvedAccountEmail, passwordForHash);
     }
   }
 
@@ -7800,11 +7820,10 @@ async function updateCurrentAccountProfile(options = {}) {
   }
 
   refreshAccountAndMenuUi();
-  const preferredAuthEmail = getAccountEmail(account) || getCloudSignedInEmail();
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = preferredAuthEmail || "";
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail || "";
-  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = getAccountDisplayName(account);
-  populateAccountUpdateInputs(account);
+  syncAccountAuthFormInputs(account, {
+    preferredEmail: getAccountEmail(account) || getCloudSignedInEmail(),
+    preferredDisplayName: getAccountDisplayName(account),
+  });
 
   const updatedFields = [];
   if (wantsDisplayNameChange) updatedFields.push("username");
@@ -8187,6 +8206,7 @@ function clearAccountAuthInputs(options = {}) {
   const keepCreateDisplayName = !!options.keepCreateDisplayName;
   const keepCreateUsername = !!options.keepCreateUsername;
   const keepLoginUsername = !!options.keepLoginUsername;
+  const keepUpdateCurrentEmail = !!options.keepUpdateCurrentEmail;
   const keepUpdateDisplayName = !!options.keepUpdateDisplayName;
   const keepUpdateEmail = !!options.keepUpdateEmail;
   if (accountCreateDisplayNameInputEl && !keepCreateDisplayName) accountCreateDisplayNameInputEl.value = "";
@@ -8195,6 +8215,7 @@ function clearAccountAuthInputs(options = {}) {
   if (accountCreatePasswordConfirmInputEl) accountCreatePasswordConfirmInputEl.value = "";
   if (accountLoginUsernameInputEl && !keepLoginUsername) accountLoginUsernameInputEl.value = "";
   if (accountLoginPasswordInputEl) accountLoginPasswordInputEl.value = "";
+  if (accountUpdateCurrentEmailInputEl && !keepUpdateCurrentEmail) accountUpdateCurrentEmailInputEl.value = "";
   if (accountUpdateDisplayNameInputEl && !keepUpdateDisplayName) accountUpdateDisplayNameInputEl.value = "";
   if (accountUpdateEmailInputEl && !keepUpdateEmail) accountUpdateEmailInputEl.value = "";
   if (accountUpdateCurrentPasswordInputEl) accountUpdateCurrentPasswordInputEl.value = "";
@@ -8205,18 +8226,43 @@ function clearAccountAuthInputs(options = {}) {
 function populateAccountUpdateInputs(account = null, options = {}) {
   const targetAccount = account || getCurrentAccountRecord();
   const keepPasswords = !!options.keepPasswords;
+  const keepCurrentEmail = !!options.keepCurrentEmail;
+  const keepDisplayName = !!options.keepDisplayName;
+  const keepNewEmail = !!options.keepNewEmail;
   const displayName = sanitizeAccountName(
     getAccountDisplayName(targetAccount, game.accountName || "Commander"),
     ACCOUNT_DISPLAY_NAME_MAX_LENGTH
   );
-  const email = getAccountEmail(targetAccount) || sanitizeAccountUsername(getCloudSignedInEmail());
-  if (accountUpdateDisplayNameInputEl) accountUpdateDisplayNameInputEl.value = displayName || "";
-  if (accountUpdateEmailInputEl) accountUpdateEmailInputEl.value = email || "";
+  const currentEmailValue = sanitizeAccountUsername(options.currentEmail || "");
+  const newEmailValue = sanitizeAccountUsername(options.newEmail || "");
+  if (accountUpdateCurrentEmailInputEl && !keepCurrentEmail) accountUpdateCurrentEmailInputEl.value = currentEmailValue || "";
+  if (accountUpdateDisplayNameInputEl && !keepDisplayName) accountUpdateDisplayNameInputEl.value = displayName || "";
+  if (accountUpdateEmailInputEl && !keepNewEmail) accountUpdateEmailInputEl.value = newEmailValue || "";
   if (!keepPasswords) {
     if (accountUpdateCurrentPasswordInputEl) accountUpdateCurrentPasswordInputEl.value = "";
     if (accountUpdatePasswordInputEl) accountUpdatePasswordInputEl.value = "";
     if (accountUpdatePasswordConfirmInputEl) accountUpdatePasswordConfirmInputEl.value = "";
   }
+}
+
+function syncAccountAuthFormInputs(account = null, options = {}) {
+  const targetAccount = account || getCurrentAccountRecord();
+  if (!targetAccount) return;
+  const preferredEmail = sanitizeAccountUsername(
+    options.preferredEmail || getAccountEmail(targetAccount) || getCloudSignedInEmail()
+  );
+  const preferredDisplayName = sanitizeAccountName(
+    options.preferredDisplayName || getAccountDisplayName(targetAccount, game.accountName || "Commander"),
+    ACCOUNT_DISPLAY_NAME_MAX_LENGTH
+  );
+  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = preferredEmail || "";
+  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredEmail || "";
+  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = preferredDisplayName || "";
+  populateAccountUpdateInputs(targetAccount, {
+    keepPasswords: !!options.keepUpdatePasswords,
+    currentEmail: options.currentEmail || "",
+    newEmail: options.newEmail || "",
+  });
 }
 
 function createAccountId() {
@@ -15103,11 +15149,11 @@ function deleteAccountById(accountId) {
   renderShop();
   updateHud();
   clearAccountAuthInputs();
-  const currentEmail = getAccountEmail(getCurrentAccountRecord()) || getCloudSignedInEmail();
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = currentEmail || "";
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = currentEmail || "";
-  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = game.accountName || "";
-  populateAccountUpdateInputs(getCurrentAccountRecord());
+  const currentAccount = getCurrentAccountRecord();
+  syncAccountAuthFormInputs(currentAccount, {
+    preferredEmail: getAccountEmail(currentAccount) || getCloudSignedInEmail(),
+    preferredDisplayName: game.accountName || getAccountDisplayName(currentAccount),
+  });
   setStatus(`Deleted account ${getAccountDisplayName(removed)}.`);
 }
 
@@ -15132,11 +15178,10 @@ function switchToAccount(accountId, quiet = false) {
   renderShop();
   updateHud();
   clearAccountAuthInputs();
-  const accountEmail = getAccountEmail(account);
-  if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = accountEmail || "";
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = accountEmail || "";
-  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = getAccountDisplayName(account);
-  populateAccountUpdateInputs(account);
+  syncAccountAuthFormInputs(account, {
+    preferredEmail: getAccountEmail(account),
+    preferredDisplayName: getAccountDisplayName(account),
+  });
   if (!quiet) setStatus(`Switched to account ${getAccountDisplayName(account)}.`);
 }
 
@@ -15263,6 +15308,9 @@ function updateAccountFromInput() {
     sanitizeAccountName(getAccountDisplayName(account, game.accountName || "Commander"), ACCOUNT_DISPLAY_NAME_MAX_LENGTH)
     || "Commander";
   const currentEmail = sanitizeAccountUsername(getAccountEmail(account) || getCloudSignedInEmail());
+  const enteredCurrentEmail = sanitizeAccountUsername(
+    accountUpdateCurrentEmailInputEl ? accountUpdateCurrentEmailInputEl.value : ""
+  );
   const nextDisplayName = sanitizeAccountName(
     accountUpdateDisplayNameInputEl ? accountUpdateDisplayNameInputEl.value : "",
     ACCOUNT_DISPLAY_NAME_MAX_LENGTH
@@ -15278,6 +15326,22 @@ function updateAccountFromInput() {
 
   if (!wantsDisplayNameChange && !wantsEmailChange && !wantsPasswordChange) {
     setAccountStatus("No account changes detected.");
+    return;
+  }
+  if (!enteredCurrentEmail) {
+    setAccountStatus("Enter your current email to update your account.", true);
+    return;
+  }
+  if (!isEmailAddress(enteredCurrentEmail)) {
+    setAccountStatus("Use a valid current email address before updating your account.", true);
+    return;
+  }
+  if (!currentEmail || !isEmailAddress(currentEmail)) {
+    setAccountStatus("Current account email is missing. Login again before changing account details.", true);
+    return;
+  }
+  if (enteredCurrentEmail !== currentEmail) {
+    setAccountStatus("Current email does not match the active account email.", true);
     return;
   }
   if (wantsEmailChange && !isEmailAddress(nextEmail)) {
@@ -15307,6 +15371,7 @@ function updateAccountFromInput() {
     try {
       await updateCurrentAccountProfile({
         account,
+        currentEmail: enteredCurrentEmail,
         nextDisplayName,
         nextEmail,
         currentPassword,
@@ -15744,15 +15809,15 @@ function openAccountMenu() {
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
   refreshAccountAuthButtons();
   clearAccountAuthInputs();
-  setAccountActionStatus("Create with username + email. Login with email + password. Use Manage Account to change username, email, or password later.");
+  setAccountActionStatus(
+    "Create with username + email. Login with email + password. In Manage Account, Current Email is required and New Email is optional."
+  );
   const currentAccount = getCurrentAccountRecord();
-  const preferredAuthEmail = getCloudSignedInEmail() || getAccountEmail(currentAccount);
-  const preferredDisplayName = sanitizeAccountName(game.accountName || getAccountDisplayName(currentAccount), ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
-  if (accountCreateDisplayNameInputEl) accountCreateDisplayNameInputEl.value = preferredDisplayName || "";
-  if (accountCreateUsernameInputEl) accountCreateUsernameInputEl.value = preferredAuthEmail;
-  populateAccountUpdateInputs(currentAccount);
+  syncAccountAuthFormInputs(currentAccount, {
+    preferredEmail: getCloudSignedInEmail() || getAccountEmail(currentAccount),
+    preferredDisplayName: game.accountName || getAccountDisplayName(currentAccount),
+  });
   if (accountLoginUsernameInputEl) {
-    accountLoginUsernameInputEl.value = preferredAuthEmail;
     accountLoginUsernameInputEl.focus();
     accountLoginUsernameInputEl.select();
   }
@@ -17242,7 +17307,10 @@ function startGameFromMenu(preferredLevel = null) {
     const pendingAccount = getAccountById(startupAuthPendingAccountId);
     const pendingName = getAccountDisplayName(pendingAccount, "your account");
     openAccountMenu();
-    if (accountLoginUsernameInputEl) accountLoginUsernameInputEl.value = getAccountEmail(pendingAccount);
+    syncAccountAuthFormInputs(pendingAccount, {
+      preferredEmail: getAccountEmail(pendingAccount),
+      preferredDisplayName: getAccountDisplayName(pendingAccount),
+    });
     if (accountLoginPasswordInputEl) {
       accountLoginPasswordInputEl.focus();
       accountLoginPasswordInputEl.select();
@@ -17457,6 +17525,7 @@ for (const inputEl of [accountLoginUsernameInputEl, accountLoginPasswordInputEl]
   });
 }
 for (const inputEl of [
+  accountUpdateCurrentEmailInputEl,
   accountUpdateDisplayNameInputEl,
   accountUpdateEmailInputEl,
   accountUpdateCurrentPasswordInputEl,
@@ -17581,6 +17650,7 @@ window.addEventListener("keydown", (event) => {
     (accountCreatePasswordConfirmInputEl && document.activeElement === accountCreatePasswordConfirmInputEl) ||
     (accountLoginUsernameInputEl && document.activeElement === accountLoginUsernameInputEl) ||
     (accountLoginPasswordInputEl && document.activeElement === accountLoginPasswordInputEl) ||
+    (accountUpdateCurrentEmailInputEl && document.activeElement === accountUpdateCurrentEmailInputEl) ||
     (accountUpdateDisplayNameInputEl && document.activeElement === accountUpdateDisplayNameInputEl) ||
     (accountUpdateEmailInputEl && document.activeElement === accountUpdateEmailInputEl) ||
     (accountUpdateCurrentPasswordInputEl && document.activeElement === accountUpdateCurrentPasswordInputEl) ||

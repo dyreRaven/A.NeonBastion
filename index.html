@@ -115,20 +115,12 @@
             <section class="menu-account-form" aria-label="Manage account">
               <h3>Manage Account</h3>
               <input
-                id="accountUpdateDisplayNameInput"
-                type="text"
-                autocomplete="nickname"
-                spellcheck="false"
-                maxlength="24"
-                placeholder="New username"
-              />
-              <input
-                id="accountUpdateEmailInput"
+                id="accountUpdateCurrentEmailInput"
                 type="text"
                 autocomplete="email"
                 spellcheck="false"
                 maxlength="64"
-                placeholder="New email"
+                placeholder="Current email (required)"
               />
               <input
                 id="accountUpdateCurrentPasswordInput"
@@ -136,7 +128,23 @@
                 autocomplete="current-password"
                 spellcheck="false"
                 maxlength="48"
-                placeholder="Current password"
+                placeholder="Current password (for email/password change)"
+              />
+              <input
+                id="accountUpdateDisplayNameInput"
+                type="text"
+                autocomplete="nickname"
+                spellcheck="false"
+                maxlength="24"
+                placeholder="Username"
+              />
+              <input
+                id="accountUpdateEmailInput"
+                type="text"
+                autocomplete="email"
+                spellcheck="false"
+                maxlength="64"
+                placeholder="New email (optional)"
               />
               <input
                 id="accountUpdatePasswordInput"
@@ -154,6 +162,7 @@
                 maxlength="48"
                 placeholder="Confirm new password"
               />
+              <p class="menu-account-form-note">Current email is required. Leave New Email blank to keep your current one.</p>
               <button id="updateAccountBtn" type="button">Update Account</button>
             </section>
           </div>
@@ -164,7 +173,7 @@
             </label>
           </div>
           <div id="menuAccountList" class="menu-shop-list"></div>
-          <p id="menuAccountNote" class="menu-shop-note">Use a username + email + password for cloud accounts. You can edit username, email, and password later in Manage Account.</p>
+          <p id="menuAccountNote" class="menu-shop-note">Use a username + email + password for cloud accounts. In Manage Account, Current Email is required and New Email is optional.</p>
           <div class="menu-shop-actions">
             <button id="accountCloudSignOutBtn" type="button" hidden>Cloud Sign Out</button>
             <button id="closeAccountBtn" class="menu-play-btn" type="button">Menu Page</button>
