@@ -1441,7 +1441,7 @@ const TOWER_TYPES = {
     name: "Deluxe Stormcoiler",
     cost: 1940,
     range: 8.2,
-    damage: 8,
+    damage: 24,
     fireInterval: 0.06,
     turnSpeed: 8.8,
     projectileSpeed: 58,
@@ -1454,6 +1454,7 @@ const TOWER_TYPES = {
     multiTargetDamageFalloff: 0.88,
     chainSfxInterval: 0.18,
     meshScale: 1.08,
+    footprint: 2,
   },
   frost: {
     name: "Frost",
@@ -3512,7 +3513,10 @@ function refreshBombarderSurfacePanelMask() {
   const blockedCells = new Set();
   for (const tower of game.towers) {
     if (!tower || tower.destroyed) continue;
-    const isBombarderFamily = tower.towerTypeId === "bombarder" || tower.towerTypeId === "deluxeBombarder";
+    const isBombarderFamily =
+      tower.towerTypeId === "bombarder" ||
+      tower.towerTypeId === "deluxeBombarder" ||
+      tower.towerTypeId === "deluxeStormcoiler";
     if (!isBombarderFamily) continue;
     const { width, height } = getTowerFootprintForPlacedTower(tower);
     if (width <= 1 && height <= 1) continue;
@@ -10079,29 +10083,51 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   base.position.y = 0.21;
   group.add(base);
 
-  if (towerTypeId === "deluxeBombarder") {
+  const isTwoByTwoDeluxeTower = towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler";
+  if (isTwoByTwoDeluxeTower) {
+    const isDeluxeStormcoilerBody = towerTypeId === "deluxeStormcoiler";
     // Circular O-shaped base for the 2x2 deluxe body.
     const footprintDisk = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.68, CELL_SIZE * 0.74, 0.14, 42), darkMat)
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.66 : 0.68),
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.72 : 0.74),
+          0.14,
+          42
+        ),
+        darkMat
+      )
     );
     footprintDisk.position.y = 0.12;
     group.add(footprintDisk);
 
-    const footprintRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.3, 0.03, 10, 40), glowMat));
+    const footprintRing = cast(
+      new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * (isDeluxeStormcoilerBody ? 0.31 : 0.3), 0.03, 10, 40), glowMat)
+    );
     footprintRing.rotation.x = Math.PI / 2;
     footprintRing.position.y = 0.17;
     group.add(footprintRing);
 
     // Raised central chassis so the 2x2 variant reads taller instead of bulky.
     const superHull = cast(
-      new THREE.Mesh(new THREE.CylinderGeometry(CELL_SIZE * 0.42, CELL_SIZE * 0.48, 1.3, 34), bodyMat)
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.36 : 0.42),
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.44 : 0.48),
+          isDeluxeStormcoilerBody ? 1.24 : 1.3,
+          34
+        ),
+        bodyMat
+      )
     );
-    superHull.position.y = 1.16;
+    superHull.position.y = isDeluxeStormcoilerBody ? 1.12 : 1.16;
     group.add(superHull);
 
-    const superHullRing = cast(new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * 0.3, 0.045, 12, 42), coreMat));
+    const superHullRing = cast(
+      new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * (isDeluxeStormcoilerBody ? 0.28 : 0.3), 0.045, 12, 42), coreMat)
+    );
     superHullRing.rotation.x = Math.PI / 2;
-    superHullRing.position.y = 1.66;
+    superHullRing.position.y = isDeluxeStormcoilerBody ? 1.62 : 1.66;
     group.add(superHullRing);
   }
 
@@ -10150,12 +10176,22 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     neck.position.y = 1.86;
     ring.scale.set(0.56, 1, 0.56);
     ring.position.y = 1.56;
+  } else if (towerTypeId === "deluxeStormcoiler") {
+    base.scale.set(0.94, 1.14, 0.94);
+    base.position.y = 0.27;
+    lowerCore.scale.set(0.86, 1.38, 0.86);
+    lowerCore.position.y = 1.11;
+    neck.scale.set(0.84, 1.5, 0.84);
+    neck.position.y = 1.9;
+    ring.scale.set(0.66, 1, 0.66);
+    ring.position.y = 1.6;
   }
 
-  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
+  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler") {
     // Ground sleeve intentionally passes through terrain so the base never appears to float.
-    const sleeveRadiusTop = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.54 : 1.02;
-    const sleeveRadiusBottom = towerTypeId === "deluxeBombarder" ? CELL_SIZE * 0.6 : 1.1;
+    const isDeluxeSleeveTower = towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler";
+    const sleeveRadiusTop = isDeluxeSleeveTower ? CELL_SIZE * 0.54 : 1.02;
+    const sleeveRadiusBottom = isDeluxeSleeveTower ? CELL_SIZE * 0.6 : 1.1;
     const sleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(sleeveRadiusTop, sleeveRadiusBottom, 1.9, 24), darkMat));
     sleeve.position.y = -0.72;
     group.add(sleeve);
@@ -10750,7 +10786,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   mastLight.position.y = 2.08;
   group.add(mastLight);
 
-  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") group.position.y -= 0.04;
+  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler") group.position.y -= 0.04;
 
   return { group, turret, muzzle, spinNode, barrelRig };
 }
