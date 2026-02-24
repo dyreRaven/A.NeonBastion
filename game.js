@@ -1224,10 +1224,11 @@ const TOWER_UNLOCKS = {
   frost: { shardCost: 56 },
   quarry: { shardCost: 88 },
   bombarder: { shardCost: 100 },
-  deluxeBombarder: { shardCost: 600 },
+  deluxeBombarder: { shardCost: 580 },
   rift: { shardCost: 64 },
   volt: { shardCost: 72 },
   tesla: { shardCost: 116 },
+  deluxeStormcoiler: { shardCost: 760 },
   bastion: { shardCost: 96 },
   photon: { shardCost: 104 },
   citadel: { shardCost: 144 },
@@ -1242,6 +1243,7 @@ const MENU_UNLOCK_TOWER_IDS = [
   "rift",
   "volt",
   "tesla",
+  "deluxeStormcoiler",
   "bastion",
   "photon",
   "citadel",
@@ -1259,6 +1261,7 @@ const BASE_TOWER_PLACE_CAPS = {
   sentinel: 1,
   volt: 3,
   tesla: 2,
+  deluxeStormcoiler: 1,
   frost: 3,
   ion: 1,
   quarry: 1,
@@ -1433,6 +1436,24 @@ const TOWER_TYPES = {
     summary: "Chain lightning",
     multiTargetCount: 4,
     multiTargetDamageFalloff: 0.78,
+  },
+  deluxeStormcoiler: {
+    name: "Deluxe Stormcoiler",
+    cost: 1940,
+    range: 8.2,
+    damage: 8,
+    fireInterval: 0.06,
+    turnSpeed: 8.8,
+    projectileSpeed: 58,
+    projectileRadius: 0.2,
+    projectileColor: "#bff7ff",
+    bodyColor: "#84eaff",
+    coreColor: "#1a4f66",
+    summary: "Constant close electrocution",
+    multiTargetCount: 6,
+    multiTargetDamageFalloff: 0.88,
+    chainSfxInterval: 0.18,
+    meshScale: 1.08,
   },
   frost: {
     name: "Frost",
@@ -9768,6 +9789,38 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       mesh.receiveShadow = true;
       return mesh;
     };
+    // Rounded rectangular prism used to soften hard box silhouettes on Bombarder parts.
+    const createRoundedPrismGeometry = (width, height, depth, radius, segments = 3) => {
+      const halfWidth = width * 0.5;
+      const halfHeight = height * 0.5;
+      const maxRadius = Math.max(0.002, Math.min(halfWidth, halfHeight, depth * 0.5) * 0.92);
+      const cornerRadius = Math.max(0.002, Math.min(maxRadius, Number(radius) || maxRadius * 0.4));
+
+      const shape = new THREE.Shape();
+      shape.moveTo(-halfWidth + cornerRadius, -halfHeight);
+      shape.lineTo(halfWidth - cornerRadius, -halfHeight);
+      shape.absarc(halfWidth - cornerRadius, -halfHeight + cornerRadius, cornerRadius, -Math.PI / 2, 0, false);
+      shape.lineTo(halfWidth, halfHeight - cornerRadius);
+      shape.absarc(halfWidth - cornerRadius, halfHeight - cornerRadius, cornerRadius, 0, Math.PI / 2, false);
+      shape.lineTo(-halfWidth + cornerRadius, halfHeight);
+      shape.absarc(-halfWidth + cornerRadius, halfHeight - cornerRadius, cornerRadius, Math.PI / 2, Math.PI, false);
+      shape.lineTo(-halfWidth, -halfHeight + cornerRadius);
+      shape.absarc(-halfWidth + cornerRadius, -halfHeight + cornerRadius, cornerRadius, Math.PI, (Math.PI * 3) / 2, false);
+
+      const bevelAmount = Math.min(cornerRadius * 0.52, depth * 0.24);
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth,
+        steps: 1,
+        bevelEnabled: true,
+        bevelThickness: bevelAmount,
+        bevelSize: bevelAmount,
+        bevelSegments: Math.max(1, Math.round(segments)),
+        curveSegments: Math.max(6, Math.round(segments) * 2),
+      });
+      geometry.translate(0, 0, -depth * 0.5);
+      geometry.computeVertexNormals();
+      return geometry;
+    };
 
     const footprintRadius = isDeluxe ? CELL_SIZE * 0.72 : 1.52;
     const baseRadiusTop = footprintRadius * (isDeluxe ? 0.9 : 0.86);
@@ -9796,14 +9849,16 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
 
     const outriggerCount = isDeluxe ? 8 : 6;
     const outriggerRadius = footprintRadius * (isDeluxe ? 0.78 : 0.74);
+    const outriggerArmGeometry = createRoundedPrismGeometry(
+      isDeluxe ? 0.18 : 0.15,
+      isDeluxe ? 0.28 : 0.24,
+      footprintRadius * (isDeluxe ? 0.32 : 0.28),
+      isDeluxe ? 0.04 : 0.032,
+      3
+    );
     for (let i = 0; i < outriggerCount; i += 1) {
       const angle = (i / outriggerCount) * Math.PI * 2;
-      const arm = cast(
-        new THREE.Mesh(
-          new THREE.BoxGeometry(isDeluxe ? 0.18 : 0.15, isDeluxe ? 0.28 : 0.24, footprintRadius * (isDeluxe ? 0.32 : 0.28)),
-          darkMat
-        )
-      );
+      const arm = cast(new THREE.Mesh(outriggerArmGeometry, darkMat));
       arm.position.set(Math.cos(angle) * outriggerRadius, 0.34, Math.sin(angle) * outriggerRadius);
       arm.rotation.y = angle;
       group.add(arm);
@@ -9835,12 +9890,14 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     turret.position.y = isDeluxe ? 2.42 : 2.08;
     group.add(turret);
 
-    const turretBody = cast(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(isDeluxe ? 1.52 : 1.16, isDeluxe ? 0.98 : 0.76, isDeluxe ? 1.72 : 1.28),
-        bodyMat
-      )
+    const turretBodyGeometry = createRoundedPrismGeometry(
+      isDeluxe ? 1.52 : 1.16,
+      isDeluxe ? 0.98 : 0.76,
+      isDeluxe ? 1.72 : 1.28,
+      isDeluxe ? 0.16 : 0.13,
+      4
     );
+    const turretBody = cast(new THREE.Mesh(turretBodyGeometry, bodyMat));
     turretBody.position.y = 0.42;
     turret.add(turretBody);
 
@@ -9853,23 +9910,28 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     turretCollar.position.y = 0.56;
     turret.add(turretCollar);
 
-    const sidePlateLeft = cast(
-      new THREE.Mesh(new THREE.BoxGeometry(isDeluxe ? 0.14 : 0.11, isDeluxe ? 0.62 : 0.5, isDeluxe ? 1.24 : 0.94), darkMat)
+    const sidePlateGeometry = createRoundedPrismGeometry(
+      isDeluxe ? 0.14 : 0.11,
+      isDeluxe ? 0.62 : 0.5,
+      isDeluxe ? 1.24 : 0.94,
+      isDeluxe ? 0.038 : 0.028,
+      3
     );
+    const sidePlateLeft = cast(new THREE.Mesh(sidePlateGeometry, darkMat));
     sidePlateLeft.position.set(isDeluxe ? -0.72 : -0.56, 0.34, 0.34);
     turret.add(sidePlateLeft);
-    const sidePlateRight = cast(
-      new THREE.Mesh(new THREE.BoxGeometry(isDeluxe ? 0.14 : 0.11, isDeluxe ? 0.62 : 0.5, isDeluxe ? 1.24 : 0.94), darkMat)
-    );
+    const sidePlateRight = cast(new THREE.Mesh(sidePlateGeometry, darkMat));
     sidePlateRight.position.set(isDeluxe ? 0.72 : 0.56, 0.34, 0.34);
     turret.add(sidePlateRight);
 
-    const counterMass = cast(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(isDeluxe ? 0.86 : 0.66, isDeluxe ? 0.44 : 0.34, isDeluxe ? 0.56 : 0.46),
-        darkMat
-      )
+    const counterMassGeometry = createRoundedPrismGeometry(
+      isDeluxe ? 0.86 : 0.66,
+      isDeluxe ? 0.44 : 0.34,
+      isDeluxe ? 0.56 : 0.46,
+      isDeluxe ? 0.09 : 0.07,
+      3
     );
+    const counterMass = cast(new THREE.Mesh(counterMassGeometry, darkMat));
     counterMass.position.set(0, 0.3, isDeluxe ? -0.64 : -0.54);
     turret.add(counterMass);
 
@@ -9882,21 +9944,25 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     barrelRig.rotation.x = -0.22;
     turret.add(barrelRig);
 
-    const mountBridge = cast(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(isDeluxe ? 0.94 : 0.56, isDeluxe ? 0.28 : 0.22, isDeluxe ? 0.94 : 0.7),
-        darkMat
-      )
+    const mountBridgeGeometry = createRoundedPrismGeometry(
+      isDeluxe ? 0.94 : 0.56,
+      isDeluxe ? 0.28 : 0.22,
+      isDeluxe ? 0.94 : 0.7,
+      isDeluxe ? 0.09 : 0.065,
+      3
     );
+    const mountBridge = cast(new THREE.Mesh(mountBridgeGeometry, darkMat));
     mountBridge.position.set(0, 0.08, -0.04);
     barrelRig.add(mountBridge);
 
-    const breech = cast(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(isDeluxe ? 1.02 : 0.58, isDeluxe ? 0.44 : 0.34, isDeluxe ? 0.74 : 0.62),
-        coreMat
-      )
+    const breechGeometry = createRoundedPrismGeometry(
+      isDeluxe ? 1.02 : 0.58,
+      isDeluxe ? 0.44 : 0.34,
+      isDeluxe ? 0.74 : 0.62,
+      isDeluxe ? 0.1 : 0.068,
+      3
     );
+    const breech = cast(new THREE.Mesh(breechGeometry, coreMat));
     breech.position.set(0, 0.08, 0.36);
     barrelRig.add(breech);
 
@@ -9921,7 +9987,8 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       rightTube.position.set(0.24, 0.08, 2.04);
       barrelRig.add(rightTube);
 
-      const stabilizer = cast(new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.14, 0.46), darkMat));
+      const stabilizerGeometry = createRoundedPrismGeometry(0.82, 0.14, 0.46, 0.045, 3);
+      const stabilizer = cast(new THREE.Mesh(stabilizerGeometry, darkMat));
       stabilizer.position.set(0, 0.08, 1.5);
       barrelRig.add(stabilizer);
 
@@ -9945,10 +10012,11 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       muzzleBrake.position.set(0, 0.08, 3.28);
       barrelRig.add(muzzleBrake);
 
-      const ventLeft = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.42), glowMat));
+      const ventGeometry = createRoundedPrismGeometry(0.08, 0.08, 0.42, 0.022, 2);
+      const ventLeft = cast(new THREE.Mesh(ventGeometry, glowMat));
       ventLeft.position.set(-0.24, 0.08, 3.28);
       barrelRig.add(ventLeft);
-      const ventRight = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.42), glowMat));
+      const ventRight = cast(new THREE.Mesh(ventGeometry, glowMat));
       ventRight.position.set(0.24, 0.08, 3.28);
       barrelRig.add(ventRight);
     }
@@ -10337,38 +10405,60 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     towerTypeId === "swarm" ||
     towerTypeId === "volt" ||
     towerTypeId === "tesla" ||
+    towerTypeId === "deluxeStormcoiler" ||
     towerTypeId === "frost" ||
     towerTypeId === "nova" ||
     towerTypeId === "photon"
   ) {
-    turret.position.y = 1.78;
+    const isDeluxeStormcoiler = towerTypeId === "deluxeStormcoiler";
+    turret.position.y = isDeluxeStormcoiler ? 1.9 : 1.78;
 
-    const hub = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.45, 0.62, 20), coreMat));
+    const hub = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          isDeluxeStormcoiler ? 0.42 : 0.34,
+          isDeluxeStormcoiler ? 0.54 : 0.45,
+          isDeluxeStormcoiler ? 0.78 : 0.62,
+          20
+        ),
+        coreMat
+      )
+    );
     hub.position.y = 0.22;
     turret.add(hub);
 
     spinNode = new THREE.Group();
-    spinNode.position.y = 0.28;
+    spinNode.position.y = isDeluxeStormcoiler ? 0.34 : 0.28;
     for (let i = 0; i < 3; i += 1) {
       const a = (i / 3) * Math.PI * 2;
-      const arm = cast(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.96), darkMat));
+      const arm = cast(
+        new THREE.Mesh(
+          new THREE.BoxGeometry(isDeluxeStormcoiler ? 0.14 : 0.12, isDeluxeStormcoiler ? 0.14 : 0.12, isDeluxeStormcoiler ? 1.14 : 0.96),
+          darkMat
+        )
+      );
       arm.rotation.y = a;
-      arm.position.set(Math.cos(a) * 0.28, 0, Math.sin(a) * 0.28);
+      arm.position.set(Math.cos(a) * (isDeluxeStormcoiler ? 0.34 : 0.28), 0, Math.sin(a) * (isDeluxeStormcoiler ? 0.34 : 0.28));
       spinNode.add(arm);
 
-      const orb = cast(new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 10), bodyMat));
-      orb.position.set(Math.cos(a) * 0.76, 0, Math.sin(a) * 0.76);
+      const orb = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.2 : 0.17, 10, 10), bodyMat));
+      orb.position.set(Math.cos(a) * (isDeluxeStormcoiler ? 0.88 : 0.76), 0, Math.sin(a) * (isDeluxeStormcoiler ? 0.88 : 0.76));
       spinNode.add(orb);
     }
     turret.add(spinNode);
 
-    const centerBarrel = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.24, 12), coreMat));
+    const centerBarrel = cast(
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.13 : 0.11, isDeluxeStormcoiler ? 0.16 : 0.13, isDeluxeStormcoiler ? 1.42 : 1.24, 12),
+        coreMat
+      )
+    );
     centerBarrel.rotation.x = Math.PI / 2;
-    centerBarrel.position.set(0, 0.22, 0.8);
+    centerBarrel.position.set(0, isDeluxeStormcoiler ? 0.26 : 0.22, isDeluxeStormcoiler ? 0.94 : 0.8);
     turret.add(centerBarrel);
 
-    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), beaconMat);
-    beacon.position.set(0, 0.56, 0.2);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.12 : 0.1, 12, 12), beaconMat);
+    beacon.position.set(0, isDeluxeStormcoiler ? 0.68 : 0.56, 0.2);
     turret.add(beacon);
 
     if (towerTypeId === "volt") {
@@ -10394,37 +10484,72 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const rearCell = cast(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), glowMat));
       rearCell.position.set(0, 0.22, -0.42);
       turret.add(rearCell);
-    } else if (towerTypeId === "tesla") {
-      const coilStem = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.92, 12), coreMat));
+    } else if (towerTypeId === "tesla" || towerTypeId === "deluxeStormcoiler") {
+      const isDeluxeStormcoiler = towerTypeId === "deluxeStormcoiler";
+      const coilStem = cast(
+        new THREE.Mesh(
+          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.15 : 0.12, isDeluxeStormcoiler ? 0.2 : 0.16, isDeluxeStormcoiler ? 1.08 : 0.92, 12),
+          coreMat
+        )
+      );
       coilStem.rotation.x = Math.PI / 2;
-      coilStem.position.set(0, 0.42, 1.18);
+      coilStem.position.set(0, isDeluxeStormcoiler ? 0.48 : 0.42, isDeluxeStormcoiler ? 1.34 : 1.18);
       turret.add(coilStem);
 
-      const lowerCoil = cast(new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.06, 10, 30), glowMat));
+      const lowerCoil = cast(
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.7 : 0.56, isDeluxeStormcoiler ? 0.075 : 0.06, 10, 34), glowMat)
+      );
       lowerCoil.rotation.x = Math.PI / 2;
-      lowerCoil.position.set(0, 0.34, 0.84);
+      lowerCoil.position.set(0, isDeluxeStormcoiler ? 0.4 : 0.34, isDeluxeStormcoiler ? 1.0 : 0.84);
       turret.add(lowerCoil);
 
-      const upperCoil = cast(new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.05, 10, 26), coreMat));
+      const upperCoil = cast(
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.5 : 0.38, isDeluxeStormcoiler ? 0.06 : 0.05, 10, 30), coreMat)
+      );
       upperCoil.rotation.x = Math.PI / 2;
-      upperCoil.position.set(0, 0.62, 1.02);
+      upperCoil.position.set(0, isDeluxeStormcoiler ? 0.74 : 0.62, isDeluxeStormcoiler ? 1.16 : 1.02);
       turret.add(upperCoil);
 
-      for (let i = 0; i < 4; i += 1) {
-        const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
-        const prong = cast(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.54), coreMat));
-        prong.position.set(Math.cos(angle) * 0.28, 0.62, Math.sin(angle) * 0.28 + 1.26);
+      const prongCount = isDeluxeStormcoiler ? 6 : 4;
+      const prongRadius = isDeluxeStormcoiler ? 0.34 : 0.28;
+      for (let i = 0; i < prongCount; i += 1) {
+        const angle = (i / prongCount) * Math.PI * 2 + Math.PI / 4;
+        const prong = cast(
+          new THREE.Mesh(
+            new THREE.BoxGeometry(isDeluxeStormcoiler ? 0.09 : 0.08, isDeluxeStormcoiler ? 0.38 : 0.3, isDeluxeStormcoiler ? 0.68 : 0.54),
+            coreMat
+          )
+        );
+        prong.position.set(
+          Math.cos(angle) * prongRadius,
+          isDeluxeStormcoiler ? 0.74 : 0.62,
+          Math.sin(angle) * prongRadius + (isDeluxeStormcoiler ? 1.46 : 1.26)
+        );
         prong.rotation.y = angle;
         turret.add(prong);
       }
 
-      const arcEmitter = cast(new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), glowMat));
-      arcEmitter.position.set(0, 0.8, 1.54);
+      const arcEmitter = cast(new THREE.Mesh(new THREE.OctahedronGeometry(isDeluxeStormcoiler ? 0.2 : 0.16, 0), glowMat));
+      arcEmitter.position.set(0, isDeluxeStormcoiler ? 0.92 : 0.8, isDeluxeStormcoiler ? 1.78 : 1.54);
       turret.add(arcEmitter);
 
-      const rearNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), glowMat));
-      rearNode.position.set(0, 0.22, -0.46);
+      const rearNode = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.2 : 0.16, 12, 12), glowMat));
+      rearNode.position.set(0, isDeluxeStormcoiler ? 0.26 : 0.22, isDeluxeStormcoiler ? -0.56 : -0.46);
       turret.add(rearNode);
+
+      if (isDeluxeStormcoiler) {
+        const outerHalo = cast(new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.06, 10, 38), glowMat));
+        outerHalo.rotation.x = Math.PI / 2;
+        outerHalo.position.set(0, 0.56, 1.22);
+        turret.add(outerHalo);
+
+        for (let i = 0; i < 3; i += 1) {
+          const a = (i / 3) * Math.PI * 2;
+          const arcNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), glowMat));
+          arcNode.position.set(Math.cos(a) * 0.62, 0.9, Math.sin(a) * 0.62 + 1.08);
+          turret.add(arcNode);
+        }
+      }
     } else if (towerTypeId === "frost") {
       for (let i = 0; i < 6; i += 1) {
         const angle = (i / 6) * Math.PI * 2;
@@ -10507,6 +10632,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle.position.set(0, 0.22, 1.5);
     if (towerTypeId === "volt") muzzle.position.set(0, 0.24, 1.7);
     if (towerTypeId === "tesla") muzzle.position.set(0, 0.4, 1.72);
+    if (towerTypeId === "deluxeStormcoiler") muzzle.position.set(0, 0.5, 1.98);
     if (towerTypeId === "frost") muzzle.position.set(0, 0.24, 1.56);
     if (towerTypeId === "nova") muzzle.position.set(0, 0.22, 1.78);
     if (towerTypeId === "photon") muzzle.position.set(0, 0.24, 1.98);
@@ -11575,6 +11701,8 @@ class Tower {
       this.multiTargetCount > 1
         ? THREE.MathUtils.clamp(Number(config.multiTargetDamageFalloff || 0.8), 0.35, 1)
         : 1;
+    this.chainSfxInterval = Math.max(0, Number(config.chainSfxInterval || 0));
+    this.nextChainSfxAt = 0;
     this.meshScale = Number.isFinite(config.meshScale) ? Math.max(0.6, config.meshScale) : 1;
     this.trapTriggerRadius = this.isTrap ? Math.max(0.5, Number(config.trapTriggerRadius || config.range || 1)) : 0;
     this.trapDurabilityMax = this.isTrap ? Math.max(1, Math.floor(config.trapDurability || 10)) : 0;
@@ -11961,7 +12089,10 @@ class Tower {
 
     this.cooldown = this.fireInterval;
     if (chainTargets && chainTargets.length > 0) {
-      audioSystem.playTowerShot(this.damage * 0.96);
+      if (this.chainSfxInterval <= 0 || game.time >= this.nextChainSfxAt) {
+        audioSystem.playTowerShot(this.damage * 0.96);
+        if (this.chainSfxInterval > 0) this.nextChainSfxAt = game.time + this.chainSfxInterval;
+      }
       const hitLimit = Math.min(Math.max(1, this.multiTargetCount), chainTargets.length);
       const damageFalloff = THREE.MathUtils.clamp(this.multiTargetDamageFalloff, 0.35, 1);
       const aimPoint = new THREE.Vector3();
