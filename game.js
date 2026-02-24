@@ -10487,15 +10487,29 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       );
       spinRingC.rotation.z = Math.PI / 2;
       spinNode.add(spinRingC);
+      if (isDeluxeStormcoiler) {
+        const spinRingD = cast(new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 10, 26), coreMat));
+        spinRingD.rotation.set(Math.PI / 2, Math.PI / 3, Math.PI / 7);
+        spinNode.add(spinRingD);
+
+        const spinRingE = cast(new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.03, 10, 24), glowMat));
+        spinRingE.rotation.set(Math.PI / 2, -Math.PI / 5, Math.PI / 3);
+        spinNode.add(spinRingE);
+      }
       turret.add(spinNode);
 
       const centerMast = cast(
         new THREE.Mesh(
-          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.12 : 0.1, isDeluxeStormcoiler ? 0.16 : 0.13, isDeluxeStormcoiler ? 1.26 : 1.04, 12),
+          new THREE.CylinderGeometry(
+            isDeluxeStormcoiler ? 0.14 : 0.115,
+            isDeluxeStormcoiler ? 0.2 : 0.16,
+            isDeluxeStormcoiler ? 0.82 : 0.7,
+            12
+          ),
           coreMat
         )
       );
-      centerMast.position.set(0, isDeluxeStormcoiler ? 0.78 : 0.68, coilCenterZ);
+      centerMast.position.set(0, isDeluxeStormcoiler ? 0.4 : 0.36, coilCenterZ);
       turret.add(centerMast);
 
       const beacon = new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.14 : 0.11, 12, 12), beaconMat);
@@ -10626,6 +10640,27 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
           const arcNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), glowMat));
           arcNode.position.set(Math.cos(a) * 0.66, coilBaseY + 0.66, coilCenterZ + Math.sin(a) * 0.66);
           turret.add(arcNode);
+        }
+
+        const crownHaloA = cast(new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.038, 10, 34), coreMat));
+        crownHaloA.rotation.set(Math.PI / 2, Math.PI / 3.8, 0);
+        crownHaloA.position.set(0, coilBaseY + 0.42, coilCenterZ);
+        turret.add(crownHaloA);
+
+        const crownHaloB = cast(new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.034, 10, 30), glowMat));
+        crownHaloB.rotation.set(Math.PI / 2, 0, Math.PI / 3.5);
+        crownHaloB.position.set(0, coilBaseY + 0.5, coilCenterZ);
+        turret.add(crownHaloB);
+
+        for (let i = 0; i < 6; i += 1) {
+          const a = (i / 6) * Math.PI * 2;
+          const pylon = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.045, 0.32, 10), darkMat));
+          pylon.position.set(Math.cos(a) * 0.78, coilBaseY + 0.1, coilCenterZ + Math.sin(a) * 0.78);
+          turret.add(pylon);
+
+          const pylonCap = cast(new THREE.Mesh(new THREE.SphereGeometry(0.052, 10, 10), glowMat));
+          pylonCap.position.set(Math.cos(a) * 0.78, coilBaseY + 0.28, coilCenterZ + Math.sin(a) * 0.78);
+          turret.add(pylonCap);
         }
       }
     } else if (towerTypeId === "frost") {
