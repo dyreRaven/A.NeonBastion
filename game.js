@@ -10447,55 +10447,85 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     towerTypeId === "photon"
   ) {
     const isDeluxeStormcoiler = towerTypeId === "deluxeStormcoiler";
+    const isStormcoiler = towerTypeId === "tesla" || towerTypeId === "deluxeStormcoiler";
     turret.position.y = isDeluxeStormcoiler ? 1.9 : 1.78;
 
     const hub = cast(
       new THREE.Mesh(
         new THREE.CylinderGeometry(
-          isDeluxeStormcoiler ? 0.42 : 0.34,
-          isDeluxeStormcoiler ? 0.54 : 0.45,
-          isDeluxeStormcoiler ? 0.78 : 0.62,
+          isStormcoiler ? (isDeluxeStormcoiler ? 0.48 : 0.4) : isDeluxeStormcoiler ? 0.42 : 0.34,
+          isStormcoiler ? (isDeluxeStormcoiler ? 0.62 : 0.52) : isDeluxeStormcoiler ? 0.54 : 0.45,
+          isStormcoiler ? (isDeluxeStormcoiler ? 0.92 : 0.74) : isDeluxeStormcoiler ? 0.78 : 0.62,
           20
         ),
         coreMat
       )
     );
-    hub.position.y = 0.22;
+    hub.position.y = isStormcoiler ? 0.26 : 0.22;
     turret.add(hub);
 
-    spinNode = new THREE.Group();
-    spinNode.position.y = isDeluxeStormcoiler ? 0.34 : 0.28;
-    for (let i = 0; i < 3; i += 1) {
-      const a = (i / 3) * Math.PI * 2;
-      const arm = cast(
+    if (isStormcoiler) {
+      // Use a dedicated Tesla silhouette: central mast + spinning electromagnetic rings.
+      const coilCenterZ = isDeluxeStormcoiler ? 1.08 : 0.96;
+      spinNode = new THREE.Group();
+      spinNode.position.set(0, isDeluxeStormcoiler ? 0.62 : 0.52, coilCenterZ);
+
+      const spinRingA = cast(
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.58 : 0.46, isDeluxeStormcoiler ? 0.06 : 0.05, 10, 34), glowMat)
+      );
+      spinRingA.rotation.x = Math.PI / 2;
+      spinNode.add(spinRingA);
+
+      const spinRingB = cast(
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.5 : 0.4, isDeluxeStormcoiler ? 0.05 : 0.042, 10, 30), coreMat)
+      );
+      spinRingB.rotation.y = Math.PI / 2;
+      spinNode.add(spinRingB);
+
+      const spinRingC = cast(
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.42 : 0.34, isDeluxeStormcoiler ? 0.045 : 0.038, 10, 28), glowMat)
+      );
+      spinRingC.rotation.z = Math.PI / 2;
+      spinNode.add(spinRingC);
+      turret.add(spinNode);
+
+      const centerMast = cast(
         new THREE.Mesh(
-          new THREE.BoxGeometry(isDeluxeStormcoiler ? 0.14 : 0.12, isDeluxeStormcoiler ? 0.14 : 0.12, isDeluxeStormcoiler ? 1.14 : 0.96),
-          darkMat
+          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.12 : 0.1, isDeluxeStormcoiler ? 0.16 : 0.13, isDeluxeStormcoiler ? 1.26 : 1.04, 12),
+          coreMat
         )
       );
-      arm.rotation.y = a;
-      arm.position.set(Math.cos(a) * (isDeluxeStormcoiler ? 0.34 : 0.28), 0, Math.sin(a) * (isDeluxeStormcoiler ? 0.34 : 0.28));
-      spinNode.add(arm);
+      centerMast.position.set(0, isDeluxeStormcoiler ? 0.78 : 0.68, coilCenterZ);
+      turret.add(centerMast);
 
-      const orb = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.2 : 0.17, 10, 10), bodyMat));
-      orb.position.set(Math.cos(a) * (isDeluxeStormcoiler ? 0.88 : 0.76), 0, Math.sin(a) * (isDeluxeStormcoiler ? 0.88 : 0.76));
-      spinNode.add(orb);
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.14 : 0.11, 12, 12), beaconMat);
+      beacon.position.set(0, isDeluxeStormcoiler ? 1.28 : 1.08, coilCenterZ);
+      turret.add(beacon);
+    } else {
+      spinNode = new THREE.Group();
+      spinNode.position.y = 0.28;
+      for (let i = 0; i < 3; i += 1) {
+        const a = (i / 3) * Math.PI * 2;
+        const arm = cast(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.96), darkMat));
+        arm.rotation.y = a;
+        arm.position.set(Math.cos(a) * 0.28, 0, Math.sin(a) * 0.28);
+        spinNode.add(arm);
+
+        const orb = cast(new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 10), bodyMat));
+        orb.position.set(Math.cos(a) * 0.76, 0, Math.sin(a) * 0.76);
+        spinNode.add(orb);
+      }
+      turret.add(spinNode);
+
+      const centerBarrel = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.24, 12), coreMat));
+      centerBarrel.rotation.x = Math.PI / 2;
+      centerBarrel.position.set(0, 0.22, 0.8);
+      turret.add(centerBarrel);
+
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), beaconMat);
+      beacon.position.set(0, 0.56, 0.2);
+      turret.add(beacon);
     }
-    turret.add(spinNode);
-
-    const centerBarrel = cast(
-      new THREE.Mesh(
-        new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.13 : 0.11, isDeluxeStormcoiler ? 0.16 : 0.13, isDeluxeStormcoiler ? 1.42 : 1.24, 12),
-        coreMat
-      )
-    );
-    centerBarrel.rotation.x = Math.PI / 2;
-    centerBarrel.position.set(0, isDeluxeStormcoiler ? 0.26 : 0.22, isDeluxeStormcoiler ? 0.94 : 0.8);
-    turret.add(centerBarrel);
-
-    const beacon = new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.12 : 0.1, 12, 12), beaconMat);
-    beacon.position.set(0, isDeluxeStormcoiler ? 0.68 : 0.56, 0.2);
-    turret.add(beacon);
 
     if (towerTypeId === "volt") {
       const arcRing = cast(new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.05, 10, 30), glowMat));
@@ -10522,67 +10552,79 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(rearCell);
     } else if (towerTypeId === "tesla" || towerTypeId === "deluxeStormcoiler") {
       const isDeluxeStormcoiler = towerTypeId === "deluxeStormcoiler";
+      const coilCenterZ = isDeluxeStormcoiler ? 1.08 : 0.96;
+      const coilBaseY = isDeluxeStormcoiler ? 0.78 : 0.68;
       const coilStem = cast(
         new THREE.Mesh(
-          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.15 : 0.12, isDeluxeStormcoiler ? 0.2 : 0.16, isDeluxeStormcoiler ? 1.08 : 0.92, 12),
+          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.11 : 0.09, isDeluxeStormcoiler ? 0.14 : 0.12, isDeluxeStormcoiler ? 1.18 : 0.98, 12),
           coreMat
         )
       );
-      coilStem.rotation.x = Math.PI / 2;
-      coilStem.position.set(0, isDeluxeStormcoiler ? 0.48 : 0.42, isDeluxeStormcoiler ? 1.34 : 1.18);
+      coilStem.position.set(0, coilBaseY, coilCenterZ);
       turret.add(coilStem);
 
       const lowerCoil = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.7 : 0.56, isDeluxeStormcoiler ? 0.075 : 0.06, 10, 34), glowMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.74 : 0.58, isDeluxeStormcoiler ? 0.075 : 0.06, 10, 34), glowMat)
       );
       lowerCoil.rotation.x = Math.PI / 2;
-      lowerCoil.position.set(0, isDeluxeStormcoiler ? 0.4 : 0.34, isDeluxeStormcoiler ? 1.0 : 0.84);
+      lowerCoil.position.set(0, coilBaseY - (isDeluxeStormcoiler ? 0.26 : 0.22), coilCenterZ);
       turret.add(lowerCoil);
 
+      const midCoil = cast(
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.62 : 0.5, isDeluxeStormcoiler ? 0.07 : 0.054, 10, 32), bodyMat)
+      );
+      midCoil.rotation.x = Math.PI / 2;
+      midCoil.position.set(0, coilBaseY - (isDeluxeStormcoiler ? 0.04 : 0.03), coilCenterZ);
+      turret.add(midCoil);
+
       const upperCoil = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.5 : 0.38, isDeluxeStormcoiler ? 0.06 : 0.05, 10, 30), coreMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.52 : 0.4, isDeluxeStormcoiler ? 0.06 : 0.05, 10, 30), coreMat)
       );
       upperCoil.rotation.x = Math.PI / 2;
-      upperCoil.position.set(0, isDeluxeStormcoiler ? 0.74 : 0.62, isDeluxeStormcoiler ? 1.16 : 1.02);
+      upperCoil.position.set(0, coilBaseY + (isDeluxeStormcoiler ? 0.2 : 0.16), coilCenterZ);
       turret.add(upperCoil);
 
       const prongCount = isDeluxeStormcoiler ? 6 : 4;
-      const prongRadius = isDeluxeStormcoiler ? 0.34 : 0.28;
+      const prongRadius = isDeluxeStormcoiler ? 0.44 : 0.34;
       for (let i = 0; i < prongCount; i += 1) {
-        const angle = (i / prongCount) * Math.PI * 2 + Math.PI / 4;
+        const angle = (i / prongCount) * Math.PI * 2 + (Math.PI / prongCount);
         const prong = cast(
           new THREE.Mesh(
-            new THREE.BoxGeometry(isDeluxeStormcoiler ? 0.09 : 0.08, isDeluxeStormcoiler ? 0.38 : 0.3, isDeluxeStormcoiler ? 0.68 : 0.54),
+            new THREE.BoxGeometry(isDeluxeStormcoiler ? 0.1 : 0.085, isDeluxeStormcoiler ? 0.34 : 0.28, isDeluxeStormcoiler ? 0.62 : 0.52),
             coreMat
           )
         );
         prong.position.set(
           Math.cos(angle) * prongRadius,
-          isDeluxeStormcoiler ? 0.74 : 0.62,
-          Math.sin(angle) * prongRadius + (isDeluxeStormcoiler ? 1.46 : 1.26)
+          coilBaseY + (isDeluxeStormcoiler ? 0.46 : 0.36),
+          coilCenterZ + Math.sin(angle) * prongRadius
         );
-        prong.rotation.y = angle;
+        prong.rotation.y = angle + Math.PI / 2;
+        prong.rotation.x = -0.06;
         turret.add(prong);
       }
 
       const arcEmitter = cast(new THREE.Mesh(new THREE.OctahedronGeometry(isDeluxeStormcoiler ? 0.2 : 0.16, 0), glowMat));
-      arcEmitter.position.set(0, isDeluxeStormcoiler ? 0.92 : 0.8, isDeluxeStormcoiler ? 1.78 : 1.54);
+      arcEmitter.position.set(0, coilBaseY + (isDeluxeStormcoiler ? 0.72 : 0.56), coilCenterZ);
       turret.add(arcEmitter);
 
-      const rearNode = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.2 : 0.16, 12, 12), glowMat));
-      rearNode.position.set(0, isDeluxeStormcoiler ? 0.26 : 0.22, isDeluxeStormcoiler ? -0.56 : -0.46);
-      turret.add(rearNode);
+      const capacitorLeft = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.17 : 0.14, 12, 12), glowMat));
+      capacitorLeft.position.set(-(isDeluxeStormcoiler ? 0.56 : 0.44), coilBaseY - 0.08, coilCenterZ - 0.14);
+      turret.add(capacitorLeft);
+      const capacitorRight = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.17 : 0.14, 12, 12), glowMat));
+      capacitorRight.position.set(isDeluxeStormcoiler ? 0.56 : 0.44, coilBaseY - 0.08, coilCenterZ - 0.14);
+      turret.add(capacitorRight);
 
       if (isDeluxeStormcoiler) {
         const outerHalo = cast(new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.06, 10, 38), glowMat));
         outerHalo.rotation.x = Math.PI / 2;
-        outerHalo.position.set(0, 0.56, 1.22);
+        outerHalo.position.set(0, coilBaseY + 0.04, coilCenterZ);
         turret.add(outerHalo);
 
         for (let i = 0; i < 3; i += 1) {
           const a = (i / 3) * Math.PI * 2;
           const arcNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), glowMat));
-          arcNode.position.set(Math.cos(a) * 0.62, 0.9, Math.sin(a) * 0.62 + 1.08);
+          arcNode.position.set(Math.cos(a) * 0.66, coilBaseY + 0.66, coilCenterZ + Math.sin(a) * 0.66);
           turret.add(arcNode);
         }
       }
@@ -10667,8 +10709,8 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle = new THREE.Object3D();
     muzzle.position.set(0, 0.22, 1.5);
     if (towerTypeId === "volt") muzzle.position.set(0, 0.24, 1.7);
-    if (towerTypeId === "tesla") muzzle.position.set(0, 0.4, 1.72);
-    if (towerTypeId === "deluxeStormcoiler") muzzle.position.set(0, 0.5, 1.98);
+    if (towerTypeId === "tesla") muzzle.position.set(0, 1.26, 0.96);
+    if (towerTypeId === "deluxeStormcoiler") muzzle.position.set(0, 1.52, 1.08);
     if (towerTypeId === "frost") muzzle.position.set(0, 0.24, 1.56);
     if (towerTypeId === "nova") muzzle.position.set(0, 0.22, 1.78);
     if (towerTypeId === "photon") muzzle.position.set(0, 0.24, 1.98);
