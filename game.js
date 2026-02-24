@@ -10090,8 +10090,8 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     const footprintDisk = cast(
       new THREE.Mesh(
         new THREE.CylinderGeometry(
-          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.66 : 0.68),
-          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.72 : 0.74),
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.58 : 0.68),
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.62 : 0.74),
           0.14,
           42
         ),
@@ -10102,7 +10102,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     group.add(footprintDisk);
 
     const footprintRing = cast(
-      new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * (isDeluxeStormcoilerBody ? 0.31 : 0.3), 0.03, 10, 40), glowMat)
+      new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * (isDeluxeStormcoilerBody ? 0.24 : 0.3), 0.028, 10, 40), glowMat)
     );
     footprintRing.rotation.x = Math.PI / 2;
     footprintRing.position.y = 0.17;
@@ -10112,19 +10112,19 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     const superHull = cast(
       new THREE.Mesh(
         new THREE.CylinderGeometry(
-          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.36 : 0.42),
-          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.44 : 0.48),
-          isDeluxeStormcoilerBody ? 1.24 : 1.3,
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.28 : 0.42),
+          CELL_SIZE * (isDeluxeStormcoilerBody ? 0.34 : 0.48),
+          isDeluxeStormcoilerBody ? 1.32 : 1.3,
           34
         ),
         bodyMat
       )
     );
-    superHull.position.y = isDeluxeStormcoilerBody ? 1.12 : 1.16;
+    superHull.position.y = isDeluxeStormcoilerBody ? 1.18 : 1.16;
     group.add(superHull);
 
     const superHullRing = cast(
-      new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * (isDeluxeStormcoilerBody ? 0.28 : 0.3), 0.045, 12, 42), coreMat)
+      new THREE.Mesh(new THREE.TorusGeometry(CELL_SIZE * (isDeluxeStormcoilerBody ? 0.22 : 0.3), 0.038, 12, 42), coreMat)
     );
     superHullRing.rotation.x = Math.PI / 2;
     superHullRing.position.y = isDeluxeStormcoilerBody ? 1.62 : 1.66;
@@ -10177,21 +10177,30 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     ring.scale.set(0.56, 1, 0.56);
     ring.position.y = 1.56;
   } else if (towerTypeId === "deluxeStormcoiler") {
-    base.scale.set(0.94, 1.14, 0.94);
+    base.scale.set(0.78, 1.18, 0.78);
     base.position.y = 0.27;
-    lowerCore.scale.set(0.86, 1.38, 0.86);
-    lowerCore.position.y = 1.11;
-    neck.scale.set(0.84, 1.5, 0.84);
-    neck.position.y = 1.9;
-    ring.scale.set(0.66, 1, 0.66);
-    ring.position.y = 1.6;
+    lowerCore.scale.set(0.7, 1.44, 0.7);
+    lowerCore.position.y = 1.15;
+    neck.scale.set(0.68, 1.58, 0.68);
+    neck.position.y = 1.98;
+    ring.scale.set(0.48, 1, 0.48);
+    ring.position.y = 1.68;
   }
 
   if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler") {
     // Ground sleeve intentionally passes through terrain so the base never appears to float.
-    const isDeluxeSleeveTower = towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler";
-    const sleeveRadiusTop = isDeluxeSleeveTower ? CELL_SIZE * 0.54 : 1.02;
-    const sleeveRadiusBottom = isDeluxeSleeveTower ? CELL_SIZE * 0.6 : 1.1;
+    const sleeveRadiusTop =
+      towerTypeId === "deluxeBombarder"
+        ? CELL_SIZE * 0.54
+        : towerTypeId === "deluxeStormcoiler"
+          ? CELL_SIZE * 0.44
+          : 1.02;
+    const sleeveRadiusBottom =
+      towerTypeId === "deluxeBombarder"
+        ? CELL_SIZE * 0.6
+        : towerTypeId === "deluxeStormcoiler"
+          ? CELL_SIZE * 0.5
+          : 1.1;
     const sleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(sleeveRadiusTop, sleeveRadiusBottom, 1.9, 24), darkMat));
     sleeve.position.y = -0.72;
     group.add(sleeve);
@@ -10453,9 +10462,9 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     const hub = cast(
       new THREE.Mesh(
         new THREE.CylinderGeometry(
-          isStormcoiler ? (isDeluxeStormcoiler ? 0.48 : 0.4) : isDeluxeStormcoiler ? 0.42 : 0.34,
-          isStormcoiler ? (isDeluxeStormcoiler ? 0.62 : 0.52) : isDeluxeStormcoiler ? 0.54 : 0.45,
-          isStormcoiler ? (isDeluxeStormcoiler ? 0.92 : 0.74) : isDeluxeStormcoiler ? 0.78 : 0.62,
+          isStormcoiler ? (isDeluxeStormcoiler ? 0.34 : 0.4) : isDeluxeStormcoiler ? 0.42 : 0.34,
+          isStormcoiler ? (isDeluxeStormcoiler ? 0.46 : 0.52) : isDeluxeStormcoiler ? 0.54 : 0.45,
+          isStormcoiler ? (isDeluxeStormcoiler ? 0.72 : 0.74) : isDeluxeStormcoiler ? 0.78 : 0.62,
           20
         ),
         coreMat
@@ -10468,31 +10477,31 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       // Use a dedicated Tesla silhouette: central mast + spinning electromagnetic rings.
       const coilCenterZ = isDeluxeStormcoiler ? 1.08 : 0.96;
       spinNode = new THREE.Group();
-      spinNode.position.set(0, isDeluxeStormcoiler ? 0.62 : 0.52, coilCenterZ);
+      spinNode.position.set(0, isDeluxeStormcoiler ? 0.66 : 0.52, coilCenterZ);
 
       const spinRingA = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.58 : 0.46, isDeluxeStormcoiler ? 0.06 : 0.05, 10, 34), glowMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.48 : 0.46, isDeluxeStormcoiler ? 0.046 : 0.05, 10, 34), glowMat)
       );
       spinRingA.rotation.x = Math.PI / 2;
       spinNode.add(spinRingA);
 
       const spinRingB = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.5 : 0.4, isDeluxeStormcoiler ? 0.05 : 0.042, 10, 30), coreMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.41 : 0.4, isDeluxeStormcoiler ? 0.04 : 0.042, 10, 30), coreMat)
       );
       spinRingB.rotation.y = Math.PI / 2;
       spinNode.add(spinRingB);
 
       const spinRingC = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.42 : 0.34, isDeluxeStormcoiler ? 0.045 : 0.038, 10, 28), glowMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.34 : 0.34, isDeluxeStormcoiler ? 0.034 : 0.038, 10, 28), glowMat)
       );
       spinRingC.rotation.z = Math.PI / 2;
       spinNode.add(spinRingC);
       if (isDeluxeStormcoiler) {
-        const spinRingD = cast(new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 10, 26), coreMat));
+        const spinRingD = cast(new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.03, 10, 26), coreMat));
         spinRingD.rotation.set(Math.PI / 2, Math.PI / 3, Math.PI / 7);
         spinNode.add(spinRingD);
 
-        const spinRingE = cast(new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.03, 10, 24), glowMat));
+        const spinRingE = cast(new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.024, 10, 24), glowMat));
         spinRingE.rotation.set(Math.PI / 2, -Math.PI / 5, Math.PI / 3);
         spinNode.add(spinRingE);
       }
@@ -10570,7 +10579,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const coilBaseY = isDeluxeStormcoiler ? 0.78 : 0.68;
       const coilStem = cast(
         new THREE.Mesh(
-          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.11 : 0.09, isDeluxeStormcoiler ? 0.14 : 0.12, isDeluxeStormcoiler ? 1.18 : 0.98, 12),
+          new THREE.CylinderGeometry(isDeluxeStormcoiler ? 0.085 : 0.09, isDeluxeStormcoiler ? 0.115 : 0.12, isDeluxeStormcoiler ? 1.24 : 0.98, 12),
           coreMat
         )
       );
@@ -10578,28 +10587,28 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(coilStem);
 
       const lowerCoil = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.74 : 0.58, isDeluxeStormcoiler ? 0.075 : 0.06, 10, 34), glowMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.56 : 0.58, isDeluxeStormcoiler ? 0.055 : 0.06, 10, 34), glowMat)
       );
       lowerCoil.rotation.x = Math.PI / 2;
       lowerCoil.position.set(0, coilBaseY - (isDeluxeStormcoiler ? 0.26 : 0.22), coilCenterZ);
       turret.add(lowerCoil);
 
       const midCoil = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.62 : 0.5, isDeluxeStormcoiler ? 0.07 : 0.054, 10, 32), bodyMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.46 : 0.5, isDeluxeStormcoiler ? 0.05 : 0.054, 10, 32), bodyMat)
       );
       midCoil.rotation.x = Math.PI / 2;
       midCoil.position.set(0, coilBaseY - (isDeluxeStormcoiler ? 0.04 : 0.03), coilCenterZ);
       turret.add(midCoil);
 
       const upperCoil = cast(
-        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.52 : 0.4, isDeluxeStormcoiler ? 0.06 : 0.05, 10, 30), coreMat)
+        new THREE.Mesh(new THREE.TorusGeometry(isDeluxeStormcoiler ? 0.38 : 0.4, isDeluxeStormcoiler ? 0.045 : 0.05, 10, 30), coreMat)
       );
       upperCoil.rotation.x = Math.PI / 2;
       upperCoil.position.set(0, coilBaseY + (isDeluxeStormcoiler ? 0.2 : 0.16), coilCenterZ);
       turret.add(upperCoil);
 
       const prongCount = isDeluxeStormcoiler ? 6 : 4;
-      const prongRadius = isDeluxeStormcoiler ? 0.44 : 0.34;
+      const prongRadius = isDeluxeStormcoiler ? 0.34 : 0.34;
       for (let i = 0; i < prongCount; i += 1) {
         const angle = (i / prongCount) * Math.PI * 2 + (Math.PI / prongCount);
         const prong = cast(
@@ -10623,14 +10632,14 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       turret.add(arcEmitter);
 
       const capacitorLeft = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.17 : 0.14, 12, 12), glowMat));
-      capacitorLeft.position.set(-(isDeluxeStormcoiler ? 0.56 : 0.44), coilBaseY - 0.08, coilCenterZ - 0.14);
+      capacitorLeft.position.set(-(isDeluxeStormcoiler ? 0.42 : 0.44), coilBaseY - 0.08, coilCenterZ - 0.14);
       turret.add(capacitorLeft);
       const capacitorRight = cast(new THREE.Mesh(new THREE.SphereGeometry(isDeluxeStormcoiler ? 0.17 : 0.14, 12, 12), glowMat));
-      capacitorRight.position.set(isDeluxeStormcoiler ? 0.56 : 0.44, coilBaseY - 0.08, coilCenterZ - 0.14);
+      capacitorRight.position.set(isDeluxeStormcoiler ? 0.42 : 0.44, coilBaseY - 0.08, coilCenterZ - 0.14);
       turret.add(capacitorRight);
 
       if (isDeluxeStormcoiler) {
-        const outerHalo = cast(new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.06, 10, 38), glowMat));
+        const outerHalo = cast(new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.046, 10, 38), glowMat));
         outerHalo.rotation.x = Math.PI / 2;
         outerHalo.position.set(0, coilBaseY + 0.04, coilCenterZ);
         turret.add(outerHalo);
@@ -10638,28 +10647,28 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
         for (let i = 0; i < 3; i += 1) {
           const a = (i / 3) * Math.PI * 2;
           const arcNode = cast(new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), glowMat));
-          arcNode.position.set(Math.cos(a) * 0.66, coilBaseY + 0.66, coilCenterZ + Math.sin(a) * 0.66);
+          arcNode.position.set(Math.cos(a) * 0.5, coilBaseY + 0.66, coilCenterZ + Math.sin(a) * 0.5);
           turret.add(arcNode);
         }
 
-        const crownHaloA = cast(new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.038, 10, 34), coreMat));
+        const crownHaloA = cast(new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.03, 10, 34), coreMat));
         crownHaloA.rotation.set(Math.PI / 2, Math.PI / 3.8, 0);
         crownHaloA.position.set(0, coilBaseY + 0.42, coilCenterZ);
         turret.add(crownHaloA);
 
-        const crownHaloB = cast(new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.034, 10, 30), glowMat));
+        const crownHaloB = cast(new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.028, 10, 30), glowMat));
         crownHaloB.rotation.set(Math.PI / 2, 0, Math.PI / 3.5);
         crownHaloB.position.set(0, coilBaseY + 0.5, coilCenterZ);
         turret.add(crownHaloB);
 
         for (let i = 0; i < 6; i += 1) {
           const a = (i / 6) * Math.PI * 2;
-          const pylon = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.045, 0.32, 10), darkMat));
-          pylon.position.set(Math.cos(a) * 0.78, coilBaseY + 0.1, coilCenterZ + Math.sin(a) * 0.78);
+          const pylon = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.036, 0.34, 10), darkMat));
+          pylon.position.set(Math.cos(a) * 0.56, coilBaseY + 0.1, coilCenterZ + Math.sin(a) * 0.56);
           turret.add(pylon);
 
-          const pylonCap = cast(new THREE.Mesh(new THREE.SphereGeometry(0.052, 10, 10), glowMat));
-          pylonCap.position.set(Math.cos(a) * 0.78, coilBaseY + 0.28, coilCenterZ + Math.sin(a) * 0.78);
+          const pylonCap = cast(new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 10), glowMat));
+          pylonCap.position.set(Math.cos(a) * 0.56, coilBaseY + 0.28, coilCenterZ + Math.sin(a) * 0.56);
           turret.add(pylonCap);
         }
       }
@@ -10745,7 +10754,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     muzzle.position.set(0, 0.22, 1.5);
     if (towerTypeId === "volt") muzzle.position.set(0, 0.24, 1.7);
     if (towerTypeId === "tesla") muzzle.position.set(0, 1.26, 0.96);
-    if (towerTypeId === "deluxeStormcoiler") muzzle.position.set(0, 1.52, 1.08);
+    if (towerTypeId === "deluxeStormcoiler") muzzle.position.set(0, 1.48, 1.08);
     if (towerTypeId === "frost") muzzle.position.set(0, 0.24, 1.56);
     if (towerTypeId === "nova") muzzle.position.set(0, 0.22, 1.78);
     if (towerTypeId === "photon") muzzle.position.set(0, 0.24, 1.98);
