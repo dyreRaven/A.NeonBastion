@@ -16729,6 +16729,63 @@ function clearCreaturePortraitSubject() {
   }
 }
 
+function tuneCreaturePortraitMeshReadability(group, enemyType) {
+  if (!group || !enemyType) return;
+  const primary = new THREE.Color(enemyType.colorA || "#7de4ff");
+  const secondary = new THREE.Color(enemyType.colorB || "#e9fcff");
+  const edgeColor = secondary.clone().lerp(new THREE.Color("#ffffff"), 0.38);
+
+  group.traverse((node) => {
+    if (!node || !node.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    for (const material of materials) {
+      if (!material) continue;
+      if (material.isMeshPhysicalMaterial) {
+        material.transparent = false;
+        material.opacity = 1;
+        if (Number.isFinite(material.transmission)) material.transmission = Math.min(material.transmission, 0.42);
+        if (Number.isFinite(material.thickness)) material.thickness *= 0.55;
+        if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.36, material.roughness + 0.1);
+        if (Number.isFinite(material.clearcoat)) material.clearcoat = Math.max(0.28, material.clearcoat * 0.62);
+        if (Number.isFinite(material.clearcoatRoughness)) {
+          material.clearcoatRoughness = Math.min(0.24, material.clearcoatRoughness + 0.07);
+        }
+        if (Number.isFinite(material.envMapIntensity)) material.envMapIntensity = Math.min(1.2, material.envMapIntensity);
+        if (material.color?.isColor) material.color.lerp(primary, 0.18);
+        if (material.emissive?.isColor) {
+          material.emissive.lerp(secondary, 0.2);
+          material.emissiveIntensity = Math.max(0.34, material.emissiveIntensity || 0.2);
+        }
+        material.needsUpdate = true;
+      } else if (material.isMeshStandardMaterial) {
+        if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.5, material.roughness + 0.08);
+        if (Number.isFinite(material.metalness)) material.metalness = Math.max(0.08, material.metalness * 0.62);
+        if (material.emissive?.isColor) {
+          material.emissive.lerp(secondary, 0.12);
+          material.emissiveIntensity = Math.max(0.26, material.emissiveIntensity || 0.18);
+        }
+        material.needsUpdate = true;
+      }
+    }
+
+    if (node.geometry && typeof node.geometry.clone === "function") {
+      const edgeGeometry = new THREE.EdgesGeometry(node.geometry, 26);
+      const edgeMaterial = new THREE.LineBasicMaterial({
+        color: edgeColor,
+        transparent: true,
+        opacity: 0.68,
+        depthWrite: false,
+      });
+      const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+      edgeLines.position.copy(node.position);
+      edgeLines.rotation.copy(node.rotation);
+      edgeLines.scale.copy(node.scale).multiplyScalar(1.004);
+      edgeLines.renderOrder = 5;
+      if (node.parent) node.parent.add(edgeLines);
+    }
+  });
+}
+
 function renderCreatureCardPortraitWithMainRenderer() {
   if (
     !creatureCardPortraitScene ||
@@ -16807,6 +16864,7 @@ function renderCreatureCardPortraitDataUrl(enemyTypeId) {
   let enemyVisual = null;
   try {
     enemyVisual = createEnemyMesh(enemyTypeId, enemyType.colorA, enemyType.colorB);
+    tuneCreaturePortraitMeshReadability(enemyVisual.group, enemyType);
     const portraitGroup = enemyVisual.group;
     creatureCardPortraitSubject.add(portraitGroup);
 

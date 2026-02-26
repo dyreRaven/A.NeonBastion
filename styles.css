@@ -1610,14 +1610,14 @@ body:not(.menu-active) .menu-screen {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   background: linear-gradient(
     96deg,
-    rgba(9, 17, 28, 0.8) 0%,
-    rgba(9, 17, 28, 0.62) 36%,
-    rgba(9, 17, 28, 0.24) 66%,
-    rgba(9, 17, 28, 0.02) 100%
+    rgba(9, 17, 28, 0.74) 0%,
+    rgba(9, 17, 28, 0.52) 34%,
+    rgba(9, 17, 28, 0.16) 66%,
+    rgba(9, 17, 28, 0.01) 100%
   );
 }
 
@@ -1625,7 +1625,7 @@ body:not(.menu-active) .menu-screen {
   content: "";
   position: absolute;
   inset: -24% -16%;
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
   background:
     conic-gradient(
@@ -1636,7 +1636,7 @@ body:not(.menu-active) .menu-screen {
       var(--creature-accent-b) 184deg,
       transparent 360deg
     );
-  opacity: 0.22;
+  opacity: 0.14;
   filter: blur(8px);
   transform: translateX(0);
   animation: creature-card-glow-sweep 5.8s ease-in-out infinite;
@@ -1645,28 +1645,28 @@ body:not(.menu-active) .menu-screen {
 .menu-creature-portrait {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
   background-repeat: no-repeat;
-  background-position: 80% 53%;
-  background-size: auto 166%;
-  opacity: 0.9;
+  background-position: 76% 52%;
+  background-size: auto 148%;
+  opacity: 0.94;
   mix-blend-mode: normal;
   filter:
-    saturate(1.5)
-    contrast(1.26)
-    brightness(1.2)
+    saturate(1.38)
+    contrast(1.16)
+    brightness(1.08)
     drop-shadow(0 0 14px var(--creature-accent-a));
 }
 
 .menu-creature-item.unlocked.has-portrait .menu-creature-portrait {
-  opacity: 0.96;
+  opacity: 1;
 }
 
 .menu-creature-content,
 .menu-creature-item .unlock-action {
   position: relative;
-  z-index: 2;
+  z-index: 3;
 }
 
 .menu-creature-content {
