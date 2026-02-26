@@ -2028,17 +2028,17 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-loadout-item.upgrade-open {
+  grid-column: 1 / -1;
+  z-index: 9;
   overflow: visible;
   min-height: 0;
-}
-
-.menu-loadout-item.has-portrait.upgrade-open {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "content"
     "actions"
     "upgrade";
   grid-template-rows: auto auto auto;
+  align-items: stretch;
   gap: 0.46rem;
 }
 
@@ -2096,17 +2096,26 @@ body:not(.menu-active) .menu-screen {
   gap: 0.34rem;
 }
 
-.menu-loadout-item.has-portrait.upgrade-open .menu-loadout-portrait {
-  display: none;
+.menu-loadout-item.upgrade-open .menu-loadout-content {
+  grid-area: content;
+  align-self: start;
 }
 
-.menu-loadout-item.has-portrait.upgrade-open .menu-loadout-actions {
+.menu-loadout-item.upgrade-open .menu-loadout-actions {
+  grid-area: actions;
+  justify-self: stretch;
+  align-self: start;
+  width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   flex-wrap: wrap;
-  width: 100%;
+  gap: 0.34rem;
+}
+
+.menu-loadout-item.has-portrait.upgrade-open .menu-loadout-portrait {
+  display: none;
 }
 
 .menu-loadout-item strong {
@@ -2164,8 +2173,8 @@ body:not(.menu-active) .menu-screen {
   padding: 0.34rem 0.52rem;
 }
 
-.menu-loadout-item.has-portrait.upgrade-open .menu-loadout-action,
-.menu-loadout-item.has-portrait.upgrade-open .menu-loadout-upgrade-toggle {
+.menu-loadout-item.upgrade-open .menu-loadout-action,
+.menu-loadout-item.upgrade-open .menu-loadout-upgrade-toggle {
   width: auto;
   min-width: 128px;
 }
