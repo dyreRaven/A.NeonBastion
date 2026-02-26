@@ -15814,10 +15814,28 @@ function renderLoadoutMenu() {
     }
 
     const isUpgradeOpen = game.loadoutUpgradeTargetId === towerTypeId;
-    const upgradeToggleLabel = isUpgradeOpen ? "CLOSE UPGRADE MENU" : "UPGRADE MENU";
-    const classes = ["menu-loadout-item", isSpawner ? "spawner" : "", isTrap ? "trap" : "", equipped ? "equipped" : ""]
+    const upgradeToggleLabel = isUpgradeOpen ? "CLOSE UPGRADES" : "UPGRADES";
+    const spawnerEnemyType = isSpawner ? ENEMY_TYPES[type.spawnerEnemyTypeId] : null;
+    const accentPrimaryColor = spawnerEnemyType?.colorA || type.bodyColor;
+    const accentSecondaryColor = spawnerEnemyType?.colorB || type.coreColor;
+    const portraitDataUrl = getTowerCardPortraitDataUrl(towerTypeId);
+    const hasPortrait = !!portraitDataUrl;
+    const accentA = colorHexToRgbaCss(accentPrimaryColor, isSpawner ? 0.38 : isTrap ? 0.34 : 0.3);
+    const accentB = colorHexToRgbaCss(accentSecondaryColor, isSpawner ? 0.3 : isTrap ? 0.28 : 0.24);
+    const edgeGlow = colorHexToRgbaCss(accentPrimaryColor, equipped ? 0.84 : isSpawner ? 0.76 : 0.68);
+    const cardStyle = `--loadout-accent-a:${accentA};--loadout-accent-b:${accentB};--loadout-edge:${edgeGlow};`;
+    const classes = [
+      "menu-loadout-item",
+      hasPortrait ? "has-portrait" : "",
+      isSpawner ? "spawner" : "",
+      isTrap ? "trap" : "",
+      equipped ? "equipped" : "",
+    ]
       .filter(Boolean)
       .join(" ");
+    const portraitMarkup = hasPortrait
+      ? `<div class="menu-loadout-portrait menu-tower-portrait" aria-hidden="true" style="background-image: url('${portraitDataUrl}')"></div>`
+      : "";
 
     const infoLine = isSpawner
       ? `Spawner | Spawn ${Math.max(1, Math.floor(type.spawnCount || 1))} every ${type.spawnInterval.toFixed(2)}s`
@@ -15860,8 +15878,9 @@ function renderLoadoutMenu() {
       : "";
 
     fragments.push(`
-      <div class="${classes}">
-        <div>
+      <div class="${classes}" style="${cardStyle}">
+        ${portraitMarkup}
+        <div class="menu-loadout-content">
           <strong>${type.name}</strong>
           <span>${infoLine}</span>
           <span>Placement Cap ${capInfo.cap} (Base ${capInfo.baseCap} +${capInfo.upgradeLevel})</span>
