@@ -2062,8 +2062,9 @@ body:not(.menu-active) .menu-screen {
   justify-self: stretch;
   align-self: end;
   width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.34rem;
 }
 
@@ -2095,6 +2096,7 @@ body:not(.menu-active) .menu-screen {
   border-radius: 8px;
   padding: 0.3rem 0.56rem;
   font-size: 0.82rem;
+  line-height: 1.15;
 }
 
 .menu-loadout-upgrade-toggle {
@@ -2102,10 +2104,10 @@ body:not(.menu-active) .menu-screen {
   min-height: 2.1rem;
   border-radius: 8px;
   padding: 0.3rem 0.56rem;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: 0.015em;
+  text-transform: none;
   border-color: rgba(255, 229, 168, 0.76);
   background: linear-gradient(180deg, rgba(255, 202, 120, 0.52), rgba(150, 84, 33, 0.48));
   box-shadow:
@@ -2117,8 +2119,8 @@ body:not(.menu-active) .menu-screen {
 .menu-loadout-item.has-portrait .menu-loadout-upgrade-toggle {
   min-width: 0;
   width: 100%;
-  min-height: 2.2rem;
-  padding: 0.28rem 0.44rem;
+  min-height: 2.32rem;
+  padding: 0.34rem 0.52rem;
 }
 
 .menu-loadout-upgrade-toggle:disabled {
@@ -2139,7 +2141,7 @@ body:not(.menu-active) .menu-screen {
 
 .menu-loadout-upgrade-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.4rem;
   border: 1px solid rgba(175, 220, 249, 0.22);
@@ -2163,11 +2165,12 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-loadout-upgrade-buy {
-  min-width: 96px;
-  min-height: 32px;
+  min-width: 122px;
+  min-height: 34px;
   border-radius: 8px;
-  padding: 0.24rem 0.46rem;
-  font-size: 0.76rem;
+  padding: 0.26rem 0.52rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
   border-color: rgba(255, 208, 140, 0.52);
   background: linear-gradient(180deg, rgba(255, 178, 108, 0.24), rgba(109, 64, 34, 0.3));
 }
