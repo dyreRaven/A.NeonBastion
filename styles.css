@@ -1586,9 +1586,24 @@ body:not(.menu-active) .menu-screen {
 
 .menu-creature-item {
   position: relative;
+  --creature-accent-a: rgba(120, 220, 255, 0.42);
+  --creature-accent-b: rgba(255, 195, 128, 0.26);
+  --creature-edge: rgba(160, 225, 255, 0.64);
   min-height: 5.8rem;
   overflow: hidden;
   isolation: isolate;
+}
+
+.menu-creature-item.has-portrait {
+  border-color: var(--creature-edge);
+  background:
+    radial-gradient(circle at 78% 52%, var(--creature-accent-a), transparent 58%),
+    radial-gradient(circle at 90% 28%, var(--creature-accent-b), transparent 56%),
+    linear-gradient(150deg, rgba(166, 205, 237, 0.12), rgba(255, 255, 255, 0.02));
+  box-shadow:
+    inset 0 1px 0 rgba(238, 249, 255, 0.18),
+    0 0 0 1px var(--creature-edge),
+    0 12px 22px rgba(0, 0, 0, 0.24);
 }
 
 .menu-creature-item.has-portrait::before {
@@ -1606,6 +1621,27 @@ body:not(.menu-active) .menu-screen {
   );
 }
 
+.menu-creature-item.has-portrait::after {
+  content: "";
+  position: absolute;
+  inset: -24% -16%;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    conic-gradient(
+      from 38deg at 80% 54%,
+      transparent 0deg,
+      var(--creature-accent-a) 52deg,
+      transparent 122deg,
+      var(--creature-accent-b) 184deg,
+      transparent 360deg
+    );
+  opacity: 0.22;
+  filter: blur(8px);
+  transform: translateX(0);
+  animation: creature-card-glow-sweep 5.8s ease-in-out infinite;
+}
+
 .menu-creature-portrait {
   position: absolute;
   inset: 0;
@@ -1614,13 +1650,17 @@ body:not(.menu-active) .menu-screen {
   background-repeat: no-repeat;
   background-position: 80% 53%;
   background-size: auto 166%;
-  opacity: 0.74;
-  mix-blend-mode: screen;
-  filter: saturate(1.34) contrast(1.2) brightness(1.14);
+  opacity: 0.9;
+  mix-blend-mode: normal;
+  filter:
+    saturate(1.5)
+    contrast(1.26)
+    brightness(1.2)
+    drop-shadow(0 0 14px var(--creature-accent-a));
 }
 
 .menu-creature-item.unlocked.has-portrait .menu-creature-portrait {
-  opacity: 0.82;
+  opacity: 0.96;
 }
 
 .menu-creature-content,
@@ -1631,6 +1671,27 @@ body:not(.menu-active) .menu-screen {
 
 .menu-creature-content {
   min-width: 0;
+}
+
+@keyframes creature-card-glow-sweep {
+  0% {
+    transform: translateX(-3%) scale(0.98);
+    opacity: 0.16;
+  }
+  50% {
+    transform: translateX(2%) scale(1.02);
+    opacity: 0.28;
+  }
+  100% {
+    transform: translateX(-3%) scale(0.98);
+    opacity: 0.16;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-creature-item.has-portrait::after {
+    animation: none;
+  }
 }
 
 .menu-creature-item .unlock-action {

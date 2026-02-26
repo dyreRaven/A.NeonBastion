@@ -15987,6 +15987,19 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;");
 }
 
+function colorHexToRgbaCss(colorValue, alpha = 1) {
+  const safeAlpha = Math.max(0, Math.min(1, Number(alpha)));
+  try {
+    const color = new THREE.Color(colorValue || "#7de4ff");
+    const r = Math.round(Math.max(0, Math.min(1, color.r)) * 255);
+    const g = Math.round(Math.max(0, Math.min(1, color.g)) * 255);
+    const b = Math.round(Math.max(0, Math.min(1, color.b)) * 255);
+    return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
+  } catch (_) {
+    return `rgba(125, 228, 255, ${safeAlpha})`;
+  }
+}
+
 function decorateShardWordsForHtml(text) {
   return escapeHtml(text).replace(/\b([Ss]hards?)\b/g, '<span class="shard-word-inline">$1</span>');
 }
@@ -16620,9 +16633,9 @@ function ensureCreatureCardPortraitScene() {
   const backdrop = new THREE.Mesh(
     new THREE.PlaneGeometry(16, 16),
     new THREE.MeshBasicMaterial({
-      color: "#0f2741",
+      color: "#1a1f27",
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.16,
       depthWrite: false,
     })
   );
@@ -16632,9 +16645,9 @@ function ensureCreatureCardPortraitScene() {
   const halo = new THREE.Mesh(
     new THREE.CircleGeometry(3.5, 48),
     new THREE.MeshBasicMaterial({
-      color: "#66c7ff",
+      color: "#ffffff",
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.08,
       depthWrite: false,
     })
   );
@@ -16681,7 +16694,7 @@ function ensureCreatureCardPortraitRenderer() {
   portraitRenderer.setSize(CREATURE_CARD_PORTRAIT_SIZE, CREATURE_CARD_PORTRAIT_SIZE, false);
   portraitRenderer.setClearColor(0x000000, 0);
   portraitRenderer.toneMapping = renderer.toneMapping;
-  portraitRenderer.toneMappingExposure = Math.max(1.1, (renderer.toneMappingExposure || 1) * 1.18);
+  portraitRenderer.toneMappingExposure = Math.max(0.98, (renderer.toneMappingExposure || 1) * 1.04);
   if ("outputColorSpace" in portraitRenderer) {
     portraitRenderer.outputColorSpace = "outputColorSpace" in renderer ? renderer.outputColorSpace : THREE.SRGBColorSpace;
   } else if ("outputEncoding" in portraitRenderer) {
@@ -16753,7 +16766,7 @@ function renderCreatureCardPortraitWithMainRenderer() {
 
   try {
     renderer.autoClear = true;
-    renderer.toneMappingExposure = Math.max(1.1, (renderer.toneMappingExposure || 1) * 1.18);
+    renderer.toneMappingExposure = Math.max(0.98, (renderer.toneMappingExposure || 1) * 1.04);
     renderer.setRenderTarget(renderTarget);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, true, true);
@@ -16878,6 +16891,10 @@ function renderCreatureShop() {
     const towerType = getTowerType(spawnerTowerIdForEnemy(enemyTypeId));
     const portraitDataUrl = getCreatureCardPortraitDataUrl(enemyTypeId);
     const hasPortrait = !!portraitDataUrl;
+    const accentA = colorHexToRgbaCss(enemyType.colorA, 0.42);
+    const accentB = colorHexToRgbaCss(enemyType.colorB, 0.26);
+    const edgeGlow = colorHexToRgbaCss(enemyType.colorA, 0.66);
+    const cardStyle = `--creature-accent-a:${accentA};--creature-accent-b:${accentB};--creature-edge:${edgeGlow};`;
     const classes = [
       "menu-unlock-item",
       "menu-creature-item",
@@ -16891,7 +16908,7 @@ function renderCreatureShop() {
       : "";
 
     fragments.push(`
-      <div class="${classes}">
+      <div class="${classes}" style="${cardStyle}">
         ${portraitMarkup}
         <div class="menu-creature-content">
           <strong>${enemyType.name} Spawner</strong>
