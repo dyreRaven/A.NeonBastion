@@ -1972,7 +1972,7 @@ const CREATURE_SPAWNER_UNLOCKS = {
 const CREATURE_SHOP_ENEMY_IDS = Object.keys(ENEMY_TYPES).filter((enemyTypeId) =>
   Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
 );
-const CREATURE_CARD_PORTRAIT_SIZE = 208;
+const CREATURE_CARD_PORTRAIT_SIZE = 240;
 const CREATURE_CARD_PORTRAIT_RETRY_DELAY_MS = 5000;
 const creatureCardPortraitCache = new Map();
 const creatureCardPortraitFailureAt = new Map();
@@ -16595,20 +16595,51 @@ function ensureCreatureCardPortraitScene() {
   const subjectRoot = new THREE.Group();
   portraitScene.add(subjectRoot);
 
-  const hemi = new THREE.HemisphereLight(0xd2f2ff, 0x151a27, 0.96);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.54);
+  portraitScene.add(ambient);
+
+  const hemi = new THREE.HemisphereLight(0xdaf4ff, 0x1a2332, 1.04);
   portraitScene.add(hemi);
 
-  const key = new THREE.DirectionalLight(0xffffff, 1.18);
+  const key = new THREE.DirectionalLight(0xffffff, 1.34);
   key.position.set(2.8, 3.6, 4.1);
   portraitScene.add(key);
 
-  const rim = new THREE.DirectionalLight(0x7de1ff, 0.74);
+  const rim = new THREE.DirectionalLight(0x8ae8ff, 0.92);
   rim.position.set(-3.4, 1.8, -3.6);
   portraitScene.add(rim);
 
-  const warmFill = new THREE.PointLight(0xffd2a8, 0.48, 18, 2);
-  warmFill.position.set(1.4, 0.9, 2.2);
+  const warmFill = new THREE.PointLight(0xffd2a8, 0.62, 22, 2);
+  warmFill.position.set(1.6, 1.1, 2.5);
   portraitScene.add(warmFill);
+
+  const backRim = new THREE.PointLight(0xc8ecff, 0.7, 26, 2);
+  backRim.position.set(-0.6, 1.4, -4.8);
+  portraitScene.add(backRim);
+
+  const backdrop = new THREE.Mesh(
+    new THREE.PlaneGeometry(16, 16),
+    new THREE.MeshBasicMaterial({
+      color: "#0f2741",
+      transparent: true,
+      opacity: 0.2,
+      depthWrite: false,
+    })
+  );
+  backdrop.position.set(0, 0.2, -5.6);
+  portraitScene.add(backdrop);
+
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(3.5, 48),
+    new THREE.MeshBasicMaterial({
+      color: "#66c7ff",
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false,
+    })
+  );
+  halo.position.set(0, 0.08, -5.2);
+  portraitScene.add(halo);
 
   creatureCardPortraitScene = portraitScene;
   creatureCardPortraitCamera = portraitCamera;
@@ -16650,7 +16681,7 @@ function ensureCreatureCardPortraitRenderer() {
   portraitRenderer.setSize(CREATURE_CARD_PORTRAIT_SIZE, CREATURE_CARD_PORTRAIT_SIZE, false);
   portraitRenderer.setClearColor(0x000000, 0);
   portraitRenderer.toneMapping = renderer.toneMapping;
-  portraitRenderer.toneMappingExposure = Math.max(0.85, (renderer.toneMappingExposure || 1) * 0.92);
+  portraitRenderer.toneMappingExposure = Math.max(1.1, (renderer.toneMappingExposure || 1) * 1.18);
   if ("outputColorSpace" in portraitRenderer) {
     portraitRenderer.outputColorSpace = "outputColorSpace" in renderer ? renderer.outputColorSpace : THREE.SRGBColorSpace;
   } else if ("outputEncoding" in portraitRenderer) {
@@ -16722,7 +16753,7 @@ function renderCreatureCardPortraitWithMainRenderer() {
 
   try {
     renderer.autoClear = true;
-    renderer.toneMappingExposure = Math.max(0.85, (renderer.toneMappingExposure || 1) * 0.92);
+    renderer.toneMappingExposure = Math.max(1.1, (renderer.toneMappingExposure || 1) * 1.18);
     renderer.setRenderTarget(renderTarget);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, true, true);
@@ -16762,7 +16793,7 @@ function renderCreatureCardPortraitDataUrl(enemyTypeId) {
   clearCreaturePortraitSubject();
   let enemyVisual = null;
   try {
-    enemyVisual = createEnemyMesh(enemyTypeId, enemyType.colorA, enemyType.colorB, { hideRings: true });
+    enemyVisual = createEnemyMesh(enemyTypeId, enemyType.colorA, enemyType.colorB);
     const portraitGroup = enemyVisual.group;
     creatureCardPortraitSubject.add(portraitGroup);
 
@@ -16777,7 +16808,7 @@ function renderCreatureCardPortraitDataUrl(enemyTypeId) {
     const size = preBounds.getSize(new THREE.Vector3());
     portraitGroup.position.sub(center);
     portraitGroup.position.y -= size.y * 0.05;
-    portraitGroup.rotation.y = Math.PI * 0.2;
+    portraitGroup.rotation.y = Math.PI * 0.24;
     portraitGroup.rotation.x = -Math.PI * 0.03;
     portraitGroup.updateMatrixWorld(true);
 
@@ -16785,8 +16816,8 @@ function renderCreatureCardPortraitDataUrl(enemyTypeId) {
     const sphere = bounds.getBoundingSphere(new THREE.Sphere());
     const radius = Math.max(0.14, sphere.radius);
     const fovRad = THREE.MathUtils.degToRad(creatureCardPortraitCamera.fov);
-    const distance = (radius * 1.08) / Math.sin(fovRad * 0.5);
-    creatureCardPortraitCamera.position.set(radius * 0.32, radius * 0.16, distance);
+    const distance = (radius * 1.16) / Math.sin(fovRad * 0.5);
+    creatureCardPortraitCamera.position.set(radius * 0.22, radius * 0.14, distance);
     creatureCardPortraitCamera.lookAt(sphere.center.x, sphere.center.y + radius * 0.04, sphere.center.z);
     creatureCardPortraitCamera.updateMatrixWorld(true);
 
