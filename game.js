@@ -1976,6 +1976,8 @@ const CREATURE_CARD_PORTRAIT_SIZE = 240;
 const CREATURE_CARD_PORTRAIT_RETRY_DELAY_MS = 5000;
 const creatureCardPortraitCache = new Map();
 const creatureCardPortraitFailureAt = new Map();
+const towerCardPortraitCache = new Map();
+const towerCardPortraitFailureAt = new Map();
 let creatureCardPortraitCanvas = null;
 let creatureCardPortraitRenderer = null;
 let creatureCardPortraitScene = null;
@@ -16460,17 +16462,29 @@ function renderMenuShop() {
       : type.multiTargetCount > 1
         ? ` | ARC ${Math.max(2, Math.floor(type.multiTargetCount || 2))}`
       : "";
+    const portraitDataUrl = getTowerCardPortraitDataUrl(towerTypeId);
+    const hasPortrait = !!portraitDataUrl;
+    const accentA = colorHexToRgbaCss(type.bodyColor, 0.52);
+    const accentB = colorHexToRgbaCss(type.coreColor, 0.4);
+    const edgeGlow = colorHexToRgbaCss(type.bodyColor, 0.84);
+    const cardStyle = `--tower-accent-a:${accentA};--tower-accent-b:${accentB};--tower-edge:${edgeGlow};`;
     const itemClasses = [
       "menu-unlock-item",
+      "menu-tower-item",
+      hasPortrait ? "has-portrait" : "",
       unlocked ? "unlocked" : "",
       !unlocked && !canAfford ? "unaffordable" : "",
     ]
       .filter(Boolean)
       .join(" ");
+    const portraitMarkup = hasPortrait
+      ? `<div class="menu-tower-portrait" aria-hidden="true" style="background-image: url('${portraitDataUrl}')"></div>`
+      : "";
 
     fragments.push(`
-      <div class="${itemClasses}">
-        <div>
+      <div class="${itemClasses}" style="${cardStyle}">
+        ${portraitMarkup}
+        <div class="menu-tower-content">
           <strong>${type.name}</strong>
           <span>${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}${detailSuffix}</span>
         </div>
@@ -16772,6 +16786,68 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
   });
 }
 
+function tuneTowerPortraitMeshReadability(group, towerType) {
+  if (!group || !towerType) return;
+  const primary = new THREE.Color(towerType.bodyColor || "#7de4ff");
+  const secondary = new THREE.Color(towerType.coreColor || "#e9fcff");
+  const emissiveTint = primary.clone().lerp(secondary, 0.24);
+
+  group.traverse((node) => {
+    if (!node || !node.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    for (const material of materials) {
+      if (!material) continue;
+      if (material.isMeshPhysicalMaterial) {
+        material.transparent = true;
+        material.opacity = 1;
+        if (Number.isFinite(material.transmission)) {
+          material.transmission = Math.max(0.12, Math.min(0.34, material.transmission || 0.2));
+        }
+        if (Number.isFinite(material.thickness)) {
+          material.thickness = Math.max(0.12, Math.min(0.58, material.thickness || 0.24));
+        }
+        if (Number.isFinite(material.roughness)) {
+          material.roughness = Math.max(0.08, Math.min(0.24, material.roughness || 0.16));
+        }
+        if (Number.isFinite(material.clearcoat)) {
+          material.clearcoat = Math.max(0.56, Math.min(1, material.clearcoat || 0.78));
+        }
+        if (Number.isFinite(material.clearcoatRoughness)) {
+          material.clearcoatRoughness = Math.max(0.03, Math.min(0.14, material.clearcoatRoughness || 0.08));
+        }
+        if (Number.isFinite(material.ior)) material.ior = Math.max(1.2, Math.min(1.45, material.ior || 1.33));
+        if (Number.isFinite(material.envMapIntensity)) {
+          material.envMapIntensity = Math.max(0.96, Math.min(1.4, material.envMapIntensity || 1.1));
+        }
+        if (material.color?.isColor) material.color.lerp(primary, 0.24);
+        if (material.emissive?.isColor) {
+          material.emissive.lerp(emissiveTint, 0.04);
+          material.emissiveIntensity = Math.min(0.08, Math.max(0.01, material.emissiveIntensity || 0.04));
+        }
+        material.needsUpdate = true;
+      } else if (material.isMeshStandardMaterial) {
+        material.transparent = false;
+        material.opacity = 1;
+        if (Number.isFinite(material.roughness)) {
+          material.roughness = Math.max(0.14, Math.min(0.34, material.roughness || 0.24));
+        }
+        if (Number.isFinite(material.metalness)) {
+          material.metalness = Math.max(0.08, Math.min(0.26, material.metalness || 0.14));
+        }
+        if (material.color?.isColor) material.color.lerp(primary, 0.2);
+        if (material.emissive?.isColor) {
+          material.emissive.lerp(emissiveTint, 0.03);
+          material.emissiveIntensity = Math.min(0.06, Math.max(0.01, material.emissiveIntensity || 0.03));
+        }
+        material.needsUpdate = true;
+      } else if (material.isMeshBasicMaterial) {
+        if (material.color?.isColor) material.color.lerp(secondary, 0.08);
+        material.needsUpdate = true;
+      }
+    }
+  });
+}
+
 function renderCreatureCardPortraitWithMainRenderer() {
   if (
     !creatureCardPortraitScene ||
@@ -16912,6 +16988,81 @@ function getCreatureCardPortraitDataUrl(enemyTypeId) {
     return dataUrl;
   }
   creatureCardPortraitFailureAt.set(enemyTypeId, now);
+  return "";
+}
+
+function renderTowerCardPortraitDataUrl(towerTypeId) {
+  if (!ensureCreatureCardPortraitScene()) return "";
+  const towerType = getTowerType(towerTypeId);
+  if (!towerType || !towerType.bodyColor || !towerType.coreColor) return "";
+
+  clearCreaturePortraitSubject();
+  let towerVisual = null;
+  try {
+    towerVisual = createTowerMesh(towerTypeId, towerType.bodyColor, towerType.coreColor);
+    const portraitGroup = towerVisual?.group;
+    if (!portraitGroup) return "";
+    tuneTowerPortraitMeshReadability(portraitGroup, towerType);
+    creatureCardPortraitSubject.add(portraitGroup);
+
+    const preBounds = new THREE.Box3().setFromObject(portraitGroup);
+    if (preBounds.isEmpty()) {
+      creatureCardPortraitSubject.remove(portraitGroup);
+      disposeCreaturePortraitObject(portraitGroup);
+      return "";
+    }
+
+    const center = preBounds.getCenter(new THREE.Vector3());
+    const size = preBounds.getSize(new THREE.Vector3());
+    portraitGroup.position.sub(center);
+    portraitGroup.position.y -= size.y * 0.1;
+    portraitGroup.rotation.y = Math.PI * 0.2;
+    portraitGroup.rotation.x = -Math.PI * 0.04;
+    portraitGroup.updateMatrixWorld(true);
+
+    const bounds = new THREE.Box3().setFromObject(portraitGroup);
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const radius = Math.max(0.16, sphere.radius);
+    const fovRad = THREE.MathUtils.degToRad(creatureCardPortraitCamera.fov);
+    const distance = (radius * 1.26) / Math.sin(fovRad * 0.5);
+    creatureCardPortraitCamera.position.set(radius * 0.24, radius * 0.18, distance);
+    creatureCardPortraitCamera.lookAt(sphere.center.x, sphere.center.y + radius * 0.02, sphere.center.z);
+    creatureCardPortraitCamera.updateMatrixWorld(true);
+
+    let dataUrl = "";
+    if (ensureCreatureCardPortraitRenderer() && creatureCardPortraitRenderer && creatureCardPortraitCanvas) {
+      creatureCardPortraitRenderer.clear();
+      creatureCardPortraitRenderer.render(creatureCardPortraitScene, creatureCardPortraitCamera);
+      dataUrl = creatureCardPortraitCanvas.toDataURL("image/png");
+    }
+    if (!dataUrl) dataUrl = renderCreatureCardPortraitWithMainRenderer();
+
+    creatureCardPortraitSubject.remove(portraitGroup);
+    disposeCreaturePortraitObject(portraitGroup);
+    return dataUrl;
+  } catch (_) {
+    if (towerVisual?.group) {
+      creatureCardPortraitSubject.remove(towerVisual.group);
+      disposeCreaturePortraitObject(towerVisual.group);
+    }
+    return "";
+  }
+}
+
+function getTowerCardPortraitDataUrl(towerTypeId) {
+  if (!towerTypeId) return "";
+  if (towerCardPortraitCache.has(towerTypeId)) return towerCardPortraitCache.get(towerTypeId) || "";
+  const failureAt = towerCardPortraitFailureAt.get(towerTypeId) || 0;
+  const now = Date.now();
+  if (failureAt && now - failureAt < CREATURE_CARD_PORTRAIT_RETRY_DELAY_MS) return "";
+
+  const dataUrl = renderTowerCardPortraitDataUrl(towerTypeId);
+  if (dataUrl) {
+    towerCardPortraitCache.set(towerTypeId, dataUrl);
+    towerCardPortraitFailureAt.delete(towerTypeId);
+    return dataUrl;
+  }
+  towerCardPortraitFailureAt.set(towerTypeId, now);
   return "";
 }
 
