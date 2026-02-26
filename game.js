@@ -16464,9 +16464,9 @@ function renderMenuShop() {
       : "";
     const portraitDataUrl = getTowerCardPortraitDataUrl(towerTypeId);
     const hasPortrait = !!portraitDataUrl;
-    const accentA = colorHexToRgbaCss(type.bodyColor, 0.52);
-    const accentB = colorHexToRgbaCss(type.coreColor, 0.4);
-    const edgeGlow = colorHexToRgbaCss(type.bodyColor, 0.84);
+    const accentA = colorHexToRgbaCss(type.bodyColor, 0.3);
+    const accentB = colorHexToRgbaCss(type.coreColor, 0.24);
+    const edgeGlow = colorHexToRgbaCss(type.bodyColor, 0.68);
     const cardStyle = `--tower-accent-a:${accentA};--tower-accent-b:${accentB};--tower-edge:${edgeGlow};`;
     const itemClasses = [
       "menu-unlock-item",
@@ -16790,7 +16790,7 @@ function tuneTowerPortraitMeshReadability(group, towerType) {
   if (!group || !towerType) return;
   const primary = new THREE.Color(towerType.bodyColor || "#7de4ff");
   const secondary = new THREE.Color(towerType.coreColor || "#e9fcff");
-  const emissiveTint = primary.clone().lerp(secondary, 0.24);
+  const emissiveTint = primary.clone().lerp(secondary, 0.2);
 
   group.traverse((node) => {
     if (!node || !node.isMesh) return;
@@ -16801,47 +16801,42 @@ function tuneTowerPortraitMeshReadability(group, towerType) {
         material.transparent = true;
         material.opacity = 1;
         if (Number.isFinite(material.transmission)) {
-          material.transmission = Math.max(0.12, Math.min(0.34, material.transmission || 0.2));
+          material.transmission = Math.max(0.14, Math.min(0.56, material.transmission || 0.26));
         }
         if (Number.isFinite(material.thickness)) {
-          material.thickness = Math.max(0.12, Math.min(0.58, material.thickness || 0.24));
+          material.thickness = Math.max(0.14, Math.min(0.72, material.thickness || 0.3));
         }
         if (Number.isFinite(material.roughness)) {
-          material.roughness = Math.max(0.08, Math.min(0.24, material.roughness || 0.16));
+          material.roughness = Math.max(0.06, Math.min(0.28, material.roughness || 0.16));
         }
         if (Number.isFinite(material.clearcoat)) {
-          material.clearcoat = Math.max(0.56, Math.min(1, material.clearcoat || 0.78));
+          material.clearcoat = Math.max(0.46, Math.min(1, material.clearcoat || 0.72));
         }
         if (Number.isFinite(material.clearcoatRoughness)) {
-          material.clearcoatRoughness = Math.max(0.03, Math.min(0.14, material.clearcoatRoughness || 0.08));
+          material.clearcoatRoughness = Math.max(0.02, Math.min(0.16, material.clearcoatRoughness || 0.09));
         }
-        if (Number.isFinite(material.ior)) material.ior = Math.max(1.2, Math.min(1.45, material.ior || 1.33));
+        if (Number.isFinite(material.ior)) material.ior = Math.max(1.22, Math.min(1.52, material.ior || 1.34));
         if (Number.isFinite(material.envMapIntensity)) {
-          material.envMapIntensity = Math.max(0.96, Math.min(1.4, material.envMapIntensity || 1.1));
+          material.envMapIntensity = Math.max(1.02, Math.min(1.55, material.envMapIntensity || 1.16));
         }
-        if (material.color?.isColor) material.color.lerp(primary, 0.24);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(emissiveTint, 0.04);
-          material.emissiveIntensity = Math.min(0.08, Math.max(0.01, material.emissiveIntensity || 0.04));
+          material.emissive.lerp(emissiveTint, 0.02);
+          material.emissiveIntensity = Math.min(0.12, Math.max(0.01, material.emissiveIntensity || 0.04));
         }
         material.needsUpdate = true;
       } else if (material.isMeshStandardMaterial) {
         material.transparent = false;
         material.opacity = 1;
         if (Number.isFinite(material.roughness)) {
-          material.roughness = Math.max(0.14, Math.min(0.34, material.roughness || 0.24));
+          material.roughness = Math.max(0.14, Math.min(0.42, material.roughness || 0.26));
         }
         if (Number.isFinite(material.metalness)) {
-          material.metalness = Math.max(0.08, Math.min(0.26, material.metalness || 0.14));
+          material.metalness = Math.max(0.08, Math.min(0.38, material.metalness || 0.16));
         }
-        if (material.color?.isColor) material.color.lerp(primary, 0.2);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(emissiveTint, 0.03);
-          material.emissiveIntensity = Math.min(0.06, Math.max(0.01, material.emissiveIntensity || 0.03));
+          material.emissive.lerp(emissiveTint, 0.015);
+          material.emissiveIntensity = Math.min(0.18, Math.max(0.01, material.emissiveIntensity || 0.04));
         }
-        material.needsUpdate = true;
-      } else if (material.isMeshBasicMaterial) {
-        if (material.color?.isColor) material.color.lerp(secondary, 0.08);
         material.needsUpdate = true;
       }
     }
