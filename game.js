@@ -194,9 +194,9 @@ const GAME_UPGRADE_MAX_LEVELS = Object.freeze({
   shardPercent: 4,
 });
 const GAME_UPGRADE_COSTS = Object.freeze({
-  gameSpeed: [800, 1950, 3650, 6200, 9800, 14750],
-  startingCredits: [700, 1900, 4200, 8000],
-  shardPercent: [900, 2450, 5300, 10500],
+  gameSpeed: [160, 390, 730, 1240, 1960, 2950],
+  startingCredits: [140, 380, 840, 1600],
+  shardPercent: [180, 490, 1060, 2100],
 });
 const STARTING_CREDITS_BONUS_STEP = 0.25;
 const SHARD_GAIN_RATE_BASE = 0.01;
