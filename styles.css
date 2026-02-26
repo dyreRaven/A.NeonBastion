@@ -1960,7 +1960,7 @@ body:not(.menu-active) .menu-screen {
   --loadout-accent-a: rgba(120, 220, 255, 0.36);
   --loadout-accent-b: rgba(255, 195, 128, 0.24);
   --loadout-edge: rgba(160, 225, 255, 0.64);
-  min-height: 8.6rem;
+  min-height: 10.4rem;
   overflow: hidden;
   isolation: isolate;
   display: grid;
@@ -1996,7 +1996,7 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-loadout-item.has-portrait {
-  grid-template-columns: minmax(0, 1fr) 114px;
+  grid-template-columns: minmax(0, 1fr) 126px;
   grid-template-areas:
     "content portrait"
     "actions portrait";
@@ -2052,15 +2052,19 @@ body:not(.menu-active) .menu-screen {
   grid-area: portrait;
   justify-self: end;
   align-self: center;
-  width: 114px;
-  height: 114px;
-  min-height: 114px;
+  width: 126px;
+  height: 126px;
+  min-height: 126px;
 }
 
 .menu-loadout-item.has-portrait .menu-loadout-actions {
   grid-area: actions;
-  justify-self: start;
+  justify-self: stretch;
   align-self: end;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.34rem;
 }
 
 .menu-loadout-item strong {
@@ -2107,6 +2111,14 @@ body:not(.menu-active) .menu-screen {
   box-shadow:
     inset 0 0 0 1px rgba(255, 246, 210, 0.28),
     0 0 0 1px rgba(255, 188, 108, 0.24);
+}
+
+.menu-loadout-item.has-portrait .menu-loadout-action,
+.menu-loadout-item.has-portrait .menu-loadout-upgrade-toggle {
+  min-width: 0;
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0.28rem 0.44rem;
 }
 
 .menu-loadout-upgrade-toggle:disabled {

@@ -15801,7 +15801,6 @@ function renderLoadoutMenu() {
 
   const renderLoadoutCard = (towerTypeId, type, isSpawner, isTrap = false) => {
     const equipped = isTowerInLoadout(towerTypeId);
-    const capInfo = getTowerCapBreakdown(towerTypeId);
     let actionLabel = "Equip";
     let actionDisabled = "";
 
@@ -15812,12 +15811,12 @@ function renderLoadoutMenu() {
         actionDisabled = "disabled";
       }
     } else if (game.activeLoadout.size >= loadoutLimit) {
-      actionLabel = "Loadout Full";
+      actionLabel = "Full";
       actionDisabled = "disabled";
     }
 
     const isUpgradeOpen = game.loadoutUpgradeTargetId === towerTypeId;
-    const upgradeToggleLabel = isUpgradeOpen ? "CLOSE UPGRADES" : "UPGRADES";
+    const upgradeToggleLabel = isUpgradeOpen ? "Close" : "Upgrades";
     const spawnerEnemyType = isSpawner ? ENEMY_TYPES[type.spawnerEnemyTypeId] : null;
     const accentPrimaryColor = spawnerEnemyType?.colorA || type.bodyColor;
     const accentSecondaryColor = spawnerEnemyType?.colorB || type.coreColor;
@@ -15841,14 +15840,14 @@ function renderLoadoutMenu() {
       : "";
 
     const infoLine = isSpawner
-      ? `Spawner | Spawn ${Math.max(1, Math.floor(type.spawnCount || 1))} every ${type.spawnInterval.toFixed(2)}s`
+      ? `Spawner | ${Math.max(1, Math.floor(type.spawnCount || 1))} per ${type.spawnInterval.toFixed(2)}s`
       : isTrap
-        ? `Trap | DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}`
+        ? `Trap | DMG ${type.damage} | TRG ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)}`
         : type.manualAreaTargeting
-          ? `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
+          ? `DMG ${type.damage} | RNG ${type.range.toFixed(1)} | SPL ${Math.max(0.8, type.splashRadius || 1).toFixed(1)}`
         : type.multiTargetCount > 1
-          ? `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)} | ARC ${Math.max(2, Math.floor(type.multiTargetCount || 2))}`
-        : `${type.summary} | DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
+          ? `DMG ${type.damage} | RNG ${type.range.toFixed(1)} | ARC ${Math.max(2, Math.floor(type.multiTargetCount || 2))}`
+        : `DMG ${type.damage} | RNG ${type.range.toFixed(1)}`;
     const options = isUpgradeOpen ? getLoadoutUpgradeOptions(towerTypeId) : [];
     const upgradePanel = isUpgradeOpen
       ? `
@@ -15886,7 +15885,6 @@ function renderLoadoutMenu() {
         <div class="menu-loadout-content">
           <strong>${type.name}</strong>
           <span>${infoLine}</span>
-          <span>Placement Cap ${capInfo.cap} (Base ${capInfo.baseCap} +${capInfo.upgradeLevel})</span>
         </div>
         <div class="menu-loadout-actions">
           <button class="menu-loadout-upgrade-toggle" type="button" data-loadout-upgrade-toggle="${towerTypeId}">
