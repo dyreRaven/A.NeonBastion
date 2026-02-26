@@ -76,6 +76,13 @@ const closeGameUpgradesBtn = $id("closeGameUpgradesBtn");
 // Account menu.
 const menuAccountEl = $id("menuAccountList");
 const menuAccountCurrentEl = $id("menuAccountCurrent");
+const menuAccountPagesEl = $id("menuAccountPages");
+const openAccountCreatePageBtn = $id("openAccountCreatePageBtn");
+const openAccountLoginPageBtn = $id("openAccountLoginPageBtn");
+const openAccountManagePageBtn = $id("openAccountManagePageBtn");
+const backToAccountSetupFromCreateBtn = $id("backToAccountSetupFromCreateBtn");
+const backToAccountSetupFromLoginBtn = $id("backToAccountSetupFromLoginBtn");
+const backToAccountSetupFromManageBtn = $id("backToAccountSetupFromManageBtn");
 const accountCreateDisplayNameInputEl = $id("accountCreateDisplayNameInput");
 const accountCreateUsernameInputEl = $id("accountCreateUsernameInput");
 const accountCreatePasswordInputEl = $id("accountCreatePasswordInput");
@@ -226,6 +233,12 @@ const ACCOUNT_CREATE_SUBMIT_COOLDOWN_MS = 1800;
 const ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS = 65000;
 const ACCOUNT_LOGIN_SUBMIT_COOLDOWN_MS = 1000;
 const ACCOUNT_UPDATE_SUBMIT_COOLDOWN_MS = 1200;
+const ACCOUNT_MENU_PAGES = Object.freeze({
+  setup: "setup",
+  create: "create",
+  login: "login",
+  manage: "manage",
+});
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -5188,6 +5201,7 @@ let accountUpdateCooldownUntil = 0;
 let accountCreateCooldownTimer = 0;
 let accountLoginCooldownTimer = 0;
 let accountUpdateCooldownTimer = 0;
+let accountMenuPage = ACCOUNT_MENU_PAGES.setup;
 
 function sanitizeRoomCode(rawCode) {
   if (multiplayerUtils && typeof multiplayerUtils.sanitizeRoomCode === "function") {
@@ -6342,7 +6356,7 @@ let progressRecoveredFromBackup = false;
 let progressRecoveredFromIndexedDb = false;
 let progressRecoveredFromRuntimeFile = false;
 const ACCOUNT_NOTE_BASE_TEXT =
-  "Use a username + email + password for cloud accounts. In Manage Account, Current Email is required and New Email is optional.";
+  "Use Account Actions to open Create, Login, or Change Account Info pages. Current Email is required for account updates.";
 const cloudAuth = {
   enabled: false,
   initialized: false,
@@ -7520,15 +7534,15 @@ async function syncCloudSessionUser(user, quiet = false, fallbackEmail = "") {
 async function createCloudAccountFromInput(emailInput, displayNameInput, password, confirmPassword) {
   if (!cloudAuth.enabled || !cloudAuth.client) {
     setAccountStatus("Cloud auth is unavailable right now.", true);
-    return;
+    return false;
   }
   if (password.length < MIN_ACCOUNT_PASSWORD_LENGTH) {
     setAccountStatus(`Password must be at least ${MIN_ACCOUNT_PASSWORD_LENGTH} characters.`, true);
-    return;
+    return false;
   }
   if (password !== confirmPassword) {
     setAccountStatus("Passwords do not match.", true);
-    return;
+    return false;
   }
 
   const email = sanitizeAccountUsername(emailInput);
@@ -7538,7 +7552,7 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
     || "Commander";
   if (!isEmailAddress(email)) {
     setAccountStatus("Use a valid email address to create a cloud account.", true);
-    return;
+    return false;
   }
   const migrationSeed = captureGameProgressSeedForAccountMigration();
   setAccountStatus(`Creating cloud account "${displayName}" for ${email}...`);
@@ -7565,11 +7579,11 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
         } else {
           setAccountStatus(`Account exists for ${email}. Logged in.`);
         }
-        return;
+        return true;
       }
       if (existingLogin?.error && isCloudEmailNotConfirmedError(existingLogin.error)) {
         setAccountStatus(`Account exists for ${email}, but email is not confirmed yet. Check your inbox, then use Login.`, true);
-        return;
+        return false;
       }
       if (existingLogin?.error && !isCloudInvalidCredentialsError(existingLogin.error)) {
         logCloudError("create.pre_login", existingLogin.error);
@@ -7605,12 +7619,12 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
             } else {
               setAccountStatus(`Signup throttled, but login succeeded for ${email}.`);
             }
-            return;
+            return true;
           }
           if (retryLogin?.error && isCloudEmailNotConfirmedError(retryLogin.error)) {
             setAccountStatus(`Account exists for ${email}, but email is not confirmed yet. Check your inbox, then use Login.`, true);
             startAccountCreateCooldown(ACCOUNT_CREATE_RATE_LIMIT_COOLDOWN_MS);
-            return;
+            return false;
           }
           if (retryLogin?.error && !isCloudInvalidCredentialsError(retryLogin.error)) {
             logCloudError("create.rate_limited_retry_login", retryLogin.error);
@@ -7622,13 +7636,13 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
       }
       logCloudError("create.signup", error);
       setAccountStatus(appendCloudErrorDebugToMessage(`Cloud sign-up failed: ${formatCloudErrorMessage(error)}`, error), true);
-      return;
+      return false;
     }
 
     const sessionUser = data?.session?.user || null;
     if (!sessionUser) {
       setAccountStatus(`Account created for ${email}. Confirm your email, then login for cloud sync.`);
-      return;
+      return true;
     }
 
     const account = ensureLocalAccountRecord(email, password, {
@@ -7657,23 +7671,25 @@ async function createCloudAccountFromInput(emailInput, displayNameInput, passwor
     } else {
       setAccountStatus(`Cloud account created and logged in as ${email}.`);
     }
+    return true;
   } catch (error) {
     logCloudError("create.exception", error);
     setAccountStatus(appendCloudErrorDebugToMessage("Cloud sign-up failed due to a network error.", error), true);
+    return false;
   }
 }
 
 async function loginCloudAccountFromInput(emailInput, password) {
   if (!cloudAuth.enabled || !cloudAuth.client) {
     setAccountStatus("Cloud auth is unavailable right now.", true);
-    return;
+    return false;
   }
 
   const email = sanitizeAccountUsername(emailInput);
   const preferredDisplayName = sanitizeAccountName(game.accountName || "", ACCOUNT_DISPLAY_NAME_MAX_LENGTH);
   if (!isEmailAddress(email)) {
     setAccountStatus("Use the email address for your cloud account.", true);
-    return;
+    return false;
   }
   const migrationSeed = captureGameProgressSeedForAccountMigration();
   setAccountStatus(`Signing into cloud account ${email}...`);
@@ -7685,13 +7701,13 @@ async function loginCloudAccountFromInput(emailInput, password) {
     if (error) {
       logCloudError("login.password", error);
       setAccountStatus(appendCloudErrorDebugToMessage(`Cloud login failed: ${formatCloudErrorMessage(error)}`, error), true);
-      return;
+      return false;
     }
 
     const user = data?.user || data?.session?.user || null;
     if (!user) {
       setAccountStatus("Cloud login failed: no user session returned.", true);
-      return;
+      return false;
     }
 
     const account = ensureLocalAccountRecord(email, password, {
@@ -7720,9 +7736,11 @@ async function loginCloudAccountFromInput(emailInput, password) {
     } else {
       setAccountStatus(`Logged in as ${email} (cloud sync active).`);
     }
+    return true;
   } catch (error) {
     logCloudError("login.exception", error);
     setAccountStatus(appendCloudErrorDebugToMessage("Cloud login failed due to a network error.", error), true);
+    return false;
   }
 }
 
@@ -10282,22 +10300,31 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
     ring.position.y = 1.56;
   }
 
-  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler") {
+  if (
+    towerTypeId === "bombarder" ||
+    towerTypeId === "deluxeBombarder" ||
+    towerTypeId === "tesla" ||
+    towerTypeId === "deluxeStormcoiler"
+  ) {
     // Ground sleeve intentionally passes through terrain so the base never appears to float.
     const sleeveRadiusTop =
       towerTypeId === "deluxeBombarder"
         ? CELL_SIZE * 0.54
         : towerTypeId === "deluxeStormcoiler"
           ? CELL_SIZE * 0.44
+          : towerTypeId === "tesla"
+            ? CELL_SIZE * 0.38
           : 1.02;
     const sleeveRadiusBottom =
       towerTypeId === "deluxeBombarder"
         ? CELL_SIZE * 0.6
         : towerTypeId === "deluxeStormcoiler"
           ? CELL_SIZE * 0.5
+          : towerTypeId === "tesla"
+            ? CELL_SIZE * 0.44
           : 1.1;
     const sleeve = cast(new THREE.Mesh(new THREE.CylinderGeometry(sleeveRadiusTop, sleeveRadiusBottom, 1.9, 24), darkMat));
-    sleeve.position.y = -0.72;
+    sleeve.position.y = towerTypeId === "tesla" ? -0.78 : -0.72;
     group.add(sleeve);
   }
 
@@ -10961,7 +10988,11 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
   mastLight.position.y = 2.08;
   group.add(mastLight);
 
-  if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder" || towerTypeId === "deluxeStormcoiler") group.position.y -= 0.04;
+  if (towerTypeId === "tesla" || towerTypeId === "deluxeStormcoiler") {
+    group.position.y -= 0.1;
+  } else if (towerTypeId === "bombarder" || towerTypeId === "deluxeBombarder") {
+    group.position.y -= 0.04;
+  }
 
   return { group, turret, muzzle, spinNode, barrelRig };
 }
@@ -14281,6 +14312,43 @@ function setAccountStatus(message, danger = false) {
   setAccountActionStatus(message, danger);
 }
 
+function normalizeAccountMenuPage(page) {
+  const raw = String(page || "").trim().toLowerCase();
+  if (
+    raw === ACCOUNT_MENU_PAGES.setup ||
+    raw === ACCOUNT_MENU_PAGES.create ||
+    raw === ACCOUNT_MENU_PAGES.login ||
+    raw === ACCOUNT_MENU_PAGES.manage
+  ) {
+    return raw;
+  }
+  return ACCOUNT_MENU_PAGES.setup;
+}
+
+function focusAccountMenuPagePrimaryControl(page) {
+  const targetPage = normalizeAccountMenuPage(page);
+  let targetEl = null;
+  if (targetPage === ACCOUNT_MENU_PAGES.create) {
+    targetEl = accountCreateDisplayNameInputEl || createAccountBtn;
+  } else if (targetPage === ACCOUNT_MENU_PAGES.login) {
+    targetEl = accountLoginUsernameInputEl || loginAccountBtn;
+  } else if (targetPage === ACCOUNT_MENU_PAGES.manage) {
+    targetEl = accountUpdateCurrentEmailInputEl || updateAccountBtn;
+  } else {
+    targetEl = openAccountCreatePageBtn || openAccountLoginPageBtn || openAccountManagePageBtn;
+  }
+  if (!targetEl || typeof targetEl.focus !== "function") return;
+  targetEl.focus();
+  if (targetEl instanceof HTMLInputElement) targetEl.select();
+}
+
+function setAccountMenuPage(page, options = {}) {
+  const nextPage = normalizeAccountMenuPage(page);
+  accountMenuPage = nextPage;
+  if (menuAccountPagesEl) menuAccountPagesEl.dataset.page = nextPage;
+  if (options.focus !== false) focusAccountMenuPagePrimaryControl(nextPage);
+}
+
 function getAccountCreateCooldownRemainingMs() {
   return Math.max(0, accountCreateCooldownUntil - Date.now());
 }
@@ -16148,7 +16216,8 @@ function createAccountFromInput() {
   setAccountActionStatus("Create submitted. Contacting cloud...");
   void (async () => {
     try {
-      await createCloudAccountFromInput(email, displayName, password, confirmPassword);
+      const created = await createCloudAccountFromInput(email, displayName, password, confirmPassword);
+      if (created) setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     } finally {
       accountCreateRequestInFlight = false;
       refreshAccountAuthButtons();
@@ -16191,7 +16260,8 @@ function loginAccountFromInput() {
   setAccountActionStatus("Login submitted. Contacting cloud...");
   void (async () => {
     try {
-      await loginCloudAccountFromInput(email, password);
+      const loggedIn = await loginCloudAccountFromInput(email, password);
+      if (loggedIn) setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     } finally {
       accountLoginRequestInFlight = false;
       refreshAccountAuthButtons();
@@ -16282,7 +16352,7 @@ function updateAccountFromInput() {
   setAccountActionStatus("Update submitted. Applying account changes...");
   void (async () => {
     try {
-      await updateCurrentAccountProfile({
+      const updated = await updateCurrentAccountProfile({
         account,
         currentEmail: enteredCurrentEmail,
         nextDisplayName,
@@ -16290,6 +16360,7 @@ function updateAccountFromInput() {
         currentPassword,
         newPassword: newPassword || "",
       });
+      if (updated) setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     } finally {
       accountUpdateRequestInFlight = false;
       refreshAccountAuthButtons();
@@ -16720,20 +16791,16 @@ function openAccountMenu() {
   setMenuView("account");
   renderAccountMenu();
   if (menuAccountEl) menuAccountEl.scrollTop = 0;
+  setAccountMenuPage(ACCOUNT_MENU_PAGES.setup, { focus: false });
   refreshAccountAuthButtons();
   clearAccountAuthInputs();
-  setAccountActionStatus(
-    "Create with username + email. Login with email + password. In Manage Account, Current Email is required and New Email is optional."
-  );
+  setAccountActionStatus("Choose an action: Set Up Account, Login, or Change Account Info.");
   const currentAccount = getCurrentAccountRecord();
   syncAccountAuthFormInputs(currentAccount, {
     preferredEmail: getCloudSignedInEmail() || getAccountEmail(currentAccount),
     preferredDisplayName: game.accountName || getAccountDisplayName(currentAccount),
   });
-  if (accountLoginUsernameInputEl) {
-    accountLoginUsernameInputEl.focus();
-    accountLoginUsernameInputEl.select();
-  }
+  focusAccountMenuPagePrimaryControl(ACCOUNT_MENU_PAGES.setup);
   if (progressRecoveredFromRuntimeFile) {
     setStatus("Recovered account data from EXE file storage.");
   } else if (progressStorageUnavailable && !hasDurableLocalProgressFallback()) {
@@ -16805,6 +16872,7 @@ function openMultiplayerMenu() {
 }
 
 function closeAccountMenu() {
+  setAccountMenuPage(ACCOUNT_MENU_PAGES.setup, { focus: false });
   setMenuView("home");
 }
 
@@ -18374,6 +18442,13 @@ if (statusEl) {
   statusEl.addEventListener("pointerleave", onStatusPointerEnd, { passive: true });
   statusEl.addEventListener("click", onStatusClick);
 }
+if (openAccountCreatePageBtn) openAccountCreatePageBtn.addEventListener("click", () => setAccountMenuPage(ACCOUNT_MENU_PAGES.create));
+if (openAccountLoginPageBtn) openAccountLoginPageBtn.addEventListener("click", () => setAccountMenuPage(ACCOUNT_MENU_PAGES.login));
+if (openAccountManagePageBtn) openAccountManagePageBtn.addEventListener("click", () => setAccountMenuPage(ACCOUNT_MENU_PAGES.manage));
+for (const button of [backToAccountSetupFromCreateBtn, backToAccountSetupFromLoginBtn, backToAccountSetupFromManageBtn]) {
+  if (!button) continue;
+  button.addEventListener("click", () => setAccountMenuPage(ACCOUNT_MENU_PAGES.setup));
+}
 if (createAccountBtn) createAccountBtn.addEventListener("click", createAccountFromInput);
 if (loginAccountBtn) loginAccountBtn.addEventListener("click", loginAccountFromInput);
 if (updateAccountBtn) updateAccountBtn.addEventListener("click", updateAccountFromInput);
@@ -18421,7 +18496,7 @@ for (const inputEl of [accountCreateDisplayNameInputEl, accountCreateUsernameInp
       createAccountFromInput();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      closeAccountMenu();
+      setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     }
   });
 }
@@ -18433,7 +18508,7 @@ for (const inputEl of [accountLoginUsernameInputEl, accountLoginPasswordInputEl]
       loginAccountFromInput();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      closeAccountMenu();
+      setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     }
   });
 }
@@ -18452,7 +18527,7 @@ for (const inputEl of [
       updateAccountFromInput();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      closeAccountMenu();
+      setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     }
   });
 }
@@ -18572,7 +18647,7 @@ window.addEventListener("keydown", (event) => {
   ) {
     if (event.key === "Escape") {
       event.preventDefault();
-      closeAccountMenu();
+      setAccountMenuPage(ACCOUNT_MENU_PAGES.setup);
     }
     return;
   }

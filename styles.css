@@ -825,7 +825,7 @@ body:not(.menu-active) .menu-screen {
 
 #menuAccountPanel {
   margin-top: -0.18rem;
-  grid-template-rows: auto auto auto auto minmax(clamp(220px, 42vh, 520px), 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   align-content: stretch;
   height: min(88vh, 760px);
 }
@@ -1116,17 +1116,72 @@ body:not(.menu-active) .menu-screen {
   justify-content: flex-end;
 }
 
-.menu-account-auth {
+.menu-account-pages {
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
-  gap: 0.56rem;
-  align-items: start;
 }
 
-.menu-account-auth-col {
-  display: grid;
+.menu-account-page {
+  display: none;
+  min-height: 0;
+  align-content: start;
   gap: 0.52rem;
-  min-width: 0;
+}
+
+.menu-account-pages[data-page="setup"] [data-account-page="setup"] {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.menu-account-pages[data-page="create"] [data-account-page="create"],
+.menu-account-pages[data-page="login"] [data-account-page="login"],
+.menu-account-pages[data-page="manage"] [data-account-page="manage"] {
+  display: grid;
+}
+
+.menu-account-page-setup h3,
+.menu-account-page-head h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d8eeff;
+}
+
+.menu-account-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.46rem;
+}
+
+.menu-account-page-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.44rem;
+}
+
+#openAccountCreatePageBtn,
+#openAccountLoginPageBtn,
+#openAccountManagePageBtn {
+  min-height: 2.1rem;
+}
+
+.menu-account-page-back-btn {
+  min-height: 1.9rem;
+  padding: 0.26rem 0.56rem;
+  font-size: 0.76rem;
+  min-width: 124px;
+  width: auto;
+}
+
+.menu-account-page-form {
+  overflow-y: auto;
+  padding-right: 0.08rem;
+}
+
+.menu-account-page-form .menu-account-form {
+  max-width: min(540px, 100%);
 }
 
 .menu-account-form {
@@ -2642,23 +2697,29 @@ canvas {
 
   .menu-card[data-view="account"] #menuAccountPanel {
     margin-top: -0.06rem;
-    grid-template-rows: auto auto auto auto minmax(clamp(190px, 36vh, 320px), 1fr) auto auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     height: min(88vh, 780px);
     max-height: none;
   }
 
-  .menu-card[data-view="account"] .menu-account-auth {
-    max-height: min(34vh, 320px);
-    overflow-y: auto;
-    padding-right: 0.08rem;
+  .menu-card[data-view="account"] .menu-account-pages {
+    max-height: none;
   }
 
-  .menu-account-auth {
+  .menu-account-page-actions {
     grid-template-columns: 1fr;
   }
 
-  .menu-account-auth-col {
-    gap: 0.44rem;
+  .menu-account-page-head {
+    flex-wrap: wrap;
+  }
+
+  .menu-account-page-form {
+    padding-right: 0;
+  }
+
+  .menu-account-page-form .menu-account-form {
+    max-width: none;
   }
 
   .menu-multiplayer-panels {
@@ -3334,14 +3395,11 @@ canvas {
   .menu-card[data-view="account"] #menuAccountPanel {
     margin-top: 0;
     height: min(72dvh, 640px);
-    grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   }
 
-  .menu-card[data-view="account"] .menu-account-auth {
+  .menu-card[data-view="account"] .menu-account-pages {
     max-height: none;
-    overflow: visible;
-    padding-right: 0;
-    gap: 0.42rem;
   }
 
   .menu-multiplayer-panels {

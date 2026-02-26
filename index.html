@@ -55,10 +55,30 @@
             <span id="menuAccountCurrent">Account: -</span>
           </div>
           <p id="menuAccountActionStatus" class="menu-shop-note" aria-live="polite"></p>
-          <div class="menu-account-auth">
-            <div class="menu-account-auth-col" aria-label="Create and login">
-              <section class="menu-account-form menu-account-form-create" aria-label="Create account">
+          <div id="menuAccountPages" class="menu-account-pages" data-page="setup">
+            <section class="menu-account-page menu-account-page-setup" data-account-page="setup" aria-label="Account setup home">
+              <h3>Account Actions</h3>
+              <p class="menu-account-form-subtitle">Choose an action, then finish it on its own page.</p>
+              <div class="menu-account-page-actions">
+                <button id="openAccountCreatePageBtn" type="button">Set Up Account</button>
+                <button id="openAccountLoginPageBtn" type="button">Login</button>
+                <button id="openAccountManagePageBtn" type="button">Change Account Info</button>
+              </div>
+              <div class="menu-account-startup-auth">
+                <label for="accountRequirePasswordOnStartupToggle">
+                  <input id="accountRequirePasswordOnStartupToggle" type="checkbox" />
+                  Stay signed in on this device
+                </label>
+              </div>
+              <div id="menuAccountList" class="menu-shop-list"></div>
+            </section>
+
+            <section class="menu-account-page menu-account-page-form" data-account-page="create" aria-label="Create account page">
+              <div class="menu-account-page-head">
                 <h3>Create Account</h3>
+                <button id="backToAccountSetupFromCreateBtn" class="menu-account-page-back-btn" type="button">Back to Setup</button>
+              </div>
+              <section class="menu-account-form menu-account-form-create" aria-label="Create account">
                 <p class="menu-account-form-subtitle">Create a new cloud profile.</p>
                 <input
                   id="accountCreateDisplayNameInput"
@@ -92,10 +112,16 @@
                   maxlength="48"
                   placeholder="Confirm password"
                 />
-                <button id="createAccountBtn" type="button">Create</button>
+                <button id="createAccountBtn" type="button">Create Account</button>
               </section>
-              <section class="menu-account-form menu-account-form-login" aria-label="Login">
+            </section>
+
+            <section class="menu-account-page menu-account-page-form" data-account-page="login" aria-label="Login page">
+              <div class="menu-account-page-head">
                 <h3>Login</h3>
+                <button id="backToAccountSetupFromLoginBtn" class="menu-account-page-back-btn" type="button">Back to Setup</button>
+              </div>
+              <section class="menu-account-form menu-account-form-login" aria-label="Login">
                 <p class="menu-account-form-subtitle">Sign into an existing account.</p>
                 <input
                   id="accountLoginUsernameInput"
@@ -115,70 +141,69 @@
                 />
                 <button id="loginAccountBtn" type="button">Login</button>
               </section>
-            </div>
-            <section class="menu-account-form menu-account-form-manage" aria-label="Manage account">
-              <h3>Manage Account</h3>
-              <p class="menu-account-form-subtitle">Update your profile and credentials.</p>
-              <input
-                id="accountUpdateCurrentEmailInput"
-                type="text"
-                autocomplete="email"
-                spellcheck="false"
-                maxlength="64"
-                placeholder="Current email (required)"
-              />
-              <input
-                id="accountUpdateCurrentPasswordInput"
-                type="password"
-                autocomplete="current-password"
-                spellcheck="false"
-                maxlength="48"
-                placeholder="Current password (for email/password change)"
-              />
-              <input
-                id="accountUpdateDisplayNameInput"
-                type="text"
-                autocomplete="nickname"
-                spellcheck="false"
-                maxlength="24"
-                placeholder="Username"
-              />
-              <input
-                id="accountUpdateEmailInput"
-                type="text"
-                autocomplete="email"
-                spellcheck="false"
-                maxlength="64"
-                placeholder="New email (optional)"
-              />
-              <input
-                id="accountUpdatePasswordInput"
-                type="password"
-                autocomplete="new-password"
-                spellcheck="false"
-                maxlength="48"
-                placeholder="New password (optional)"
-              />
-              <input
-                id="accountUpdatePasswordConfirmInput"
-                type="password"
-                autocomplete="new-password"
-                spellcheck="false"
-                maxlength="48"
-                placeholder="Confirm new password"
-              />
-              <p class="menu-account-form-note">Current email is required. Leave New Email blank to keep your current one.</p>
-              <button id="updateAccountBtn" type="button">Update Account</button>
+            </section>
+
+            <section class="menu-account-page menu-account-page-form" data-account-page="manage" aria-label="Manage account page">
+              <div class="menu-account-page-head">
+                <h3>Change Account Info</h3>
+                <button id="backToAccountSetupFromManageBtn" class="menu-account-page-back-btn" type="button">Back to Setup</button>
+              </div>
+              <section class="menu-account-form menu-account-form-manage" aria-label="Manage account">
+                <p class="menu-account-form-subtitle">Update your profile and credentials.</p>
+                <input
+                  id="accountUpdateCurrentEmailInput"
+                  type="text"
+                  autocomplete="email"
+                  spellcheck="false"
+                  maxlength="64"
+                  placeholder="Current email (required)"
+                />
+                <input
+                  id="accountUpdateCurrentPasswordInput"
+                  type="password"
+                  autocomplete="current-password"
+                  spellcheck="false"
+                  maxlength="48"
+                  placeholder="Current password (for email/password change)"
+                />
+                <input
+                  id="accountUpdateDisplayNameInput"
+                  type="text"
+                  autocomplete="nickname"
+                  spellcheck="false"
+                  maxlength="24"
+                  placeholder="Username"
+                />
+                <input
+                  id="accountUpdateEmailInput"
+                  type="text"
+                  autocomplete="email"
+                  spellcheck="false"
+                  maxlength="64"
+                  placeholder="New email (optional)"
+                />
+                <input
+                  id="accountUpdatePasswordInput"
+                  type="password"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                  maxlength="48"
+                  placeholder="New password (optional)"
+                />
+                <input
+                  id="accountUpdatePasswordConfirmInput"
+                  type="password"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                  maxlength="48"
+                  placeholder="Confirm new password"
+                />
+                <p class="menu-account-form-note">Current email is required. Leave New Email blank to keep your current one.</p>
+                <button id="updateAccountBtn" type="button">Update Account</button>
+              </section>
             </section>
           </div>
-          <div class="menu-account-startup-auth">
-            <label for="accountRequirePasswordOnStartupToggle">
-              <input id="accountRequirePasswordOnStartupToggle" type="checkbox" />
-              Stay signed in on this device
-            </label>
-          </div>
-          <div id="menuAccountList" class="menu-shop-list"></div>
-          <p id="menuAccountNote" class="menu-shop-note">Use a username + email + password for cloud accounts. In Manage Account, Current Email is required and New Email is optional.</p>
+          <p id="menuAccountNote" class="menu-shop-note">Use Account Actions to open Create, Login, or Change Account Info pages. Current Email is required for account updates.</p>
           <div class="menu-shop-actions">
             <button id="accountCloudSignOutBtn" type="button" hidden>Cloud Sign Out</button>
             <button id="closeAccountBtn" class="menu-play-btn" type="button">Menu Page</button>
