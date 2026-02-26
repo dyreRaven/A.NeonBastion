@@ -38,6 +38,7 @@ const menuCardEl = $id("menuCard");
 const buildStampEl = $id("buildStamp");
 const menuShardCornerEl = $id("menuShardCorner");
 const playBtn = $id("playBtn");
+const menuLoadingScreenEl = $id("menuLoadingScreen");
 const mapPrevBtn = $id("mapPrevBtn");
 const mapNextBtn = $id("mapNextBtn");
 const mapPreviewEl = $id("mapPreview");
@@ -201,6 +202,8 @@ const GAME_UPGRADE_COSTS = Object.freeze({
 const STARTING_CREDITS_BONUS_STEP = 0.25;
 const SHARD_GAIN_RATE_BASE = 0.01;
 const SHARD_GAIN_RATE_STEP = 0.01;
+const MENU_START_LOADING_DELAY_MS = 90;
+const MENU_START_LOADING_MIN_VISIBLE_MS = 750;
 const MULTIPLAYER_SNAPSHOT_INTERVAL = 0.12;
 const MULTIPLAYER_CLIENT_HUD_REFRESH_INTERVAL = 0.16;
 const SOLO_HUD_REFRESH_INTERVAL_SEC = 0.12;
@@ -17285,6 +17288,11 @@ function setMenuView(view) {
 }
 
 function openMenuShop() {
+  if (menuStartLoadingTimer) {
+    window.clearTimeout(menuStartLoadingTimer);
+    menuStartLoadingTimer = 0;
+  }
+  hideMenuLoadingScreen(true);
   closeDefeatPanel();
   closeLevelClearPanel();
   closeExitConfirm();
@@ -17314,6 +17322,71 @@ function closeMenuShop() {
   document.body.classList.remove("menu-active");
   if (playBtn) playBtn.textContent = getMenuPlayButtonLabel();
   updateHud();
+}
+
+let menuStartLoadingTimer = 0;
+let menuStartLoadingHideTimer = 0;
+let menuStartLoadingShownAt = 0;
+
+function showMenuLoadingScreen() {
+  if (!menuLoadingScreenEl) return;
+  if (menuStartLoadingHideTimer) {
+    window.clearTimeout(menuStartLoadingHideTimer);
+    menuStartLoadingHideTimer = 0;
+  }
+  menuStartLoadingShownAt = performance.now();
+  menuLoadingScreenEl.hidden = false;
+  // Force a paint boundary so fade-in is visible before start logic runs.
+  void menuLoadingScreenEl.offsetWidth;
+  menuLoadingScreenEl.classList.add("active");
+}
+
+function hideMenuLoadingScreen(force = false) {
+  if (!menuLoadingScreenEl) return;
+
+  const finishHide = () => {
+    menuLoadingScreenEl.classList.remove("active");
+    window.setTimeout(() => {
+      if (!menuLoadingScreenEl.classList.contains("active")) menuLoadingScreenEl.hidden = true;
+    }, 190);
+  };
+
+  if (menuStartLoadingHideTimer) {
+    window.clearTimeout(menuStartLoadingHideTimer);
+    menuStartLoadingHideTimer = 0;
+  }
+
+  if (force) {
+    menuLoadingScreenEl.classList.remove("active");
+    menuLoadingScreenEl.hidden = true;
+    return;
+  }
+
+  const elapsed = performance.now() - menuStartLoadingShownAt;
+  const delay = Math.max(0, MENU_START_LOADING_MIN_VISIBLE_MS - elapsed);
+  if (delay > 0) {
+    menuStartLoadingHideTimer = window.setTimeout(() => {
+      menuStartLoadingHideTimer = 0;
+      finishHide();
+    }, delay);
+    return;
+  }
+
+  finishHide();
+}
+
+function startGameFromMenuWithLoading(preferredLevel = null) {
+  if (menuStartLoadingTimer) return;
+  showMenuLoadingScreen();
+  menuStartLoadingTimer = window.setTimeout(() => {
+    menuStartLoadingTimer = 0;
+    const started = startGameFromMenu(preferredLevel);
+    if (!started) {
+      hideMenuLoadingScreen(true);
+      return;
+    }
+    hideMenuLoadingScreen(false);
+  }, MENU_START_LOADING_DELAY_MS);
 }
 
 function openUnlocksMenu() {
@@ -18836,7 +18909,7 @@ function update(dt) {
 function startGameFromMenu(preferredLevel = null) {
   if (isMultiplayerClient() && isMultiplayerActive()) {
     setStatus("Only the host can start the multiplayer match from menu.", true);
-    return;
+    return false;
   }
   if (startupAuthPendingAccountId) {
     const pendingAccount = getAccountById(startupAuthPendingAccountId);
@@ -18851,7 +18924,7 @@ function startGameFromMenu(preferredLevel = null) {
       accountLoginPasswordInputEl.select();
     }
     setStatus(`Login required for ${pendingName} before starting.`, true);
-    return;
+    return false;
   }
   audioSystem.unlock();
   closeDefeatPanel();
@@ -18862,7 +18935,7 @@ function startGameFromMenu(preferredLevel = null) {
   if (hasPreferredLevel && !isLevelUnlocked(requestedLevel)) {
     setStatus(`Level ${requestedLevel} is locked. Clear earlier levels first.`, true);
     updateHud();
-    return;
+    return false;
   }
 
   const targetLevel = Math.max(1, Math.min(getHighestUnlockedLevel(), requestedLevel));
@@ -18878,6 +18951,7 @@ function startGameFromMenu(preferredLevel = null) {
   syncMusicState();
   updateHud();
   if (isMultiplayerHost() && isMultiplayerActive()) sendMultiplayerSnapshot(true);
+  return true;
 }
 
 function onResize() {
@@ -19310,7 +19384,7 @@ window.addEventListener("keydown", (event) => {
   if (!game.started || game.menuOpen) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel());
+      startGameFromMenuWithLoading(game.menuSelectedLevel || getHighestUnlockedLevel());
     }
     if (game.menuOpen && game.menuView === "home" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
@@ -19411,7 +19485,7 @@ void initializeCloudAuth().finally(() => {
   logRuntimeStorageDiagnostics("startup.after_cloud_auth_init");
 });
 if (menuScreenEl) menuScreenEl.hidden = false;
-if (playBtn) playBtn.addEventListener("click", () => startGameFromMenu(game.menuSelectedLevel || getHighestUnlockedLevel()));
+if (playBtn) playBtn.addEventListener("click", () => startGameFromMenuWithLoading(game.menuSelectedLevel || getHighestUnlockedLevel()));
 if (startupAuthPendingAccountId) {
   const pendingAccount = getAccountById(startupAuthPendingAccountId);
   const pendingName = getAccountDisplayName(pendingAccount, "your account");
