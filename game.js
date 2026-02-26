@@ -1973,7 +1973,9 @@ const CREATURE_SHOP_ENEMY_IDS = Object.keys(ENEMY_TYPES).filter((enemyTypeId) =>
   Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
 );
 const CREATURE_CARD_PORTRAIT_SIZE = 208;
+const CREATURE_CARD_PORTRAIT_RETRY_DELAY_MS = 5000;
 const creatureCardPortraitCache = new Map();
+const creatureCardPortraitFailureAt = new Map();
 let creatureCardPortraitCanvas = null;
 let creatureCardPortraitRenderer = null;
 let creatureCardPortraitScene = null;
@@ -16585,6 +16587,35 @@ function renderTrapShop() {
   }
 }
 
+function ensureCreatureCardPortraitScene() {
+  if (creatureCardPortraitScene && creatureCardPortraitCamera && creatureCardPortraitSubject) return true;
+
+  const portraitScene = new THREE.Scene();
+  const portraitCamera = new THREE.PerspectiveCamera(34, 1, 0.01, 80);
+  const subjectRoot = new THREE.Group();
+  portraitScene.add(subjectRoot);
+
+  const hemi = new THREE.HemisphereLight(0xd2f2ff, 0x151a27, 0.96);
+  portraitScene.add(hemi);
+
+  const key = new THREE.DirectionalLight(0xffffff, 1.18);
+  key.position.set(2.8, 3.6, 4.1);
+  portraitScene.add(key);
+
+  const rim = new THREE.DirectionalLight(0x7de1ff, 0.74);
+  rim.position.set(-3.4, 1.8, -3.6);
+  portraitScene.add(rim);
+
+  const warmFill = new THREE.PointLight(0xffd2a8, 0.48, 18, 2);
+  warmFill.position.set(1.4, 0.9, 2.2);
+  portraitScene.add(warmFill);
+
+  creatureCardPortraitScene = portraitScene;
+  creatureCardPortraitCamera = portraitCamera;
+  creatureCardPortraitSubject = subjectRoot;
+  return true;
+}
+
 function ensureCreatureCardPortraitRenderer() {
   if (
     creatureCardPortraitRenderer &&
@@ -16597,6 +16628,7 @@ function ensureCreatureCardPortraitRenderer() {
   }
 
   if (!rendererWebglAvailable || !renderer || renderer.__noop || typeof document === "undefined") return false;
+  if (!ensureCreatureCardPortraitScene()) return false;
 
   const canvasEl = document.createElement("canvas");
   canvasEl.width = CREATURE_CARD_PORTRAIT_SIZE;
@@ -16625,31 +16657,8 @@ function ensureCreatureCardPortraitRenderer() {
     portraitRenderer.outputEncoding = "outputEncoding" in renderer ? renderer.outputEncoding : THREE.sRGBEncoding;
   }
 
-  const portraitScene = new THREE.Scene();
-  const portraitCamera = new THREE.PerspectiveCamera(34, 1, 0.01, 80);
-  const subjectRoot = new THREE.Group();
-  portraitScene.add(subjectRoot);
-
-  const hemi = new THREE.HemisphereLight(0xd2f2ff, 0x151a27, 0.96);
-  portraitScene.add(hemi);
-
-  const key = new THREE.DirectionalLight(0xffffff, 1.18);
-  key.position.set(2.8, 3.6, 4.1);
-  portraitScene.add(key);
-
-  const rim = new THREE.DirectionalLight(0x7de1ff, 0.74);
-  rim.position.set(-3.4, 1.8, -3.6);
-  portraitScene.add(rim);
-
-  const warmFill = new THREE.PointLight(0xffd2a8, 0.48, 18, 2);
-  warmFill.position.set(1.4, 0.9, 2.2);
-  portraitScene.add(warmFill);
-
   creatureCardPortraitCanvas = canvasEl;
   creatureCardPortraitRenderer = portraitRenderer;
-  creatureCardPortraitScene = portraitScene;
-  creatureCardPortraitCamera = portraitCamera;
-  creatureCardPortraitSubject = subjectRoot;
   return true;
 }
 
@@ -16676,8 +16685,77 @@ function clearCreaturePortraitSubject() {
   }
 }
 
+function renderCreatureCardPortraitWithMainRenderer() {
+  if (
+    !creatureCardPortraitScene ||
+    !creatureCardPortraitCamera ||
+    !renderer ||
+    renderer.__noop ||
+    typeof renderer.setRenderTarget !== "function" ||
+    typeof renderer.readRenderTargetPixels !== "function"
+  ) {
+    return "";
+  }
+  if (typeof document === "undefined") return "";
+
+  const size = CREATURE_CARD_PORTRAIT_SIZE;
+  const renderTarget = new THREE.WebGLRenderTarget(size, size, {
+    depthBuffer: true,
+    stencilBuffer: false,
+  });
+  if (renderTarget.texture) {
+    if ("colorSpace" in renderTarget.texture && "outputColorSpace" in renderer) {
+      renderTarget.texture.colorSpace = renderer.outputColorSpace;
+    } else if ("encoding" in renderTarget.texture && "outputEncoding" in renderer) {
+      renderTarget.texture.encoding = renderer.outputEncoding;
+    }
+  }
+
+  const pixels = new Uint8Array(size * size * 4);
+  const previousTarget = typeof renderer.getRenderTarget === "function" ? renderer.getRenderTarget() : null;
+  const previousAutoClear = renderer.autoClear;
+  const previousToneExposure = renderer.toneMappingExposure;
+  const previousClearColor = new THREE.Color();
+  let previousClearAlpha = 1;
+  if (typeof renderer.getClearColor === "function") renderer.getClearColor(previousClearColor);
+  if (typeof renderer.getClearAlpha === "function") previousClearAlpha = renderer.getClearAlpha();
+
+  try {
+    renderer.autoClear = true;
+    renderer.toneMappingExposure = Math.max(0.85, (renderer.toneMappingExposure || 1) * 0.92);
+    renderer.setRenderTarget(renderTarget);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear(true, true, true);
+    renderer.render(creatureCardPortraitScene, creatureCardPortraitCamera);
+    renderer.readRenderTargetPixels(renderTarget, 0, 0, size, size, pixels);
+  } catch (_) {
+    return "";
+  } finally {
+    renderer.setRenderTarget(previousTarget);
+    renderer.setClearColor(previousClearColor, previousClearAlpha);
+    renderer.toneMappingExposure = previousToneExposure;
+    renderer.autoClear = previousAutoClear;
+    renderTarget.dispose();
+  }
+
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = size;
+  canvasEl.height = size;
+  const context2d = canvasEl.getContext("2d", { willReadFrequently: false });
+  if (!context2d) return "";
+  const imageData = context2d.createImageData(size, size);
+  const rowBytes = size * 4;
+  for (let y = 0; y < size; y += 1) {
+    const srcOffset = (size - 1 - y) * rowBytes;
+    const destOffset = y * rowBytes;
+    imageData.data.set(pixels.subarray(srcOffset, srcOffset + rowBytes), destOffset);
+  }
+  context2d.putImageData(imageData, 0, 0);
+  return canvasEl.toDataURL("image/png");
+}
+
 function renderCreatureCardPortraitDataUrl(enemyTypeId) {
-  if (!ensureCreatureCardPortraitRenderer()) return "";
+  if (!ensureCreatureCardPortraitScene()) return "";
   const enemyType = ENEMY_TYPES[enemyTypeId];
   if (!enemyType) return "";
 
@@ -16712,9 +16790,13 @@ function renderCreatureCardPortraitDataUrl(enemyTypeId) {
     creatureCardPortraitCamera.lookAt(sphere.center.x, sphere.center.y + radius * 0.04, sphere.center.z);
     creatureCardPortraitCamera.updateMatrixWorld(true);
 
-    creatureCardPortraitRenderer.clear();
-    creatureCardPortraitRenderer.render(creatureCardPortraitScene, creatureCardPortraitCamera);
-    const dataUrl = creatureCardPortraitCanvas.toDataURL("image/png");
+    let dataUrl = "";
+    if (ensureCreatureCardPortraitRenderer() && creatureCardPortraitRenderer && creatureCardPortraitCanvas) {
+      creatureCardPortraitRenderer.clear();
+      creatureCardPortraitRenderer.render(creatureCardPortraitScene, creatureCardPortraitCamera);
+      dataUrl = creatureCardPortraitCanvas.toDataURL("image/png");
+    }
+    if (!dataUrl) dataUrl = renderCreatureCardPortraitWithMainRenderer();
 
     creatureCardPortraitSubject.remove(portraitGroup);
     disposeCreaturePortraitObject(portraitGroup);
@@ -16731,9 +16813,18 @@ function renderCreatureCardPortraitDataUrl(enemyTypeId) {
 function getCreatureCardPortraitDataUrl(enemyTypeId) {
   if (!enemyTypeId) return "";
   if (creatureCardPortraitCache.has(enemyTypeId)) return creatureCardPortraitCache.get(enemyTypeId) || "";
+  const failureAt = creatureCardPortraitFailureAt.get(enemyTypeId) || 0;
+  const now = Date.now();
+  if (failureAt && now - failureAt < CREATURE_CARD_PORTRAIT_RETRY_DELAY_MS) return "";
+
   const dataUrl = renderCreatureCardPortraitDataUrl(enemyTypeId);
-  creatureCardPortraitCache.set(enemyTypeId, dataUrl || "");
-  return dataUrl || "";
+  if (dataUrl) {
+    creatureCardPortraitCache.set(enemyTypeId, dataUrl);
+    creatureCardPortraitFailureAt.delete(enemyTypeId);
+    return dataUrl;
+  }
+  creatureCardPortraitFailureAt.set(enemyTypeId, now);
+  return "";
 }
 
 function renderCreatureShop() {
