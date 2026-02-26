@@ -16682,7 +16682,7 @@ function ensureCreatureCardPortraitRenderer() {
   portraitRenderer.setSize(CREATURE_CARD_PORTRAIT_SIZE, CREATURE_CARD_PORTRAIT_SIZE, false);
   portraitRenderer.setClearColor(0x000000, 0);
   portraitRenderer.toneMapping = renderer.toneMapping;
-  portraitRenderer.toneMappingExposure = Math.max(0.98, (renderer.toneMappingExposure || 1) * 1.04);
+  portraitRenderer.toneMappingExposure = Math.max(0.76, (renderer.toneMappingExposure || 1) * 0.88);
   if ("outputColorSpace" in portraitRenderer) {
     portraitRenderer.outputColorSpace = "outputColorSpace" in renderer ? renderer.outputColorSpace : THREE.SRGBColorSpace;
   } else if ("outputEncoding" in portraitRenderer) {
@@ -16721,7 +16721,7 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
   if (!group || !enemyType) return;
   const primary = new THREE.Color(enemyType.colorA || "#7de4ff");
   const secondary = new THREE.Color(enemyType.colorB || "#e9fcff");
-  const edgeColor = secondary.clone().lerp(new THREE.Color("#ffffff"), 0.38);
+  const emissiveTint = primary.clone().lerp(secondary, 0.28);
 
   group.traverse((node) => {
     if (!node || !node.isMesh) return;
@@ -16738,38 +16738,23 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
         if (Number.isFinite(material.clearcoatRoughness)) {
           material.clearcoatRoughness = Math.min(0.24, material.clearcoatRoughness + 0.07);
         }
-        if (Number.isFinite(material.envMapIntensity)) material.envMapIntensity = Math.min(1.2, material.envMapIntensity);
-        if (material.color?.isColor) material.color.lerp(primary, 0.18);
+        if (Number.isFinite(material.envMapIntensity)) material.envMapIntensity = Math.min(1.0, material.envMapIntensity);
+        if (material.color?.isColor) material.color.lerp(primary, 0.34);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(secondary, 0.2);
-          material.emissiveIntensity = Math.max(0.34, material.emissiveIntensity || 0.2);
+          material.emissive.lerp(emissiveTint, 0.2);
+          material.emissiveIntensity = Math.min(0.32, Math.max(0.12, material.emissiveIntensity || 0.18));
         }
         material.needsUpdate = true;
       } else if (material.isMeshStandardMaterial) {
         if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.5, material.roughness + 0.08);
         if (Number.isFinite(material.metalness)) material.metalness = Math.max(0.08, material.metalness * 0.62);
+        if (material.color?.isColor) material.color.lerp(primary, 0.28);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(secondary, 0.12);
-          material.emissiveIntensity = Math.max(0.26, material.emissiveIntensity || 0.18);
+          material.emissive.lerp(emissiveTint, 0.14);
+          material.emissiveIntensity = Math.min(0.28, Math.max(0.1, material.emissiveIntensity || 0.14));
         }
         material.needsUpdate = true;
       }
-    }
-
-    if (node.geometry && typeof node.geometry.clone === "function") {
-      const edgeGeometry = new THREE.EdgesGeometry(node.geometry, 26);
-      const edgeMaterial = new THREE.LineBasicMaterial({
-        color: edgeColor,
-        transparent: true,
-        opacity: 0.68,
-        depthWrite: false,
-      });
-      const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
-      edgeLines.position.copy(node.position);
-      edgeLines.rotation.copy(node.rotation);
-      edgeLines.scale.copy(node.scale).multiplyScalar(1.004);
-      edgeLines.renderOrder = 5;
-      if (node.parent) node.parent.add(edgeLines);
     }
   });
 }
@@ -16811,7 +16796,7 @@ function renderCreatureCardPortraitWithMainRenderer() {
 
   try {
     renderer.autoClear = true;
-    renderer.toneMappingExposure = Math.max(0.98, (renderer.toneMappingExposure || 1) * 1.04);
+    renderer.toneMappingExposure = Math.max(0.76, (renderer.toneMappingExposure || 1) * 0.88);
     renderer.setRenderTarget(renderTarget);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, true, true);
