@@ -15784,13 +15784,13 @@ function tryPurchaseLoadoutUpgrade(towerTypeId, kind) {
   renderMenuShop();
   renderTrapShop();
   renderCreatureShop();
-  renderLoadoutMenu();
+  renderLoadoutMenu(game.loadoutUpgradeTargetId || towerTypeId);
   renderShop();
   updateHud();
   return true;
 }
 
-function renderLoadoutMenu() {
+function renderLoadoutMenu(scrollTargetTowerTypeId = null) {
   if (!menuLoadoutEl) return;
   const previousScrollTop = menuLoadoutEl.scrollTop;
   const fragments = [];
@@ -15885,7 +15885,7 @@ function renderLoadoutMenu() {
       : "";
 
     fragments.push(`
-      <div class="${classes}" style="${cardStyle}">
+      <div class="${classes}" style="${cardStyle}" data-loadout-card="${towerTypeId}">
         ${portraitMarkup}
         <div class="menu-loadout-content">
           <strong>${type.name}</strong>
@@ -15949,7 +15949,24 @@ function renderLoadoutMenu() {
   }
 
   menuLoadoutEl.innerHTML = fragments.join("");
-  menuLoadoutEl.scrollTop = previousScrollTop;
+  if (scrollTargetTowerTypeId) {
+    const targetCard = menuLoadoutEl.querySelector(`[data-loadout-card="${scrollTargetTowerTypeId}"]`);
+    if (targetCard) {
+      const cardTop = targetCard.offsetTop;
+      const cardBottom = cardTop + targetCard.offsetHeight;
+      const viewTop = menuLoadoutEl.scrollTop;
+      const viewBottom = viewTop + menuLoadoutEl.clientHeight;
+      if (cardTop < viewTop + 8) {
+        menuLoadoutEl.scrollTop = Math.max(0, cardTop - 8);
+      } else if (cardBottom > viewBottom - 8) {
+        menuLoadoutEl.scrollTop = Math.max(0, cardBottom - menuLoadoutEl.clientHeight + 8);
+      }
+    } else {
+      menuLoadoutEl.scrollTop = previousScrollTop;
+    }
+  } else {
+    menuLoadoutEl.scrollTop = previousScrollTop;
+  }
 
   const loadoutButtons = menuLoadoutEl.querySelectorAll(".menu-loadout-action");
   for (const button of loadoutButtons) {
@@ -15990,8 +16007,9 @@ function renderLoadoutMenu() {
     button.addEventListener("click", () => {
       const towerTypeId = button.dataset.loadoutUpgradeToggle;
       if (!towerTypeId) return;
-      game.loadoutUpgradeTargetId = game.loadoutUpgradeTargetId === towerTypeId ? null : towerTypeId;
-      renderLoadoutMenu();
+      const willOpen = game.loadoutUpgradeTargetId !== towerTypeId;
+      game.loadoutUpgradeTargetId = willOpen ? towerTypeId : null;
+      renderLoadoutMenu(willOpen ? towerTypeId : null);
     });
   }
 
