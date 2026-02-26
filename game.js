@@ -15993,6 +15993,30 @@ function formatShardWordHtml(word = "Shards") {
   return `<span class="shard-word-inline">${escapeHtml(word)}</span>`;
 }
 
+function getEventTargetElement(target) {
+  if (target instanceof Element) return target;
+  if (target instanceof Node) return target.parentElement;
+  return null;
+}
+
+function getAccountDeletionConfirmationMessage(account) {
+  const displayName = getAccountDisplayName(account);
+  const email = getAccountEmail(account) || "no-email profile";
+  return [
+    "Account Termination Notice",
+    "",
+    `You are about to permanently terminate "${displayName}" (${email}).`,
+    "This operation is irreversible.",
+    "",
+    "All progress tied to this account will be permanently erased:",
+    "- shards and progression",
+    "- tower and spawner unlocks",
+    "- upgrades and loadout setup",
+    "",
+    "Select OK to proceed with account termination.",
+  ].join("\n");
+}
+
 function renderAccountMenu() {
   const signedInCloudEmail = getCloudSignedInEmail();
   if (signedInCloudEmail && pruneLegacyLocalAccountsForCloudUser(signedInCloudEmail)) {
@@ -16047,8 +16071,13 @@ function renderAccountMenu() {
         <div class="menu-account-actions">
           <span class="menu-account-badge">${active ? "Signed In" : "Saved"}</span>
           ${switchAction}
-          <button type="button" data-account-action="delete" data-account-id="${account.id}">
-            Delete
+          <button
+            type="button"
+            data-account-action="delete"
+            data-account-id="${account.id}"
+            title="Terminate account and erase profile progress"
+          >
+            Terminate
           </button>
         </div>
       </div>
@@ -16068,8 +16097,8 @@ function renderAccountMenu() {
 
   menuAccountEl.innerHTML = fragments.join("");
   menuAccountEl.onclick = (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
+    const target = getEventTargetElement(event.target);
+    if (!target) return;
     const button = target.closest("button[data-account-action][data-account-id]");
     if (!button || !menuAccountEl.contains(button)) return;
     const accountId = button.dataset.accountId;
@@ -16087,20 +16116,17 @@ function renderAccountMenu() {
 
 function deleteAccountById(accountId) {
   const account = progressData.accounts.find((entry) => entry.id === accountId);
-  if (!account) return;
-  if (!isCloudBackedAccount(account)) {
-    setStatus("Legacy local account hidden. Use cloud email accounts only.", true);
+  if (!account) {
+    setAccountStatus("That account was not found.", true);
     return;
   }
-
-  const visibleAccounts = getVisibleCloudAccounts();
-  if (visibleAccounts.length <= 1) {
-    setStatus("Cannot delete the only account.", true);
+  if (!isCloudBackedAccount(account)) {
+    setAccountStatus("Legacy local account hidden. Use cloud email accounts only.", true);
     return;
   }
 
   const confirmed = typeof window.confirm === "function"
-    ? window.confirm(`Delete account "${getAccountDisplayName(account)}"? This cannot be undone.`)
+    ? window.confirm(getAccountDeletionConfirmationMessage(account))
     : true;
   if (!confirmed) return;
 
@@ -16110,28 +16136,26 @@ function deleteAccountById(accountId) {
   const deletingActive = removed.id === progressData.currentAccountId;
   progressData.accounts.splice(index, 1);
   clearStartupAuthenticationRequirement(removed.id);
-
-  const remainingVisibleAccounts = getVisibleCloudAccounts();
-  if (remainingVisibleAccounts.length === 0) {
-    const signedInEmail = sanitizeAccountUsername(getCloudSignedInEmail() || getAccountEmail(removed));
-    const fallback = ensureLocalAccountRecord(signedInEmail, "", {
-      displayName: game.accountName || getAccountDisplayName(removed),
-    });
-    if (fallback) {
-      progressData.currentAccountId = fallback.id;
-      progressData.lastAuthenticatedAccountId = fallback.id;
-      applyAccountToGame(fallback);
+  let nextAccount = null;
+  if (progressData.accounts.length === 0) {
+    const fallback = createAccountRecord("Commander");
+    progressData.accounts = [fallback];
+    progressData.currentAccountId = fallback.id;
+    progressData.lastAuthenticatedAccountId = fallback.id;
+    nextAccount = fallback;
+  } else {
+    if (deletingActive || !getAccountById(progressData.currentAccountId)) {
+      const remainingVisibleAccounts = getVisibleCloudAccounts();
+      const preferred = remainingVisibleAccounts[0] || progressData.accounts[0] || null;
+      if (preferred) progressData.currentAccountId = preferred.id;
     }
-  } else if (deletingActive) {
-    progressData.currentAccountId = remainingVisibleAccounts[0].id;
-    progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
-  } else if (removed.id === progressData.lastAuthenticatedAccountId) {
-    progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
+    if (!getAccountById(progressData.lastAuthenticatedAccountId)) {
+      progressData.lastAuthenticatedAccountId = progressData.currentAccountId;
+    }
+    nextAccount = getCurrentAccountRecord();
   }
 
-  if (deletingActive) {
-    applyAccountToGame(getCurrentAccountRecord());
-  }
+  if (nextAccount) applyAccountToGame(nextAccount);
   savePlayerProgress();
   renderMapPreview();
   renderAccountMenu();
@@ -16147,7 +16171,7 @@ function deleteAccountById(accountId) {
     preferredEmail: getAccountEmail(currentAccount) || getCloudSignedInEmail(),
     preferredDisplayName: game.accountName || getAccountDisplayName(currentAccount),
   });
-  setStatus(`Deleted account ${getAccountDisplayName(removed)}.`);
+  setAccountStatus(`Account ${getAccountDisplayName(removed)} was terminated and all profile progress was removed.`);
 }
 
 function switchToAccount(accountId, quiet = false) {

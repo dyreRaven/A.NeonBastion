@@ -1507,16 +1507,19 @@ body:not(.menu-active) .menu-screen {
 
 #menuShop,
 #menuCreatureShop,
+#menuTrapShop,
 #menuLoadout {
   grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
-}
-
-#menuShop {
   max-height: min(52vh, 430px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding-right: 0.14rem;
+  align-content: start;
+}
+
+#menuShop {
+  max-height: min(52vh, 430px);
 }
 
 .menu-shop-list::-webkit-scrollbar {
@@ -1583,6 +1586,7 @@ body:not(.menu-active) .menu-screen {
 
 .menu-creature-item {
   position: relative;
+  min-height: 5.8rem;
   overflow: hidden;
   isolation: isolate;
 }
@@ -2854,8 +2858,10 @@ canvas {
 
   #menuShop,
   #menuCreatureShop,
+  #menuTrapShop,
   #menuLoadout {
     grid-template-columns: 1fr;
+    max-height: min(46vh, 360px);
   }
 
   #menuShop {
