@@ -9752,7 +9752,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const angle = (i / 12) * Math.PI * 2;
       const spike = cast(new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.56 + Math.sin(i * 0.8) * 0.06, 6), spikeMat));
       spike.position.set(Math.cos(angle) * 0.56, 0.32, Math.sin(angle) * 0.56);
-      spike.rotation.x = Math.PI;
+      spike.rotation.x = 0;
       spike.rotation.z = -0.14;
       spike.rotation.y = angle;
       spikeRing.add(spike);
@@ -9761,7 +9761,7 @@ function createTowerMesh(towerTypeId, bodyColor, coreColor) {
       const innerAngle = (i / 5) * Math.PI * 2 + 0.3;
       const innerSpike = cast(new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.74, 6), spikeMat));
       innerSpike.position.set(Math.cos(innerAngle) * 0.22, 0.38, Math.sin(innerAngle) * 0.22);
-      innerSpike.rotation.x = Math.PI;
+      innerSpike.rotation.x = 0;
       innerSpike.rotation.z = -0.09;
       innerSpike.rotation.y = innerAngle;
       spikeRing.add(innerSpike);
