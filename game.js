@@ -1972,6 +1972,13 @@ const CREATURE_SPAWNER_UNLOCKS = {
 const CREATURE_SHOP_ENEMY_IDS = Object.keys(ENEMY_TYPES).filter((enemyTypeId) =>
   Object.prototype.hasOwnProperty.call(CREATURE_SPAWNER_UNLOCKS, enemyTypeId)
 );
+const CREATURE_CARD_PORTRAIT_SIZE = 208;
+const creatureCardPortraitCache = new Map();
+let creatureCardPortraitCanvas = null;
+let creatureCardPortraitRenderer = null;
+let creatureCardPortraitScene = null;
+let creatureCardPortraitCamera = null;
+let creatureCardPortraitSubject = null;
 
 function spawnerTowerIdForEnemy(enemyTypeId) {
   return `${SPAWNER_TOWER_PREFIX}${enemyTypeId}`;
@@ -16554,6 +16561,157 @@ function renderTrapShop() {
   }
 }
 
+function ensureCreatureCardPortraitRenderer() {
+  if (
+    creatureCardPortraitRenderer &&
+    creatureCardPortraitScene &&
+    creatureCardPortraitCamera &&
+    creatureCardPortraitSubject &&
+    creatureCardPortraitCanvas
+  ) {
+    return true;
+  }
+
+  if (!rendererWebglAvailable || !renderer || renderer.__noop || typeof document === "undefined") return false;
+
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = CREATURE_CARD_PORTRAIT_SIZE;
+  canvasEl.height = CREATURE_CARD_PORTRAIT_SIZE;
+
+  const portraitRenderer = tryCreateWebglRenderer({
+    canvas: canvasEl,
+    alpha: true,
+    antialias: true,
+    powerPreference: "low-power",
+    preserveDrawingBuffer: true,
+    premultipliedAlpha: true,
+    depth: true,
+    stencil: false,
+  });
+  if (!portraitRenderer) return false;
+
+  portraitRenderer.setPixelRatio(1);
+  portraitRenderer.setSize(CREATURE_CARD_PORTRAIT_SIZE, CREATURE_CARD_PORTRAIT_SIZE, false);
+  portraitRenderer.setClearColor(0x000000, 0);
+  portraitRenderer.toneMapping = renderer.toneMapping;
+  portraitRenderer.toneMappingExposure = Math.max(0.85, (renderer.toneMappingExposure || 1) * 0.92);
+  if ("outputColorSpace" in portraitRenderer) {
+    portraitRenderer.outputColorSpace = "outputColorSpace" in renderer ? renderer.outputColorSpace : THREE.SRGBColorSpace;
+  } else if ("outputEncoding" in portraitRenderer) {
+    portraitRenderer.outputEncoding = "outputEncoding" in renderer ? renderer.outputEncoding : THREE.sRGBEncoding;
+  }
+
+  const portraitScene = new THREE.Scene();
+  const portraitCamera = new THREE.PerspectiveCamera(34, 1, 0.01, 80);
+  const subjectRoot = new THREE.Group();
+  portraitScene.add(subjectRoot);
+
+  const hemi = new THREE.HemisphereLight(0xd2f2ff, 0x151a27, 0.96);
+  portraitScene.add(hemi);
+
+  const key = new THREE.DirectionalLight(0xffffff, 1.18);
+  key.position.set(2.8, 3.6, 4.1);
+  portraitScene.add(key);
+
+  const rim = new THREE.DirectionalLight(0x7de1ff, 0.74);
+  rim.position.set(-3.4, 1.8, -3.6);
+  portraitScene.add(rim);
+
+  const warmFill = new THREE.PointLight(0xffd2a8, 0.48, 18, 2);
+  warmFill.position.set(1.4, 0.9, 2.2);
+  portraitScene.add(warmFill);
+
+  creatureCardPortraitCanvas = canvasEl;
+  creatureCardPortraitRenderer = portraitRenderer;
+  creatureCardPortraitScene = portraitScene;
+  creatureCardPortraitCamera = portraitCamera;
+  creatureCardPortraitSubject = subjectRoot;
+  return true;
+}
+
+function disposeCreaturePortraitObject(object3d) {
+  if (!object3d) return;
+  object3d.traverse((node) => {
+    if (node.geometry && typeof node.geometry.dispose === "function") node.geometry.dispose();
+    if (Array.isArray(node.material)) {
+      for (const material of node.material) {
+        if (material && typeof material.dispose === "function") material.dispose();
+      }
+    } else if (node.material && typeof node.material.dispose === "function") {
+      node.material.dispose();
+    }
+  });
+}
+
+function clearCreaturePortraitSubject() {
+  if (!creatureCardPortraitSubject) return;
+  while (creatureCardPortraitSubject.children.length > 0) {
+    const child = creatureCardPortraitSubject.children[creatureCardPortraitSubject.children.length - 1];
+    creatureCardPortraitSubject.remove(child);
+    disposeCreaturePortraitObject(child);
+  }
+}
+
+function renderCreatureCardPortraitDataUrl(enemyTypeId) {
+  if (!ensureCreatureCardPortraitRenderer()) return "";
+  const enemyType = ENEMY_TYPES[enemyTypeId];
+  if (!enemyType) return "";
+
+  clearCreaturePortraitSubject();
+  let enemyVisual = null;
+  try {
+    enemyVisual = createEnemyMesh(enemyTypeId, enemyType.colorA, enemyType.colorB, { hideRings: true });
+    const portraitGroup = enemyVisual.group;
+    creatureCardPortraitSubject.add(portraitGroup);
+
+    const preBounds = new THREE.Box3().setFromObject(portraitGroup);
+    if (preBounds.isEmpty()) {
+      creatureCardPortraitSubject.remove(portraitGroup);
+      disposeCreaturePortraitObject(portraitGroup);
+      return "";
+    }
+
+    const center = preBounds.getCenter(new THREE.Vector3());
+    const size = preBounds.getSize(new THREE.Vector3());
+    portraitGroup.position.sub(center);
+    portraitGroup.position.y -= size.y * 0.05;
+    portraitGroup.rotation.y = Math.PI * 0.2;
+    portraitGroup.rotation.x = -Math.PI * 0.03;
+    portraitGroup.updateMatrixWorld(true);
+
+    const bounds = new THREE.Box3().setFromObject(portraitGroup);
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const radius = Math.max(0.14, sphere.radius);
+    const fovRad = THREE.MathUtils.degToRad(creatureCardPortraitCamera.fov);
+    const distance = (radius * 1.08) / Math.sin(fovRad * 0.5);
+    creatureCardPortraitCamera.position.set(radius * 0.32, radius * 0.16, distance);
+    creatureCardPortraitCamera.lookAt(sphere.center.x, sphere.center.y + radius * 0.04, sphere.center.z);
+    creatureCardPortraitCamera.updateMatrixWorld(true);
+
+    creatureCardPortraitRenderer.clear();
+    creatureCardPortraitRenderer.render(creatureCardPortraitScene, creatureCardPortraitCamera);
+    const dataUrl = creatureCardPortraitCanvas.toDataURL("image/png");
+
+    creatureCardPortraitSubject.remove(portraitGroup);
+    disposeCreaturePortraitObject(portraitGroup);
+    return dataUrl;
+  } catch (_) {
+    if (enemyVisual?.group) {
+      creatureCardPortraitSubject.remove(enemyVisual.group);
+      disposeCreaturePortraitObject(enemyVisual.group);
+    }
+    return "";
+  }
+}
+
+function getCreatureCardPortraitDataUrl(enemyTypeId) {
+  if (!enemyTypeId) return "";
+  if (creatureCardPortraitCache.has(enemyTypeId)) return creatureCardPortraitCache.get(enemyTypeId) || "";
+  const dataUrl = renderCreatureCardPortraitDataUrl(enemyTypeId);
+  creatureCardPortraitCache.set(enemyTypeId, dataUrl || "");
+  return dataUrl || "";
+}
+
 function renderCreatureShop() {
   if (!menuCreatureShopEl) return;
 
@@ -16572,17 +16730,24 @@ function renderCreatureShop() {
     const unlocked = game.unlockedSpawnerTowers.has(enemyTypeId);
     const progress = Math.min(1, killCount / Math.max(1, unlock.killRequirement));
     const towerType = getTowerType(spawnerTowerIdForEnemy(enemyTypeId));
+    const portraitDataUrl = getCreatureCardPortraitDataUrl(enemyTypeId);
+    const hasPortrait = !!portraitDataUrl;
     const classes = [
       "menu-unlock-item",
       "menu-creature-item",
+      hasPortrait ? "has-portrait" : "",
       unlocked ? "unlocked" : "",
     ]
       .filter(Boolean)
       .join(" ");
+    const portraitMarkup = hasPortrait
+      ? `<div class="menu-creature-portrait" aria-hidden="true" style="background-image: url('${portraitDataUrl}')"></div>`
+      : "";
 
     fragments.push(`
       <div class="${classes}">
-        <div>
+        ${portraitMarkup}
+        <div class="menu-creature-content">
           <strong>${enemyType.name} Spawner</strong>
           <span>Kills ${killCount}/${unlock.killRequirement} | Cost ${towerType.cost} | Spawn ${towerType.spawnCount || 1} every ${towerType.spawnInterval.toFixed(1)}s</span>
           <div class="menu-creature-progress" aria-hidden="true">

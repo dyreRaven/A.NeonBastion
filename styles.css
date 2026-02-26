@@ -1583,6 +1583,49 @@ body:not(.menu-active) .menu-screen {
 
 .menu-creature-item {
   position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.menu-creature-item.has-portrait::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    96deg,
+    rgba(9, 17, 28, 0.86) 0%,
+    rgba(9, 17, 28, 0.78) 42%,
+    rgba(9, 17, 28, 0.46) 66%,
+    rgba(9, 17, 28, 0.2) 100%
+  );
+}
+
+.menu-creature-portrait {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: calc(100% + 0.4rem) 54%;
+  background-size: auto 138%;
+  opacity: 0.3;
+  filter: saturate(1.08) contrast(1.04);
+}
+
+.menu-creature-item.unlocked.has-portrait .menu-creature-portrait {
+  opacity: 0.36;
+}
+
+.menu-creature-content,
+.menu-creature-item .unlock-action {
+  position: relative;
+  z-index: 2;
+}
+
+.menu-creature-content {
+  min-width: 0;
 }
 
 .menu-creature-item .unlock-action {
