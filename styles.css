@@ -855,8 +855,20 @@ body:not(.menu-active) .menu-screen {
 }
 
 #menuMultiplayerPanel {
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
-  gap: 0.62rem;
+  grid-template-rows: auto auto auto auto auto auto;
+  align-content: start;
+  gap: 0.5rem;
+  height: auto;
+  max-height: min(80vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.menu-card[data-view="multiplayer"] {
+  max-height: min(90vh, 760px);
+  padding-top: 0.96rem;
+  padding-bottom: 0.86rem;
 }
 
 .menu-shop-head {
@@ -929,15 +941,15 @@ body:not(.menu-active) .menu-screen {
   border: 1px solid rgba(171, 220, 250, 0.22);
   border-radius: 11px;
   background: linear-gradient(145deg, rgba(90, 154, 197, 0.14), rgba(16, 36, 54, 0.34));
-  padding: 0.56rem;
+  padding: 0.48rem;
   display: grid;
-  gap: 0.5rem;
+  gap: 0.42rem;
 }
 
 .menu-multiplayer-server-row,
 .menu-multiplayer-room-row {
   display: grid;
-  gap: 0.34rem;
+  gap: 0.28rem;
 }
 
 .menu-multiplayer-server-row label,
@@ -951,24 +963,31 @@ body:not(.menu-active) .menu-screen {
 
 .menu-multiplayer-room-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+#leaveMultiplayerBtn {
+  grid-column: 1 / -1;
 }
 
 .menu-multiplayer-room-actions button {
-  min-height: 2rem;
+  min-height: 1.9rem;
   min-width: 0;
+  width: 100%;
   border-radius: 8px;
-  padding: 0.3rem 0.4rem;
+  padding: 0.24rem 0.34rem;
   font-size: 0.78rem;
+  white-space: normal;
+  line-height: 1.15;
 }
 
 .menu-multiplayer-hint {
   border: 1px solid rgba(166, 219, 250, 0.24);
   border-radius: 9px;
   background: linear-gradient(145deg, rgba(105, 170, 214, 0.12), rgba(14, 30, 46, 0.3));
-  min-height: 2.2rem;
-  padding: 0.42rem 0.52rem;
+  min-height: 1.8rem;
+  padding: 0.32rem 0.44rem;
   display: flex;
   align-items: center;
 }
@@ -976,7 +995,7 @@ body:not(.menu-active) .menu-screen {
 .menu-multiplayer-panels {
   display: grid;
   grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
-  gap: 0.5rem;
+  gap: 0.4rem;
   min-height: 0;
   align-items: stretch;
 }
@@ -985,10 +1004,10 @@ body:not(.menu-active) .menu-screen {
   border: 1px solid rgba(173, 223, 255, 0.22);
   border-radius: 10px;
   background: linear-gradient(145deg, rgba(105, 167, 209, 0.1), rgba(12, 28, 43, 0.34));
-  padding: 0.46rem;
+  padding: 0.4rem;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.36rem;
+  gap: 0.3rem;
   min-height: 0;
 }
 
@@ -1010,7 +1029,7 @@ body:not(.menu-active) .menu-screen {
   min-height: 0;
   max-height: none;
   grid-template-columns: 1fr;
-  gap: 0.4rem;
+  gap: 0.32rem;
   padding-right: 0.06rem;
 }
 
@@ -1119,6 +1138,12 @@ body:not(.menu-active) .menu-screen {
 
 .menu-multiplayer-footer {
   justify-content: flex-end;
+}
+
+.menu-multiplayer-footer button {
+  min-width: 136px;
+  white-space: normal;
+  line-height: 1.15;
 }
 
 .menu-account-pages {
@@ -2874,6 +2899,16 @@ canvas {
     max-height: none;
   }
 
+  .menu-card[data-view="multiplayer"] {
+    padding-top: 0.66rem;
+    padding-bottom: 0.64rem;
+  }
+
+  .menu-card[data-view="multiplayer"] #menuMultiplayerPanel {
+    max-height: min(78vh, 600px);
+    grid-template-rows: auto auto auto auto auto auto;
+  }
+
   .menu-account-setup-grid {
     grid-template-columns: 1fr;
   }
@@ -3574,6 +3609,12 @@ canvas {
 
   .menu-card[data-view="account"] .menu-account-pages {
     max-height: none;
+  }
+
+  .menu-card[data-view="multiplayer"] #menuMultiplayerPanel {
+    margin-top: 0;
+    max-height: min(70dvh, 560px);
+    grid-template-rows: auto auto auto auto auto auto;
   }
 
   .menu-multiplayer-panels {
