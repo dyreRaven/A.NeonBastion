@@ -1130,7 +1130,7 @@ body:not(.menu-active) .menu-screen {
 
 .menu-account-pages[data-page="setup"] [data-account-page="setup"] {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-height: 0;
 }
 
 .menu-account-pages[data-page="create"] [data-account-page="create"],
@@ -1140,12 +1140,60 @@ body:not(.menu-active) .menu-screen {
 }
 
 .menu-account-page-setup h3,
+.menu-account-setup-head h3,
 .menu-account-page-head h3 {
   margin: 0;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #d8eeff;
+}
+
+.menu-account-page-setup {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.menu-account-setup-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
+  gap: 0.52rem;
+}
+
+.menu-account-setup-card {
+  border: 1px solid rgba(176, 222, 249, 0.22);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(103, 166, 209, 0.1), rgba(16, 34, 52, 0.28));
+  padding: 0.54rem 0.56rem;
+  display: grid;
+  gap: 0.42rem;
+  min-height: 0;
+}
+
+.menu-account-setup-card-actions {
+  align-content: start;
+}
+
+.menu-account-setup-card-profiles {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.menu-account-setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.44rem;
+}
+
+.menu-account-profile-count {
+  border: 1px solid rgba(176, 219, 247, 0.34);
+  border-radius: 999px;
+  padding: 0.14rem 0.46rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: #d7eeff;
+  background: rgba(63, 102, 136, 0.24);
 }
 
 .menu-account-page-head {
@@ -1157,14 +1205,16 @@ body:not(.menu-active) .menu-screen {
 
 .menu-account-page-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 0.44rem;
 }
 
 #openAccountCreatePageBtn,
 #openAccountLoginPageBtn,
 #openAccountManagePageBtn {
-  min-height: 2.1rem;
+  min-height: 2.2rem;
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .menu-account-page-back-btn {
@@ -1332,6 +1382,7 @@ body:not(.menu-active) .menu-screen {
   overflow-y: auto;
   align-content: start;
   padding-right: 0.2rem;
+  grid-template-columns: 1fr;
 }
 
 #menuAccountNote {
@@ -2704,6 +2755,10 @@ canvas {
 
   .menu-card[data-view="account"] .menu-account-pages {
     max-height: none;
+  }
+
+  .menu-account-setup-grid {
+    grid-template-columns: 1fr;
   }
 
   .menu-account-page-actions {

@@ -76,6 +76,7 @@ const closeGameUpgradesBtn = $id("closeGameUpgradesBtn");
 // Account menu.
 const menuAccountEl = $id("menuAccountList");
 const menuAccountCurrentEl = $id("menuAccountCurrent");
+const menuAccountProfileCountEl = $id("menuAccountProfileCount");
 const menuAccountPagesEl = $id("menuAccountPages");
 const openAccountCreatePageBtn = $id("openAccountCreatePageBtn");
 const openAccountLoginPageBtn = $id("openAccountLoginPageBtn");
@@ -16000,6 +16001,10 @@ function renderAccountMenu() {
 
   const fragments = [];
   const visibleAccounts = getVisibleCloudAccounts();
+  if (menuAccountProfileCountEl) {
+    const profileCount = visibleAccounts.length;
+    menuAccountProfileCountEl.textContent = `${profileCount} saved`;
+  }
   if (cloudAuth.user?.id && visibleAccounts.length === 0) {
     logCloudAuthDebug("renderAccountMenu.no_visible_cloud_accounts", {
       signedInEmail: getCloudSignedInEmail(),

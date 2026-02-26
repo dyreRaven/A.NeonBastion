@@ -57,20 +57,30 @@
           <p id="menuAccountActionStatus" class="menu-shop-note" aria-live="polite"></p>
           <div id="menuAccountPages" class="menu-account-pages" data-page="setup">
             <section class="menu-account-page menu-account-page-setup" data-account-page="setup" aria-label="Account setup home">
-              <h3>Account Actions</h3>
-              <p class="menu-account-form-subtitle">Choose an action, then finish it on its own page.</p>
-              <div class="menu-account-page-actions">
-                <button id="openAccountCreatePageBtn" type="button">Set Up Account</button>
-                <button id="openAccountLoginPageBtn" type="button">Login</button>
-                <button id="openAccountManagePageBtn" type="button">Change Account Info</button>
+              <div class="menu-account-setup-grid">
+                <section class="menu-account-setup-card menu-account-setup-card-actions" aria-label="Account actions">
+                  <h3>Account Actions</h3>
+                  <p class="menu-account-form-subtitle">Choose an action, then finish it on its own page.</p>
+                  <div class="menu-account-page-actions">
+                    <button id="openAccountCreatePageBtn" type="button">Set Up Account</button>
+                    <button id="openAccountLoginPageBtn" type="button">Login</button>
+                    <button id="openAccountManagePageBtn" type="button">Change Account Info</button>
+                  </div>
+                  <div class="menu-account-startup-auth">
+                    <label for="accountRequirePasswordOnStartupToggle">
+                      <input id="accountRequirePasswordOnStartupToggle" type="checkbox" />
+                      Stay signed in on this device
+                    </label>
+                  </div>
+                </section>
+                <section class="menu-account-setup-card menu-account-setup-card-profiles" aria-label="Saved cloud profiles">
+                  <div class="menu-account-setup-head">
+                    <h3>Saved Profiles</h3>
+                    <span id="menuAccountProfileCount" class="menu-account-profile-count">0</span>
+                  </div>
+                  <div id="menuAccountList" class="menu-shop-list"></div>
+                </section>
               </div>
-              <div class="menu-account-startup-auth">
-                <label for="accountRequirePasswordOnStartupToggle">
-                  <input id="accountRequirePasswordOnStartupToggle" type="checkbox" />
-                  Stay signed in on this device
-                </label>
-              </div>
-              <div id="menuAccountList" class="menu-shop-list"></div>
             </section>
 
             <section class="menu-account-page menu-account-page-form" data-account-page="create" aria-label="Create account page">
