@@ -1635,9 +1635,18 @@ body:not(.menu-active) .menu-screen {
 
 #menuShop,
 #menuCreatureShop,
-#menuTrapShop,
-#menuLoadout {
+#menuTrapShop {
   grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  max-height: min(52vh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 0.14rem;
+  align-content: start;
+}
+
+#menuLoadout {
+  grid-template-columns: 1fr;
   max-height: min(52vh, 430px);
   overflow-y: auto;
   overscroll-behavior: contain;
