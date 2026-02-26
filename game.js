@@ -16747,7 +16747,7 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
   if (!group || !enemyType) return;
   const primary = new THREE.Color(enemyType.colorA || "#7de4ff");
   const secondary = new THREE.Color(enemyType.colorB || "#e9fcff");
-  const emissiveTint = primary.clone().lerp(secondary, 0.22);
+  const emissiveTint = primary.clone().lerp(secondary, 0.18);
 
   group.traverse((node) => {
     if (!node || !node.isMesh) return;
@@ -16758,39 +16758,39 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
         material.transparent = true;
         material.opacity = 1;
         if (Number.isFinite(material.transmission)) {
-          material.transmission = Math.max(0.14, Math.min(0.38, material.transmission || 0.24));
+          material.transmission = Math.max(0.26, Math.min(0.62, material.transmission || 0.36));
         }
         if (Number.isFinite(material.thickness)) {
-          material.thickness = Math.max(0.12, Math.min(0.6, material.thickness || 0.24));
+          material.thickness = Math.max(0.18, Math.min(0.9, material.thickness || 0.42));
         }
         if (Number.isFinite(material.roughness)) {
-          material.roughness = Math.max(0.08, Math.min(0.24, material.roughness || 0.16));
+          material.roughness = Math.max(0.05, Math.min(0.18, material.roughness || 0.12));
         }
         if (Number.isFinite(material.clearcoat)) {
-          material.clearcoat = Math.max(0.52, Math.min(1, material.clearcoat || 0.74));
+          material.clearcoat = Math.max(0.68, Math.min(1, material.clearcoat || 0.82));
         }
         if (Number.isFinite(material.clearcoatRoughness)) {
-          material.clearcoatRoughness = Math.max(0.03, Math.min(0.14, material.clearcoatRoughness || 0.08));
+          material.clearcoatRoughness = Math.max(0.02, Math.min(0.1, material.clearcoatRoughness || 0.06));
         }
-        if (Number.isFinite(material.ior)) material.ior = Math.max(1.2, Math.min(1.45, material.ior || 1.33));
+        if (Number.isFinite(material.ior)) material.ior = Math.max(1.28, Math.min(1.58, material.ior || 1.38));
         if (Number.isFinite(material.envMapIntensity)) {
-          material.envMapIntensity = Math.max(0.92, Math.min(1.35, material.envMapIntensity || 1.08));
+          material.envMapIntensity = Math.max(1.08, Math.min(1.55, material.envMapIntensity || 1.22));
         }
-        if (material.color?.isColor) material.color.lerp(primary, 0.28);
+        if (material.color?.isColor) material.color.lerp(primary, 0.2);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(emissiveTint, 0.04);
-          material.emissiveIntensity = Math.min(0.08, Math.max(0.01, material.emissiveIntensity || 0.04));
+          material.emissive.lerp(emissiveTint, 0.02);
+          material.emissiveIntensity = Math.min(0.05, Math.max(0.005, material.emissiveIntensity || 0.025));
         }
         material.needsUpdate = true;
       } else if (material.isMeshStandardMaterial) {
         material.transparent = false;
         material.opacity = 1;
-        if (Number.isFinite(material.roughness)) material.roughness = Math.max(0.18, Math.min(0.34, material.roughness || 0.26));
-        if (Number.isFinite(material.metalness)) material.metalness = Math.max(0.02, Math.min(0.16, material.metalness || 0.08));
-        if (material.color?.isColor) material.color.lerp(primary, 0.22);
+        if (Number.isFinite(material.roughness)) material.roughness = Math.max(0.14, Math.min(0.3, material.roughness || 0.22));
+        if (Number.isFinite(material.metalness)) material.metalness = Math.max(0.1, Math.min(0.32, material.metalness || 0.16));
+        if (material.color?.isColor) material.color.lerp(primary, 0.14);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(emissiveTint, 0.03);
-          material.emissiveIntensity = Math.min(0.06, Math.max(0.01, material.emissiveIntensity || 0.03));
+          material.emissive.lerp(emissiveTint, 0.015);
+          material.emissiveIntensity = Math.min(0.04, Math.max(0.005, material.emissiveIntensity || 0.02));
         }
         material.needsUpdate = true;
       }
