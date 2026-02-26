@@ -15792,6 +15792,7 @@ function tryPurchaseLoadoutUpgrade(towerTypeId, kind) {
 
 function renderLoadoutMenu() {
   if (!menuLoadoutEl) return;
+  const previousScrollTop = menuLoadoutEl.scrollTop;
   const fragments = [];
   const loadoutLimit = getCurrentLoadoutSlotLimit();
   const equippedCount = game.activeLoadout.size;
@@ -15829,6 +15830,7 @@ function renderLoadoutMenu() {
     const classes = [
       "menu-loadout-item",
       hasPortrait ? "has-portrait" : "",
+      isUpgradeOpen ? "upgrade-open" : "",
       isSpawner ? "spawner" : "",
       isTrap ? "trap" : "",
       equipped ? "equipped" : "",
@@ -15854,8 +15856,9 @@ function renderLoadoutMenu() {
         <div class="menu-loadout-upgrade-panel">
           ${options
             .map((option) => {
-              const buttonLabel = option.atMax ? "Maxed" : `${option.cost} ${formatShardWordHtml("Shards")}`;
+              const buttonLabel = option.atMax ? "Maxed" : `Buy ${option.cost}`;
               const buttonDisabled = option.atMax || option.maxLevel <= 0 ? "disabled" : "";
+              const buttonAriaLabel = option.atMax ? "Maxed" : `Buy for ${option.cost} shards`;
               return `
                 <div class="menu-loadout-upgrade-row">
                   <div>
@@ -15867,6 +15870,8 @@ function renderLoadoutMenu() {
                     type="button"
                     data-loadout-upgrade-target="${towerTypeId}"
                     data-loadout-upgrade-kind="${option.kind}"
+                    aria-label="${buttonAriaLabel}"
+                    title="${buttonAriaLabel}"
                     ${buttonDisabled}
                   >
                     ${buttonLabel}
@@ -15944,6 +15949,7 @@ function renderLoadoutMenu() {
   }
 
   menuLoadoutEl.innerHTML = fragments.join("");
+  menuLoadoutEl.scrollTop = previousScrollTop;
 
   const loadoutButtons = menuLoadoutEl.querySelectorAll(".menu-loadout-action");
   for (const button of loadoutButtons) {
