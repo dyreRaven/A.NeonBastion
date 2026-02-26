@@ -16635,24 +16635,12 @@ function ensureCreatureCardPortraitScene() {
     new THREE.MeshBasicMaterial({
       color: "#1a1f27",
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.12,
       depthWrite: false,
     })
   );
   backdrop.position.set(0, 0.2, -5.6);
   portraitScene.add(backdrop);
-
-  const halo = new THREE.Mesh(
-    new THREE.CircleGeometry(3.5, 48),
-    new THREE.MeshBasicMaterial({
-      color: "#ffffff",
-      transparent: true,
-      opacity: 0.08,
-      depthWrite: false,
-    })
-  );
-  halo.position.set(0, 0.08, -5.2);
-  portraitScene.add(halo);
 
   creatureCardPortraitScene = portraitScene;
   creatureCardPortraitCamera = portraitCamera;
