@@ -60,11 +60,11 @@
               <div class="menu-account-setup-grid">
                 <section class="menu-account-setup-card menu-account-setup-card-actions" aria-label="Account actions">
                   <h3>Account Actions</h3>
-                  <p class="menu-account-form-subtitle">Choose an action, then finish it on its own page.</p>
+                  <p class="menu-account-form-subtitle">New player: Create. Returning player: Sign In. Use Manage to update info.</p>
                   <div class="menu-account-page-actions">
-                    <button id="openAccountCreatePageBtn" type="button">Create Account</button>
+                    <button id="openAccountCreatePageBtn" type="button">Create New Account</button>
                     <button id="openAccountLoginPageBtn" type="button">Sign In</button>
-                    <button id="openAccountManagePageBtn" type="button">Manage Account</button>
+                    <button id="openAccountManagePageBtn" type="button">Manage Account Info</button>
                   </div>
                   <div class="menu-account-startup-auth">
                     <label for="accountRequirePasswordOnStartupToggle">
@@ -128,7 +128,7 @@
 
             <section class="menu-account-page menu-account-page-form" data-account-page="login" aria-label="Login page">
               <div class="menu-account-page-head">
-                <h3>Login</h3>
+                <h3>Sign In</h3>
                 <button id="backToAccountSetupFromLoginBtn" class="menu-account-page-back-btn" type="button">Back to Setup</button>
               </div>
               <section class="menu-account-form menu-account-form-login" aria-label="Login">
@@ -149,7 +149,7 @@
                   maxlength="48"
                   placeholder="Password"
                 />
-                <button id="loginAccountBtn" type="button">Login</button>
+                <button id="loginAccountBtn" type="button">Sign In</button>
               </section>
             </section>
 
@@ -305,35 +305,41 @@
             <span id="menuMultiplayerState">Solo</span>
           </div>
           <div class="menu-multiplayer-config">
-            <div class="menu-multiplayer-server-row">
-              <label for="multiplayerServerInput">Server URL</label>
-              <input
-                id="multiplayerServerInput"
-                type="url"
-                autocomplete="off"
-                spellcheck="false"
-                maxlength="180"
-                placeholder="Server URL (wss://your-server.example)"
-              />
-            </div>
-            <div class="menu-multiplayer-room-row">
-              <label for="multiplayerRoomInput">Room Code</label>
-              <input
-                id="multiplayerRoomInput"
-                type="text"
-                autocomplete="off"
-                spellcheck="false"
-                maxlength="16"
-                placeholder="Room code"
-              />
-              <div class="menu-multiplayer-room-actions">
-                <button id="hostMultiplayerBtn" type="button">Create Room</button>
-                <button id="joinMultiplayerBtn" type="button">Join Room</button>
-                <button id="leaveMultiplayerBtn" type="button">Leave Room</button>
+            <section class="menu-multiplayer-block" aria-label="Connection setup">
+              <h3 class="menu-setup-block-title">Connection</h3>
+              <div class="menu-multiplayer-server-row">
+                <label for="multiplayerServerInput">Server URL</label>
+                <input
+                  id="multiplayerServerInput"
+                  type="url"
+                  autocomplete="off"
+                  spellcheck="false"
+                  maxlength="180"
+                  placeholder="Server URL (wss://your-server.example)"
+                />
               </div>
-            </div>
+            </section>
+            <section class="menu-multiplayer-block" aria-label="Room controls">
+              <h3 class="menu-setup-block-title">Room Controls</h3>
+              <div class="menu-multiplayer-room-row">
+                <label for="multiplayerRoomInput">Room Code</label>
+                <input
+                  id="multiplayerRoomInput"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  maxlength="16"
+                  placeholder="Room code"
+                />
+                <div class="menu-multiplayer-room-actions">
+                  <button id="hostMultiplayerBtn" type="button">Create Room</button>
+                  <button id="joinMultiplayerBtn" type="button">Join Room</button>
+                  <button id="leaveMultiplayerBtn" type="button">Leave Room</button>
+                </div>
+              </div>
+            </section>
           </div>
-          <p id="menuMultiplayerHint" class="menu-shop-note menu-multiplayer-hint">Enter a room code, then Create or Join.</p>
+          <p id="menuMultiplayerHint" class="menu-shop-note menu-multiplayer-hint">Set server URL, enter room code, then Create or Join.</p>
           <div class="menu-multiplayer-panels">
             <section class="menu-multiplayer-pane menu-multiplayer-pane-players">
               <div class="menu-shop-head menu-multiplayer-players-head">

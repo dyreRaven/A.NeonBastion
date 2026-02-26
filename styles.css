@@ -937,6 +937,14 @@ body:not(.menu-active) .menu-screen {
   color: #cfe4f7;
 }
 
+.menu-setup-block-title {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d2e9fa;
+}
+
 .menu-multiplayer-config {
   border: 1px solid rgba(171, 220, 250, 0.22);
   border-radius: 11px;
@@ -944,6 +952,16 @@ body:not(.menu-active) .menu-screen {
   padding: 0.48rem;
   display: grid;
   gap: 0.42rem;
+  align-content: start;
+}
+
+.menu-multiplayer-block {
+  border: 1px solid rgba(171, 220, 250, 0.2);
+  border-radius: 9px;
+  background: linear-gradient(148deg, rgba(89, 151, 192, 0.1), rgba(12, 29, 45, 0.28));
+  padding: 0.36rem 0.4rem;
+  display: grid;
+  gap: 0.26rem;
 }
 
 .menu-multiplayer-server-row,
@@ -1244,7 +1262,10 @@ body:not(.menu-active) .menu-screen {
 #openAccountLoginPageBtn,
 #openAccountManagePageBtn {
   min-height: 1.9rem;
+  display: flex;
+  align-items: center;
   justify-content: flex-start;
+  text-align: left;
   width: 100%;
   white-space: normal;
   line-height: 1.15;
