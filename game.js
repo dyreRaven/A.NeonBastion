@@ -16544,18 +16544,30 @@ function renderTrapShop() {
     if (!type || !unlock) continue;
     const unlocked = isTowerUnlocked(towerTypeId);
     const canAfford = game.shards >= unlock.shardCost;
+    const portraitDataUrl = getTowerCardPortraitDataUrl(towerTypeId);
+    const hasPortrait = !!portraitDataUrl;
+    const accentA = colorHexToRgbaCss(type.bodyColor, 0.34);
+    const accentB = colorHexToRgbaCss(type.coreColor, 0.28);
+    const edgeGlow = colorHexToRgbaCss(type.bodyColor, 0.72);
+    const cardStyle = `--tower-accent-a:${accentA};--tower-accent-b:${accentB};--tower-edge:${edgeGlow};`;
     const itemClasses = [
       "menu-unlock-item",
+      "menu-tower-item",
       "menu-trap-item",
+      hasPortrait ? "has-portrait" : "",
       unlocked ? "unlocked" : "",
       !unlocked && !canAfford ? "unaffordable" : "",
     ]
       .filter(Boolean)
       .join(" ");
+    const portraitMarkup = hasPortrait
+      ? `<div class="menu-tower-portrait" aria-hidden="true" style="background-image: url('${portraitDataUrl}')"></div>`
+      : "";
 
     fragments.push(`
-      <div class="${itemClasses}">
-        <div>
+      <div class="${itemClasses}" style="${cardStyle}">
+        ${portraitMarkup}
+        <div class="menu-tower-content">
           <strong>${type.name}</strong>
           <span>Trap | DMG ${type.damage} | Trigger ${Math.max(0.2, Number(type.trapTriggerRadius || type.range || 0)).toFixed(1)} | Integrity ${Math.max(1, type.trapDurability || 0)}</span>
           <span>${type.summary} | Lane tile only</span>

@@ -1818,13 +1818,25 @@ body:not(.menu-active) .menu-screen {
   min-height: 2.2rem;
 }
 
-.menu-trap-item {
+.menu-trap-item:not(.has-portrait) {
   border-color: rgba(255, 178, 116, 0.42);
   background: linear-gradient(145deg, rgba(255, 182, 124, 0.14), rgba(123, 69, 44, 0.08));
 }
 
 .menu-trap-item .unlock-action {
   min-width: 102px;
+}
+
+.menu-trap-item.has-portrait {
+  border-color: var(--tower-edge);
+  background:
+    linear-gradient(120deg, var(--tower-accent-a), transparent 68%),
+    linear-gradient(232deg, var(--tower-accent-b), transparent 64%),
+    linear-gradient(156deg, rgba(25, 16, 11, 0.95), rgba(16, 11, 8, 0.97));
+}
+
+.menu-trap-item.has-portrait .unlock-action {
+  min-width: 108px;
 }
 
 .menu-creature-progress {
