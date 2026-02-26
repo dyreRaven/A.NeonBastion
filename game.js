@@ -17140,7 +17140,7 @@ function renderCreatureShop() {
         ${portraitMarkup}
         <div class="menu-creature-content">
           <strong>${enemyType.name} Spawner</strong>
-          <span>Kills ${killCount}/${unlock.killRequirement} | Cost ${towerType.cost} | Spawn ${towerType.spawnCount || 1} every ${towerType.spawnInterval.toFixed(1)}s</span>
+          <span>Kills ${killCount}/${unlock.killRequirement} | Spawn ${towerType.spawnCount || 1} @ ${towerType.spawnInterval.toFixed(1)}s</span>
           <div class="menu-creature-progress" aria-hidden="true">
             <div class="menu-creature-progress-fill" style="transform: scaleX(${progress})"></div>
           </div>

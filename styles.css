@@ -1798,6 +1798,14 @@ body:not(.menu-active) .menu-screen {
   --creature-accent-b: rgba(255, 195, 128, 0.26);
   --creature-edge: rgba(160, 225, 255, 0.64);
   min-height: 8.4rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "content"
+    "action";
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.44rem;
   overflow: hidden;
   isolation: isolate;
 }
@@ -1893,9 +1901,14 @@ body:not(.menu-active) .menu-screen {
 
 .menu-creature-content {
   min-width: 0;
+  grid-area: content;
+  align-self: start;
 }
 
 .menu-creature-item .unlock-action {
+  grid-area: action;
+  justify-self: start;
+  align-self: end;
   min-width: 102px;
   min-height: 2.2rem;
 }
