@@ -16608,34 +16608,34 @@ function ensureCreatureCardPortraitScene() {
   const subjectRoot = new THREE.Group();
   portraitScene.add(subjectRoot);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.54);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.44);
   portraitScene.add(ambient);
 
-  const hemi = new THREE.HemisphereLight(0xdaf4ff, 0x1a2332, 1.04);
+  const hemi = new THREE.HemisphereLight(0xdaf4ff, 0x1a2332, 0.84);
   portraitScene.add(hemi);
 
-  const key = new THREE.DirectionalLight(0xffffff, 1.34);
+  const key = new THREE.DirectionalLight(0xffffff, 1.0);
   key.position.set(2.8, 3.6, 4.1);
   portraitScene.add(key);
 
-  const rim = new THREE.DirectionalLight(0x8ae8ff, 0.92);
+  const rim = new THREE.DirectionalLight(0x8ae8ff, 0.58);
   rim.position.set(-3.4, 1.8, -3.6);
   portraitScene.add(rim);
 
-  const warmFill = new THREE.PointLight(0xffd2a8, 0.62, 22, 2);
+  const warmFill = new THREE.PointLight(0xffd2a8, 0.34, 20, 2);
   warmFill.position.set(1.6, 1.1, 2.5);
   portraitScene.add(warmFill);
 
-  const backRim = new THREE.PointLight(0xc8ecff, 0.7, 26, 2);
+  const backRim = new THREE.PointLight(0xc8ecff, 0.4, 24, 2);
   backRim.position.set(-0.6, 1.4, -4.8);
   portraitScene.add(backRim);
 
   const backdrop = new THREE.Mesh(
     new THREE.PlaneGeometry(16, 16),
     new THREE.MeshBasicMaterial({
-      color: "#1a1f27",
+      color: "#0f141c",
       transparent: true,
-      opacity: 0.12,
+      opacity: 0.42,
       depthWrite: false,
     })
   );
@@ -16682,7 +16682,7 @@ function ensureCreatureCardPortraitRenderer() {
   portraitRenderer.setSize(CREATURE_CARD_PORTRAIT_SIZE, CREATURE_CARD_PORTRAIT_SIZE, false);
   portraitRenderer.setClearColor(0x000000, 0);
   portraitRenderer.toneMapping = renderer.toneMapping;
-  portraitRenderer.toneMappingExposure = Math.max(0.76, (renderer.toneMappingExposure || 1) * 0.88);
+  portraitRenderer.toneMappingExposure = Math.max(0.72, (renderer.toneMappingExposure || 1) * 0.82);
   if ("outputColorSpace" in portraitRenderer) {
     portraitRenderer.outputColorSpace = "outputColorSpace" in renderer ? renderer.outputColorSpace : THREE.SRGBColorSpace;
   } else if ("outputEncoding" in portraitRenderer) {
@@ -16721,7 +16721,7 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
   if (!group || !enemyType) return;
   const primary = new THREE.Color(enemyType.colorA || "#7de4ff");
   const secondary = new THREE.Color(enemyType.colorB || "#e9fcff");
-  const emissiveTint = primary.clone().lerp(secondary, 0.28);
+  const emissiveTint = primary.clone().lerp(secondary, 0.22);
 
   group.traverse((node) => {
     if (!node || !node.isMesh) return;
@@ -16731,27 +16731,29 @@ function tuneCreaturePortraitMeshReadability(group, enemyType) {
       if (material.isMeshPhysicalMaterial) {
         material.transparent = false;
         material.opacity = 1;
-        if (Number.isFinite(material.transmission)) material.transmission = Math.min(material.transmission, 0.42);
-        if (Number.isFinite(material.thickness)) material.thickness *= 0.55;
-        if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.36, material.roughness + 0.1);
-        if (Number.isFinite(material.clearcoat)) material.clearcoat = Math.max(0.28, material.clearcoat * 0.62);
+        if (Number.isFinite(material.transmission)) material.transmission = 0;
+        if (Number.isFinite(material.thickness)) material.thickness = 0;
+        if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.48, material.roughness + 0.14);
+        if (Number.isFinite(material.clearcoat)) material.clearcoat = Math.min(0.2, material.clearcoat);
         if (Number.isFinite(material.clearcoatRoughness)) {
-          material.clearcoatRoughness = Math.min(0.24, material.clearcoatRoughness + 0.07);
+          material.clearcoatRoughness = Math.max(0.2, material.clearcoatRoughness + 0.12);
         }
-        if (Number.isFinite(material.envMapIntensity)) material.envMapIntensity = Math.min(1.0, material.envMapIntensity);
-        if (material.color?.isColor) material.color.lerp(primary, 0.34);
+        if (Number.isFinite(material.envMapIntensity)) material.envMapIntensity = Math.min(0.84, material.envMapIntensity);
+        if (material.color?.isColor) material.color.lerp(primary, 0.42);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(emissiveTint, 0.2);
-          material.emissiveIntensity = Math.min(0.32, Math.max(0.12, material.emissiveIntensity || 0.18));
+          material.emissive.lerp(emissiveTint, 0.08);
+          material.emissiveIntensity = Math.min(0.18, Math.max(0.04, material.emissiveIntensity || 0.1));
         }
         material.needsUpdate = true;
       } else if (material.isMeshStandardMaterial) {
-        if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.5, material.roughness + 0.08);
-        if (Number.isFinite(material.metalness)) material.metalness = Math.max(0.08, material.metalness * 0.62);
-        if (material.color?.isColor) material.color.lerp(primary, 0.28);
+        material.transparent = false;
+        material.opacity = 1;
+        if (Number.isFinite(material.roughness)) material.roughness = Math.min(0.62, material.roughness + 0.14);
+        if (Number.isFinite(material.metalness)) material.metalness = Math.max(0.06, material.metalness * 0.72);
+        if (material.color?.isColor) material.color.lerp(primary, 0.34);
         if (material.emissive?.isColor) {
-          material.emissive.lerp(emissiveTint, 0.14);
-          material.emissiveIntensity = Math.min(0.28, Math.max(0.1, material.emissiveIntensity || 0.14));
+          material.emissive.lerp(emissiveTint, 0.06);
+          material.emissiveIntensity = Math.min(0.14, Math.max(0.03, material.emissiveIntensity || 0.08));
         }
         material.needsUpdate = true;
       }
@@ -16796,7 +16798,7 @@ function renderCreatureCardPortraitWithMainRenderer() {
 
   try {
     renderer.autoClear = true;
-    renderer.toneMappingExposure = Math.max(0.76, (renderer.toneMappingExposure || 1) * 0.88);
+    renderer.toneMappingExposure = Math.max(0.72, (renderer.toneMappingExposure || 1) * 0.82);
     renderer.setRenderTarget(renderTarget);
     renderer.setClearColor(0x000000, 0);
     renderer.clear(true, true, true);
@@ -16922,9 +16924,9 @@ function renderCreatureShop() {
     const towerType = getTowerType(spawnerTowerIdForEnemy(enemyTypeId));
     const portraitDataUrl = getCreatureCardPortraitDataUrl(enemyTypeId);
     const hasPortrait = !!portraitDataUrl;
-    const accentA = colorHexToRgbaCss(enemyType.colorA, 0.42);
-    const accentB = colorHexToRgbaCss(enemyType.colorB, 0.26);
-    const edgeGlow = colorHexToRgbaCss(enemyType.colorA, 0.66);
+    const accentA = colorHexToRgbaCss(enemyType.colorA, 0.48);
+    const accentB = colorHexToRgbaCss(enemyType.colorB, 0.38);
+    const edgeGlow = colorHexToRgbaCss(enemyType.colorA, 0.82);
     const cardStyle = `--creature-accent-a:${accentA};--creature-accent-b:${accentB};--creature-edge:${edgeGlow};`;
     const classes = [
       "menu-unlock-item",
