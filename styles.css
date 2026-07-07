@@ -2848,7 +2848,7 @@ button.active {
   position: fixed;
   right: 0.85rem;
   bottom: 5.8rem;
-  z-index: 66;
+  z-index: 72;
   width: min(320px, calc(100vw - 1.2rem));
   max-height: min(72vh, 520px);
   border: 1px solid rgba(166, 221, 255, 0.44);
@@ -2954,6 +2954,11 @@ button.active {
   border-radius: 8px;
   font-size: 0.78rem;
   padding: 0.22rem 0.48rem;
+}
+
+.settings-row button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 .settings-hotkeys {
