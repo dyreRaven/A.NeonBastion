@@ -251,7 +251,7 @@ const ACCOUNT_MENU_PAGES = Object.freeze({
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-07-07-06";
+const BUILD_ID = "2026-07-07-07";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3144,6 +3144,26 @@ function rebuildLevel3EnemySpawnBranches(level) {
       totalLength: data.totalLength,
     });
   }
+}
+
+function getRequiredEnemyEntryCellsForLevel(level) {
+  if (level === 3) return LEVEL3_ENEMY_ENTRY_CELLS;
+  return [LANE_START];
+}
+
+function getMissingEnemyEntryRouteKeys(level, cellSet = pathCellSet) {
+  const requiredEntries = getRequiredEnemyEntryCellsForLevel(level);
+  const missing = [];
+  for (const entryCell of requiredEntries) {
+    const entryKey = cellKey(entryCell.x, entryCell.y);
+    const route = buildPathRouteBetween(cellSet, entryCell, LANE_END);
+    if (!route || route.length < 2) missing.push(entryKey);
+  }
+  return missing;
+}
+
+function hasRequiredEnemyEntryRoutesForLevel(level, cellSet = pathCellSet) {
+  return getMissingEnemyEntryRouteKeys(level, cellSet).length === 0;
 }
 
 function getLevel3EnemySpawnBranchForType(typeId) {
@@ -18698,6 +18718,14 @@ function startWave() {
   }
   if (pathSegments.length === 0 || totalPathLength <= 0) {
     setStatus("Lane route is invalid. Use lane edit mode to reconnect entry to core.", true);
+    return;
+  }
+  const missingEntryRoutes = getMissingEnemyEntryRouteKeys(game.currentLevel);
+  if (missingEntryRoutes.length > 0) {
+    setStatus(
+      `Level ${game.currentLevel} route incomplete. Connect every enemy entry to the core before starting: ${missingEntryRoutes.join(", ")}.`,
+      true
+    );
     return;
   }
 
