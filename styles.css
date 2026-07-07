@@ -2367,6 +2367,16 @@ body:not(.menu-active) .menu-screen {
   border-radius: 8px;
 }
 
+.lane-edit-action {
+  border-color: rgba(108, 244, 202, 0.55);
+  background: linear-gradient(180deg, rgba(76, 224, 189, 0.2), rgba(23, 87, 82, 0.24));
+}
+
+.lane-edit-revert {
+  border-color: rgba(255, 156, 128, 0.56);
+  background: linear-gradient(180deg, rgba(255, 171, 124, 0.2), rgba(116, 54, 32, 0.24));
+}
+
 .shop-panel {
   margin-top: 0;
   border: 1px solid var(--line);

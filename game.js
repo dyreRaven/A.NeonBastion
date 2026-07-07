@@ -20,6 +20,8 @@ const bossBarFillRightEl = $id("bossBarFillRight");
 const buildBtn = $id("buildBtn");
 const sellBtn = $id("sellBtn");
 const laneBtn = $id("laneBtn");
+const laneConfirmBtn = $id("laneConfirmBtn");
+const laneRevertBtn = $id("laneRevertBtn");
 const loadoutBtn = $id("loadoutBtn");
 const unlockBtn = $id("unlockBtn");
 const menuBtn = $id("menuBtn");
@@ -216,6 +218,7 @@ const SOLO_HUD_REFRESH_TYPING_INTERVAL_SEC = 0.3;
 const SOLO_HUD_MENU_REFRESH_INTERVAL_SEC = 0.55;
 const SOLO_HUD_MENU_TYPING_REFRESH_INTERVAL_SEC = 1;
 const LOADOUT_SEARCH_DEBOUNCE_MS = 80;
+const LANE_EDIT_TILE_COST = 100;
 const MULTIPLAYER_STATE_FLOAT_PRECISION = 1000;
 const MULTIPLAYER_CONNECT_TIMEOUT = 7000;
 const MULTIPLAYER_SERVER_STORAGE_KEY = "tower-defense-mp-server-v1";
@@ -251,7 +254,7 @@ const ACCOUNT_MENU_PAGES = Object.freeze({
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-07-07-08";
+const BUILD_ID = "2026-07-07-09";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3197,6 +3200,148 @@ function hasRequiredEnemyEntryRoutesForLevel(level, cellSet = pathCellSet) {
   return getMissingEnemyEntryRouteKeys(level, cellSet).length === 0;
 }
 
+function cloneCellSet(cellSet) {
+  return new Set(Array.from(cellSet || []));
+}
+
+function buildCellSetFromRoute(route) {
+  const cellSet = new Set();
+  if (!Array.isArray(route)) return cellSet;
+  for (const cell of route) cellSet.add(cellKey(cell.x, cell.y));
+  return cellSet;
+}
+
+function getUsedEnemyRouteCellSet(level = game.currentLevel, cellSet = pathCellSet) {
+  if (level === 3 && cellSet === pathCellSet) {
+    const activeSet = getActiveEnemyRouteCellSet();
+    if (activeSet && activeSet.size > 0) return activeSet;
+  }
+
+  if (level === 3) {
+    const usedSet = new Set();
+    for (const entryCell of LEVEL3_ENEMY_ENTRY_CELLS) {
+      const route = buildPathRouteBetween(cellSet, entryCell, LANE_END);
+      if (!route || route.length < 2) continue;
+      for (const cell of route) usedSet.add(cellKey(cell.x, cell.y));
+    }
+    if (usedSet.size > 0) return usedSet;
+  }
+
+  return buildCellSetFromRoute(buildPathRoute(cellSet));
+}
+
+function beginLaneEditSession() {
+  if (game.laneEditSession) return game.laneEditSession;
+  game.laneEditSession = {
+    originalCells: cloneCellSet(pathCellSet),
+    paidAddedCells: new Set(),
+  };
+  return game.laneEditSession;
+}
+
+function clearLaneEditSession() {
+  game.laneEditSession = null;
+}
+
+function refundLaneEditPaidCells(keys) {
+  if (!game.laneEditSession || !Array.isArray(keys) || keys.length === 0) return 0;
+  let refund = 0;
+  for (const key of keys) {
+    if (!game.laneEditSession.paidAddedCells.has(key)) continue;
+    game.laneEditSession.paidAddedCells.delete(key);
+    refund += LANE_EDIT_TILE_COST;
+  }
+  if (refund > 0) game.money += refund;
+  return refund;
+}
+
+function revertLaneEditSession(showStatus = true) {
+  const session = game.laneEditSession;
+  if (!session) {
+    game.editingLane = false;
+    updateHud();
+    return false;
+  }
+
+  const refund = refundLaneEditPaidCells(Array.from(session.paidAddedCells));
+  commitLaneCellSet(cloneCellSet(session.originalCells));
+  clearLaneEditSession();
+  game.editingLane = false;
+  game.placing = false;
+  game.selling = false;
+  rebuildWorld();
+  if (showStatus) {
+    setStatus(refund > 0 ? `Lane edits reverted. Refunded ${refund} credits.` : "Lane edits reverted.");
+  }
+  updateHud();
+  return true;
+}
+
+function getUnusedLaneTrapBlockers(usedLaneSet) {
+  const blockers = [];
+  for (const tower of game.towers) {
+    if (!tower || tower.destroyed || !tower.isTrap) continue;
+    const key = cellKey(tower.cellX, tower.cellY);
+    if (pathCellSet.has(key) && !usedLaneSet.has(key)) blockers.push(key);
+  }
+  return blockers;
+}
+
+function confirmLaneEditSession() {
+  if (!game.laneEditSession) {
+    game.editingLane = false;
+    updateHud();
+    return false;
+  }
+
+  const missingEntryRoutes = getMissingEnemyEntryRouteKeys(game.currentLevel);
+  if (missingEntryRoutes.length > 0) {
+    setStatus(`Lane confirmation failed. Connect every enemy entry to the core first: ${missingEntryRoutes.join(", ")}.`, true);
+    updateHud();
+    return false;
+  }
+
+  const usedLaneSet = getUsedEnemyRouteCellSet(game.currentLevel);
+  if (!usedLaneSet || usedLaneSet.size === 0) {
+    setStatus("Lane confirmation failed. No usable route reaches the core.", true);
+    updateHud();
+    return false;
+  }
+
+  const trapBlockers = getUnusedLaneTrapBlockers(usedLaneSet);
+  if (trapBlockers.length > 0) {
+    setStatus(`Lane confirmation failed. Sell traps on unused lanes first: ${trapBlockers.join(", ")}.`, true);
+    updateHud();
+    return false;
+  }
+
+  usedLaneSet.add(LANE_START_KEY);
+  usedLaneSet.add(LANE_END_KEY);
+
+  const beforeCount = pathCellSet.size;
+  const unusedPaidKeys = Array.from(game.laneEditSession.paidAddedCells).filter((key) => !usedLaneSet.has(key));
+  const removedUnused = Math.max(0, beforeCount - usedLaneSet.size);
+
+  if (!commitLaneCellSet(usedLaneSet)) {
+    setStatus("Lane confirmation failed. Use Revert or reconnect the route.", true);
+    updateHud();
+    return false;
+  }
+
+  const refund = refundLaneEditPaidCells(unusedPaidKeys);
+  clearLaneEditSession();
+  game.editingLane = false;
+  game.placing = false;
+  game.selling = false;
+  rebuildWorld();
+  const refundText = refund > 0 ? ` Refunded ${refund} credits.` : "";
+  const removedText = removedUnused > 0 ? ` Removed ${removedUnused} unused lane tile${removedUnused === 1 ? "" : "s"}.` : "";
+  setStatus(`Lane edits confirmed.${removedText}${refundText}`);
+  updateHud();
+  if (isMultiplayerHost() && isMultiplayerActive()) sendMultiplayerSnapshot(true);
+  return true;
+}
+
 function getLevel3EnemySpawnBranchForType(typeId) {
   if (level3EnemySpawnBranches.length === 0) return null;
   if (typeId === "star") {
@@ -5353,6 +5498,7 @@ const game = {
   placing: false,
   selling: false,
   editingLane: false,
+  laneEditSession: null,
   paused: false,
   speedStepIndex: GAME_SPEED_STEPS.indexOf(1),
   speedMultiplier: 1,
@@ -15226,6 +15372,7 @@ function prepareLevel(level, options = {}) {
   game.autoWaveEnabled = false;
   game.autoWaveCountdown = game.autoWaveInterval;
   game.paused = false;
+  clearLaneEditSession();
   game.editingLane = false;
   game.placing = false;
   game.selling = false;
@@ -15409,6 +15556,7 @@ function skipToWaveByCommand(targetWave) {
   game.levelOneDefeated = false;
   game.autoWaveEnabled = false;
   game.autoWaveCountdown = game.autoWaveInterval;
+  clearLaneEditSession();
   game.editingLane = false;
   game.placing = false;
   game.selling = false;
@@ -15898,6 +16046,10 @@ function renderShop() {
   const buttons = shopEl.querySelectorAll(".shop-item");
   for (const button of buttons) {
     const selectTowerFromShopCard = () => {
+      if (game.laneEditSession) {
+        setStatus("Confirm or Revert lane edits before selecting towers.", true);
+        return;
+      }
       game.selectedTowerType = button.dataset.towerType;
       game.placing = true;
       game.selling = false;
@@ -18090,6 +18242,7 @@ function exitCurrentRunToMenu() {
   game.autoWaveEnabled = false;
   game.autoWaveCountdown = game.autoWaveInterval;
   game.paused = false;
+  clearLaneEditSession();
   game.editingLane = false;
   game.placing = false;
   game.selling = false;
@@ -18306,13 +18459,32 @@ function updateHud() {
     const rosterText = getMultiplayerHudRosterText();
     multiplayerPlayersHudEl.textContent = compactRoundHud ? rosterText.replace(/^Players:\s*/i, "P: ") : rosterText;
   }
+  const laneSessionActive = !!game.laneEditSession;
   livesEl.textContent = compactRoundHud ? `HP: ${game.lives}` : `Core HP: ${game.lives}`;
   waveEl.textContent = compactRoundHud ? `W: ${game.wave}` : `Wave: ${game.wave}`;
   buildBtn.textContent = compactRoundHud
     ? `Build ${selectedTower.cost}`
     : `Build ${selectedTower.name} (${placement.placed}/${placement.cap}, +${selectedCapInfo.upgradeLevel}) - ${selectedTower.cost}`;
   sellBtn.textContent = compactRoundHud ? "Sell" : "Sell - 40%";
-  laneBtn.textContent = compactRoundHud ? (game.editingLane ? "Lane On" : "Lane") : game.editingLane ? "Lane Edit: On" : "Lane Edit";
+  laneBtn.textContent = compactRoundHud
+    ? laneSessionActive
+      ? "Lane*"
+      : game.editingLane
+        ? "Lane On"
+        : "Lane"
+    : laneSessionActive
+      ? `Lane Edit: ${LANE_EDIT_TILE_COST}`
+      : game.editingLane
+        ? "Lane Edit: On"
+        : "Lane Edit";
+  if (laneConfirmBtn) {
+    laneConfirmBtn.hidden = !laneSessionActive;
+    laneConfirmBtn.textContent = compactRoundHud ? "OK" : "Confirm";
+  }
+  if (laneRevertBtn) {
+    laneRevertBtn.hidden = !laneSessionActive;
+    laneRevertBtn.textContent = compactRoundHud ? "Undo" : "Revert";
+  }
   if (loadoutBtn) loadoutBtn.textContent = `Loadout ${game.activeLoadout.size}/${getCurrentLoadoutSlotLimit()}`;
   if (unlockBtn) unlockBtn.textContent = "Unlock Shop";
   menuBtn.textContent = compactRoundHud ? "Menu" : game.menuOpen ? "Menu: Open" : "Menu";
@@ -18321,7 +18493,7 @@ function updateHud() {
   if (mobileRoundLayoutActive) {
     buildBtn.textContent = `B ${selectedTower.cost}`;
     sellBtn.textContent = "Sell";
-    laneBtn.textContent = game.editingLane ? "Lane*" : "Lane";
+    laneBtn.textContent = laneSessionActive ? "Lane*" : game.editingLane ? "Lane*" : "Lane";
     menuBtn.textContent = "Menu";
     startWaveBtn.textContent = game.levelOneDefeated ? "Done" : "Wave";
     if (pauseBtn) pauseBtn.textContent = game.paused ? "Play" : "Pause";
@@ -18346,7 +18518,11 @@ function updateHud() {
   }
   buildBtn.title = `Build ${selectedTower.name} (${placement.placed}/${placement.cap})`;
   sellBtn.title = "Sell tower (40% refund)";
-  laneBtn.title = game.editingLane ? "Lane edit mode on" : "Lane edit mode";
+  laneBtn.title = laneSessionActive
+    ? `Lane edit session active. New tiles cost ${LANE_EDIT_TILE_COST} credits.`
+    : game.editingLane ? "Lane edit mode on" : "Lane edit mode";
+  if (laneConfirmBtn) laneConfirmBtn.title = "Confirm lane edits and remove unused lanes";
+  if (laneRevertBtn) laneRevertBtn.title = "Revert lane edits and refund paid tiles";
   startWaveBtn.title = game.levelOneDefeated ? "Level complete" : "Start wave";
   menuBtn.title = "Open menu";
   if (pauseBtn) pauseBtn.title = game.paused ? "Resume" : "Pause";
@@ -18354,7 +18530,8 @@ function updateHud() {
   if (settingsToggleBtn) settingsToggleBtn.classList.toggle("active", game.settingsOpen);
   buildBtn.classList.toggle("active", game.placing);
   sellBtn.classList.toggle("active", game.selling);
-  laneBtn.classList.toggle("active", game.editingLane);
+  laneBtn.classList.toggle("active", game.editingLane || laneSessionActive);
+  if (laneConfirmBtn) laneConfirmBtn.classList.toggle("active", laneSessionActive);
 
   if (speedControlEl) speedControlEl.hidden = !game.started || game.menuOpen;
   if (autoWaveBtn) autoWaveBtn.hidden = !game.started || game.menuOpen;
@@ -18377,19 +18554,23 @@ function updateHud() {
 
   const locked =
     !game.started || game.over || game.paused || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
-  buildBtn.disabled = locked;
-  sellBtn.disabled = locked;
+  buildBtn.disabled = locked || laneSessionActive;
+  sellBtn.disabled = locked || laneSessionActive;
   laneBtn.disabled = locked;
-  if (loadoutBtn) loadoutBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
-  startWaveBtn.disabled = locked;
-  if (pauseBtn) pauseBtn.disabled = !game.started || game.over || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
-  if (autoWaveBtn) autoWaveBtn.disabled = locked;
-  if (settingsToggleBtn) settingsToggleBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
-  if (unlockBtn) unlockBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
-  menuBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen;
+  if (laneConfirmBtn) laneConfirmBtn.disabled = locked || !laneSessionActive;
+  if (laneRevertBtn) laneRevertBtn.disabled = locked || !laneSessionActive;
+  if (loadoutBtn) loadoutBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || laneSessionActive;
+  startWaveBtn.disabled = locked || laneSessionActive;
+  if (pauseBtn) {
+    pauseBtn.disabled = !game.started || game.over || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || laneSessionActive;
+  }
+  if (autoWaveBtn) autoWaveBtn.disabled = locked || laneSessionActive;
+  if (settingsToggleBtn) settingsToggleBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || laneSessionActive;
+  if (unlockBtn) unlockBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || laneSessionActive;
+  menuBtn.disabled = !game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || laneSessionActive;
   if (game.started && !game.menuOpen && !game.exitConfirmOpen && !game.levelClearOpen && !game.defeatOpen) {
     const buttons = shopEl.querySelectorAll(".shop-item");
-    for (const button of buttons) button.disabled = locked;
+    for (const button of buttons) button.disabled = locked || laneSessionActive;
   }
   if (settingsPanelEl && !settingsPanelEl.hidden) refreshSettingsPanel();
   updateBossBar();
@@ -18402,6 +18583,10 @@ function togglePause() {
   }
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   if (game.over) return;
+  if (game.laneEditSession) {
+    setStatus("Confirm or Revert lane edits before pausing.", true);
+    return;
+  }
   game.paused = !game.paused;
   if (game.paused) {
     game.placing = false;
@@ -18437,6 +18622,10 @@ function toggleAutoWave() {
 function toggleSellMode() {
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
+  if (game.laneEditSession) {
+    setStatus("Confirm or Revert lane edits before selling.", true);
+    return;
+  }
   game.selling = !game.selling;
   if (game.selling) {
     game.bombarderTargetingTower = null;
@@ -18458,10 +18647,14 @@ function editLaneAtCell(cellX, cellY) {
     return;
   }
 
+  const session = beginLaneEditSession();
   const key = cellKey(cellX, cellY);
   const locked = isLaneEndpoint(cellX, cellY);
   const currentlyLane = pathCellSet.has(key);
   const towerOnCell = getTowerAtCell(cellX, cellY);
+  const isPaidAddition = session.paidAddedCells.has(key);
+  const isOriginalLane = session.originalCells.has(key);
+  const needsPurchase = !currentlyLane && !isOriginalLane && !isPaidAddition;
 
   if (!currentlyLane && towerOnCell) {
     setStatus("Sell the tower on that tile before turning it into a lane.", true);
@@ -18476,6 +18669,10 @@ function editLaneAtCell(cellX, cellY) {
     setStatus("Entry and core lane tiles are locked.", true);
     return;
   }
+  if (needsPurchase && game.money < LANE_EDIT_TILE_COST) {
+    setStatus(`Lane edits cost ${LANE_EDIT_TILE_COST} credits per new tile. Need ${LANE_EDIT_TILE_COST - game.money} more.`, true);
+    return;
+  }
 
   const nextLaneSet = new Set(pathCellSet);
   if (currentlyLane) nextLaneSet.delete(key);
@@ -18488,29 +18685,42 @@ function editLaneAtCell(cellX, cellY) {
     return;
   }
 
+  let creditText = "";
+  if (!currentlyLane && needsPurchase) {
+    game.money -= LANE_EDIT_TILE_COST;
+    session.paidAddedCells.add(key);
+    creditText = ` -${LANE_EDIT_TILE_COST} credits.`;
+  } else if (currentlyLane && isPaidAddition) {
+    const refund = refundLaneEditPaidCells([key]);
+    if (refund > 0) creditText = ` +${refund} credits.`;
+  }
+
   rebuildWorld();
   const change = currentlyLane ? "removed from" : "added to";
-  setStatus(`Lane tile ${cellX},${cellY} ${change} route.`);
+  setStatus(`Lane tile ${cellX},${cellY} ${change} route.${creditText} Confirm to finish or Revert to undo.`);
   updateHud();
 }
 
 function toggleLaneEditMode() {
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
+  if (game.laneEditSession || game.editingLane) {
+    game.editingLane = true;
+    setStatus("Lane edit session active. Use Confirm to finish or Revert to undo.");
+    updateHud();
+    return;
+  }
   if (!game.editingLane && (game.inWave || game.enemies.length > 0 || game.allies.length > 0)) {
     setStatus("Wait until the current wave is fully clear before editing lanes.", true);
     return;
   }
 
-  game.editingLane = !game.editingLane;
-  if (game.editingLane) {
-    game.bombarderTargetingTower = null;
-    game.placing = false;
-    game.selling = false;
-    setStatus("Lane edit mode active. Click tiles to add/remove lane. Entry and core are locked.");
-  } else {
-    setStatus("Lane edit mode off.");
-  }
+  beginLaneEditSession();
+  game.editingLane = true;
+  game.bombarderTargetingTower = null;
+  game.placing = false;
+  game.selling = false;
+  setStatus(`Lane edit mode active. New lane tiles cost ${LANE_EDIT_TILE_COST} credits. Confirm to finish or Revert to undo.`);
   updateHud();
 }
 
@@ -18760,6 +18970,10 @@ function startWave() {
     setStatus("Wave already active.");
     return;
   }
+  if (game.laneEditSession) {
+    setStatus("Confirm or Revert lane edits before starting a wave.", true);
+    return;
+  }
   if (pathSegments.length === 0 || totalPathLength <= 0) {
     setStatus("Lane route is invalid. Use lane edit mode to reconnect entry to core.", true);
     return;
@@ -18929,6 +19143,10 @@ function onPointerDown(event) {
 function toggleBuildMode() {
   if (!game.started || game.menuOpen || game.exitConfirmOpen || game.paused) return;
   if (game.over) return;
+  if (game.laneEditSession) {
+    setStatus("Confirm or Revert lane edits before building.", true);
+    return;
+  }
   game.bombarderTargetingTower = null;
   game.placing = !game.placing;
   if (game.placing) {
@@ -19494,6 +19712,8 @@ function loop(now) {
 buildBtn.addEventListener("click", toggleBuildMode);
 sellBtn.addEventListener("click", toggleSellMode);
 laneBtn.addEventListener("click", toggleLaneEditMode);
+if (laneConfirmBtn) laneConfirmBtn.addEventListener("click", confirmLaneEditSession);
+if (laneRevertBtn) laneRevertBtn.addEventListener("click", () => revertLaneEditSession(true));
 if (loadoutBtn) loadoutBtn.addEventListener("click", toggleLoadoutMenu);
 if (unlockBtn) unlockBtn.addEventListener("click", toggleUnlocksMenu);
 menuBtn.addEventListener("click", toggleMenuHome);
