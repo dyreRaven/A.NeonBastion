@@ -1333,7 +1333,8 @@ body:not(.menu-active) .menu-screen {
 
 #openAccountCreatePageBtn,
 #openAccountLoginPageBtn,
-#openAccountManagePageBtn {
+#openAccountManagePageBtn,
+#wipeAccountsBtn {
   min-height: 1.9rem;
   display: flex;
   align-items: center;
@@ -1342,6 +1343,16 @@ body:not(.menu-active) .menu-screen {
   width: 100%;
   white-space: normal;
   line-height: 1.15;
+}
+
+.menu-account-danger-btn {
+  border-color: rgba(255, 128, 128, 0.56);
+  background: linear-gradient(180deg, rgba(255, 126, 126, 0.2), rgba(116, 32, 42, 0.24));
+}
+
+.menu-account-danger-btn::before {
+  background: radial-gradient(circle at 35% 30%, #fff1f1 0%, #ff9b9b 42%, #ff5d70 100%);
+  box-shadow: 0 0 9px rgba(255, 108, 132, 0.62);
 }
 
 .menu-account-page-back-btn {
