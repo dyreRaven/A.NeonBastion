@@ -2249,6 +2249,20 @@ body:not(.menu-active) .menu-screen {
   background: linear-gradient(180deg, rgba(255, 178, 108, 0.24), rgba(109, 64, 34, 0.3));
 }
 
+.menu-card .menu-loadout-upgrade-buy::before {
+  content: "\25C8";
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--shard-accent);
+  font-size: 0.78em;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(182, 125, 255, 0.72);
+  box-shadow: none;
+  opacity: 1;
+}
+
 .menu-loadout-item.upgrade-open .menu-loadout-upgrade-buy {
   justify-self: stretch;
   width: 100%;
