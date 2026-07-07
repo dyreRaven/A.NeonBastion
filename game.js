@@ -15400,6 +15400,7 @@ function refreshSettingsPanel() {
     if (!button) return;
     button.textContent = enabled ? "On" : "Off";
     button.classList.toggle("active", enabled);
+    button.setAttribute("aria-pressed", enabled ? "true" : "false");
   };
 
   applyToggleVisual(settingMusicBtn, audioSystem.musicEnabled);
@@ -15410,8 +15411,8 @@ function refreshSettingsPanel() {
   applyToggleVisual(settingExplosionLightingBtn, game.explosionLightingEffectsEnabled);
   applyToggleVisual(settingEnemyRingsBtn, game.enemyRingsEnabled);
 
-  if (settingShotBtn) settingShotBtn.disabled = !audioSystem.sfxEnabled;
-  if (settingShatterBtn) settingShatterBtn.disabled = !audioSystem.sfxEnabled;
+  if (settingShotBtn) settingShotBtn.disabled = false;
+  if (settingShatterBtn) settingShatterBtn.disabled = false;
 
   const totalPages = 2;
   const page = Math.max(0, Math.min(totalPages - 1, Math.floor(game.settingsPage || 0)));
@@ -15476,16 +15477,28 @@ function toggleSettingSfx() {
 }
 
 function toggleSettingShots() {
-  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || !audioSystem.sfxEnabled) return;
+  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   audioSystem.shotSfxEnabled = !audioSystem.shotSfxEnabled;
-  setStatus(audioSystem.shotSfxEnabled ? "Tower shot SFX enabled." : "Tower shot SFX muted.");
+  setStatus(
+    audioSystem.shotSfxEnabled
+      ? audioSystem.sfxEnabled
+        ? "Tower shot SFX enabled."
+        : "Tower shot SFX will play when All SFX is enabled."
+      : "Tower shot SFX muted."
+  );
   refreshSettingsPanel();
 }
 
 function toggleSettingShatter() {
-  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen || !audioSystem.sfxEnabled) return;
+  if (!game.started || game.exitConfirmOpen || game.levelClearOpen || game.defeatOpen) return;
   audioSystem.shatterSfxEnabled = !audioSystem.shatterSfxEnabled;
-  setStatus(audioSystem.shatterSfxEnabled ? "Glass shatter SFX enabled." : "Glass shatter SFX muted.");
+  setStatus(
+    audioSystem.shatterSfxEnabled
+      ? audioSystem.sfxEnabled
+        ? "Glass shatter SFX enabled."
+        : "Glass shatter SFX will play when All SFX is enabled."
+      : "Glass shatter SFX muted."
+  );
   refreshSettingsPanel();
 }
 
