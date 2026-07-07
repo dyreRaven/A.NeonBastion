@@ -2038,7 +2038,8 @@ body:not(.menu-active) .menu-screen {
 
 .menu-loadout-item.upgrade-open {
   overflow: hidden;
-  min-height: 0;
+  min-height: max-content;
+  height: max-content;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "content"

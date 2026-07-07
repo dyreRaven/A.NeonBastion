@@ -15960,7 +15960,8 @@ function renderLoadoutMenu(scrollTargetTowerTypeId = null) {
       const cardBottom = cardTop + targetCard.offsetHeight;
       const viewTop = menuLoadoutEl.scrollTop;
       const viewBottom = viewTop + menuLoadoutEl.clientHeight;
-      if (cardTop < viewTop + 8) {
+      const cardTallerThanView = targetCard.offsetHeight >= menuLoadoutEl.clientHeight - 16;
+      if (cardTallerThanView || cardTop < viewTop + 8) {
         menuLoadoutEl.scrollTop = Math.max(0, cardTop - 8);
       } else if (cardBottom > viewBottom - 8) {
         menuLoadoutEl.scrollTop = Math.max(0, cardBottom - menuLoadoutEl.clientHeight + 8);
