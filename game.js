@@ -17134,7 +17134,6 @@ function renderCreatureShop() {
     const killCount = getEnemyKillCount(enemyTypeId);
     const unlocked = game.unlockedSpawnerTowers.has(enemyTypeId);
     const progress = Math.min(1, killCount / Math.max(1, unlock.killRequirement));
-    const towerType = getTowerType(spawnerTowerIdForEnemy(enemyTypeId));
     const portraitDataUrl = getCreatureCardPortraitDataUrl(enemyTypeId);
     const hasPortrait = !!portraitDataUrl;
     const accentA = colorHexToRgbaCss(enemyType.colorA, 0.48);
@@ -17158,7 +17157,7 @@ function renderCreatureShop() {
         ${portraitMarkup}
         <div class="menu-creature-content">
           <strong>${enemyType.name} Spawner</strong>
-          <span>Kills ${killCount}/${unlock.killRequirement} | Spawn ${towerType.spawnCount || 1} @ ${towerType.spawnInterval.toFixed(1)}s</span>
+          <span>Kills ${killCount}/${unlock.killRequirement}</span>
           <div class="menu-creature-progress" aria-hidden="true">
             <div class="menu-creature-progress-fill" style="transform: scaleX(${progress})"></div>
           </div>
