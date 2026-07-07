@@ -251,7 +251,7 @@ const ACCOUNT_MENU_PAGES = Object.freeze({
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-02-23-13";
+const BUILD_ID = "2026-07-07-06";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -2838,17 +2838,37 @@ const LEVEL2_PATH_WAYPOINTS = [
   { x: 15, y: 3 },
 ];
 
+const LEVEL3_MERGE_CELL = { x: 5, y: 4 };
+
 const LEVEL3_PATH_WAYPOINTS = [
   { x: 0, y: 4 },
-  { x: 2, y: 4 },
-  { x: 2, y: 7 },
-  { x: 7, y: 7 },
-  { x: 7, y: 2 },
-  { x: 11, y: 2 },
-  { x: 11, y: 6 },
-  { x: 14, y: 6 },
-  { x: 14, y: 3 },
+  { x: 5, y: 4 },
+  { x: 9, y: 4 },
+  { x: 9, y: 2 },
+  { x: 12, y: 2 },
+  { x: 12, y: 6 },
+  { x: 15, y: 6 },
   { x: 15, y: 3 },
+];
+
+const LEVEL3_LANE_WAYPOINT_GROUPS = [
+  [
+    { x: 0, y: 1 },
+    { x: 5, y: 1 },
+    LEVEL3_MERGE_CELL,
+  ],
+  LEVEL3_PATH_WAYPOINTS,
+  [
+    { x: 0, y: 7 },
+    { x: 5, y: 7 },
+    LEVEL3_MERGE_CELL,
+  ],
+];
+
+const LEVEL3_ENEMY_ENTRY_CELLS = [
+  { x: 0, y: 1 },
+  { x: 0, y: 4 },
+  { x: 0, y: 7 },
 ];
 
 const LEVEL4_PATH_WAYPOINTS = [
@@ -2881,7 +2901,7 @@ const MAP_CATALOG = [
   {
     level: 3,
     name: "Level 3 - Ember Rift",
-    description: "Lava-forged battleground with volatile lighting and high-contrast shadows.",
+    description: "Three ember lanes split enemy pressure before merging into one core route.",
     theme: "ember",
   },
   {
@@ -2912,8 +2932,7 @@ function isLaneEndpoint(cellX, cellY) {
   return (cellX === LANE_START.x && cellY === LANE_START.y) || (cellX === LANE_END.x && cellY === LANE_END.y);
 }
 
-function buildLaneSetFromWaypoints(waypoints) {
-  const laneSet = new Set();
+function addWaypointsToLaneSet(laneSet, waypoints) {
   for (let i = 0; i < waypoints.length - 1; i += 1) {
     const a = waypoints[i];
     const b = waypoints[i + 1];
@@ -2927,6 +2946,22 @@ function buildLaneSetFromWaypoints(waypoints) {
   }
   laneSet.add(LANE_START_KEY);
   laneSet.add(LANE_END_KEY);
+}
+
+function buildLaneSetFromWaypoints(waypoints) {
+  const laneSet = new Set();
+  addWaypointsToLaneSet(laneSet, waypoints);
+  return laneSet;
+}
+
+function buildLaneSetFromWaypointGroups(waypointGroups) {
+  const laneSet = new Set();
+  for (const waypoints of waypointGroups) {
+    if (!Array.isArray(waypoints) || waypoints.length < 2) continue;
+    addWaypointsToLaneSet(laneSet, waypoints);
+  }
+  laneSet.add(LANE_START_KEY);
+  laneSet.add(LANE_END_KEY);
   return laneSet;
 }
 
@@ -2937,11 +2972,18 @@ function getDefaultWaypointsForLevel(level) {
   return DEFAULT_PATH_WAYPOINTS;
 }
 
-function buildPathRoute(cellSet) {
-  if (!cellSet.has(LANE_START_KEY) || !cellSet.has(LANE_END_KEY)) return null;
+function getDefaultLaneSetForLevel(level) {
+  if (level === 3) return buildLaneSetFromWaypointGroups(LEVEL3_LANE_WAYPOINT_GROUPS);
+  return buildLaneSetFromWaypoints(getDefaultWaypointsForLevel(level));
+}
 
-  const queue = [{ x: LANE_START.x, y: LANE_START.y }];
-  const visited = new Set([LANE_START_KEY]);
+function buildPathRouteBetween(cellSet, startCell, endCell) {
+  const startKey = cellKey(startCell.x, startCell.y);
+  const endKey = cellKey(endCell.x, endCell.y);
+  if (!cellSet.has(startKey) || !cellSet.has(endKey)) return null;
+
+  const queue = [{ x: startCell.x, y: startCell.y }];
+  const visited = new Set([startKey]);
   const parent = new Map();
   const dirs = [
     [1, 0],
@@ -2952,7 +2994,7 @@ function buildPathRoute(cellSet) {
 
   while (queue.length > 0) {
     const current = queue.shift();
-    if (current.x === LANE_END.x && current.y === LANE_END.y) break;
+    if (current.x === endCell.x && current.y === endCell.y) break;
 
     for (const [dx, dy] of dirs) {
       const nx = current.x + dx;
@@ -2966,10 +3008,10 @@ function buildPathRoute(cellSet) {
     }
   }
 
-  if (!visited.has(LANE_END_KEY)) return null;
+  if (!visited.has(endKey)) return null;
 
   const route = [];
-  let cursor = LANE_END_KEY;
+  let cursor = endKey;
   while (cursor) {
     route.push(parseCellKey(cursor));
     cursor = parent.get(cursor);
@@ -2978,11 +3020,18 @@ function buildPathRoute(cellSet) {
   return route;
 }
 
+function buildPathRoute(cellSet) {
+  return buildPathRouteBetween(cellSet, LANE_START, LANE_END);
+}
+
 let pathCellSet = buildLaneSetFromWaypoints(DEFAULT_PATH_WAYPOINTS);
 let pathCells = [];
 let pathPoints = [];
 let pathSegments = [];
 let totalPathLength = 0;
+let laneRenderSegments = [];
+let level3EnemySpawnBranches = [];
+let level3SpawnBranchCursor = 0;
 
 function simplifyRouteCells(route) {
   if (route.length <= 2) return route.slice();
@@ -3005,20 +3054,20 @@ function simplifyRouteCells(route) {
   return simplified;
 }
 
-function rebuildPathDataFromRoute(route) {
-  pathCells = simplifyRouteCells(route);
-  pathPoints = pathCells.map((cell) => cellToWorld(cell.x, cell.y));
-  pathSegments = [];
-  totalPathLength = 0;
+function buildPathDataFromRoute(route) {
+  const cells = simplifyRouteCells(route);
+  const points = cells.map((cell) => cellToWorld(cell.x, cell.y));
+  const segments = [];
+  let routeLength = 0;
 
-  for (let i = 0; i < pathPoints.length - 1; i += 1) {
-    const a = pathPoints[i];
-    const b = pathPoints[i + 1];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
     const dx = b.x - a.x;
     const dz = b.z - a.z;
     const length = Math.hypot(dx, dz);
     if (length <= 1e-6) continue;
-    pathSegments.push({
+    segments.push({
       a,
       b,
       dx,
@@ -3026,10 +3075,99 @@ function rebuildPathDataFromRoute(route) {
       dirX: dx / length,
       dirZ: dz / length,
       length,
-      start: totalPathLength,
+      start: routeLength,
     });
-    totalPathLength += length;
+    routeLength += length;
   }
+
+  return { cells, points, segments, totalLength: routeLength };
+}
+
+function rebuildPathDataFromRoute(route) {
+  const data = buildPathDataFromRoute(route);
+  pathCells = data.cells;
+  pathPoints = data.points;
+  pathSegments = data.segments;
+  totalPathLength = data.totalLength;
+}
+
+function createLaneRenderSegment(cellA, cellB) {
+  const a = cellToWorld(cellA.x, cellA.y);
+  const b = cellToWorld(cellB.x, cellB.y);
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const length = Math.hypot(dx, dz);
+  if (length <= 1e-6) return null;
+  return {
+    a,
+    b,
+    dx,
+    dz,
+    dirX: dx / length,
+    dirZ: dz / length,
+    length,
+    start: 0,
+  };
+}
+
+function rebuildLaneRenderSegments(cellSet) {
+  const segments = [];
+  for (const key of cellSet) {
+    const cell = parseCellKey(key);
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const neighbor = { x: cell.x + dx, y: cell.y + dy };
+      if (!cellSet.has(cellKey(neighbor.x, neighbor.y))) continue;
+      const segment = createLaneRenderSegment(cell, neighbor);
+      if (segment) segments.push(segment);
+    }
+  }
+  laneRenderSegments = segments;
+}
+
+function rebuildLevel3EnemySpawnBranches(level) {
+  level3EnemySpawnBranches = [];
+  level3SpawnBranchCursor = 0;
+  if (level !== 3) return;
+
+  for (const entryCell of LEVEL3_ENEMY_ENTRY_CELLS) {
+    const entryKey = cellKey(entryCell.x, entryCell.y);
+    if (!pathCellSet.has(entryKey)) continue;
+    const route = buildPathRouteBetween(pathCellSet, entryCell, LANE_END);
+    if (!route || route.length < 2) continue;
+    const data = buildPathDataFromRoute(route);
+    if (!data || data.points.length < 2 || data.totalLength <= 0) continue;
+    level3EnemySpawnBranches.push({
+      startKey: entryKey,
+      cells: data.cells,
+      points: data.points,
+      segments: data.segments,
+      totalLength: data.totalLength,
+    });
+  }
+}
+
+function getLevel3EnemySpawnBranchForType(typeId) {
+  if (level3EnemySpawnBranches.length === 0) return null;
+  if (typeId === "star") {
+    return level3EnemySpawnBranches.find((branch) => branch.startKey === LANE_START_KEY) || level3EnemySpawnBranches[0];
+  }
+  const branch = level3EnemySpawnBranches[level3SpawnBranchCursor % level3EnemySpawnBranches.length];
+  level3SpawnBranchCursor = (level3SpawnBranchCursor + 1) % Math.max(1, level3EnemySpawnBranches.length);
+  return branch;
+}
+
+function applyEnemyRouteStats(stats, routeData) {
+  if (!stats || !routeData || routeData.points.length < 2) return stats;
+  stats.routePoints = routeData.points;
+  stats.routeSegments = routeData.segments;
+  stats.routeLength = routeData.totalLength;
+  stats.routeStartKey = routeData.startKey;
+  return stats;
+}
+
+function applyLevelEnemySpawnRouteStats(stats, typeId) {
+  if (game.currentLevel !== 3) return stats;
+  return applyEnemyRouteStats(stats, getLevel3EnemySpawnBranchForType(typeId));
 }
 
 function commitLaneCellSet(newLaneSet) {
@@ -3037,21 +3175,26 @@ function commitLaneCellSet(newLaneSet) {
   if (!route || route.length < 2) return false;
   pathCellSet = newLaneSet;
   rebuildPathDataFromRoute(route);
+  rebuildLaneRenderSegments(pathCellSet);
+  rebuildLevel3EnemySpawnBranches(game.currentLevel);
   return true;
 }
 
 function resetLaneToLevelDefaults(level) {
-  const laneSet = buildLaneSetFromWaypoints(getDefaultWaypointsForLevel(level));
+  const laneSet = getDefaultLaneSetForLevel(level);
   const route = buildPathRoute(laneSet);
   if (!route || route.length < 2) return false;
   pathCellSet = laneSet;
   rebuildPathDataFromRoute(route);
+  rebuildLaneRenderSegments(pathCellSet);
+  rebuildLevel3EnemySpawnBranches(level);
   return true;
 }
 
 const initialRoute = buildPathRoute(pathCellSet);
 if (!initialRoute) throw new Error("Initial lane route is invalid");
 rebuildPathDataFromRoute(initialRoute);
+rebuildLaneRenderSegments(pathCellSet);
 
 function pointOnPath(distance, out = new THREE.Vector3()) {
   if (pathSegments.length === 0 || totalPathLength <= 0) {
@@ -3989,7 +4132,8 @@ function buildPathRails() {
     clearcoatRoughness: marsLevel ? 0.42 : emberLevel ? 0.16 : moonLevel ? 0.25 : 0.18,
   });
 
-  for (const segment of pathSegments) {
+  const renderSegments = laneRenderSegments.length > 0 ? laneRenderSegments : pathSegments;
+  for (const segment of renderSegments) {
     const midX = (segment.a.x + segment.b.x) / 2;
     const midZ = (segment.a.z + segment.b.z) / 2;
     const yaw = Math.atan2(segment.dirZ, segment.dirX);
@@ -11433,9 +11577,17 @@ function updateEnemySpecialVisuals(enemy, dt) {
 
 class Enemy {
   constructor(stats) {
+    const routePoints = Array.isArray(stats.routePoints) && stats.routePoints.length >= 2 ? stats.routePoints : pathPoints;
+    const routeSegments =
+      Array.isArray(stats.routeSegments) && stats.routeSegments.length > 0 ? stats.routeSegments : pathSegments;
+    const routeLength = Number.isFinite(stats.routeLength) && stats.routeLength > 0 ? stats.routeLength : totalPathLength;
     this.pathIndex = 0;
-    this.x = pathPoints[0].x;
-    this.z = pathPoints[0].z;
+    this.routePoints = routePoints;
+    this.routeSegments = routeSegments;
+    this.routeLength = routeLength;
+    this.routeStartKey = typeof stats.routeStartKey === "string" ? stats.routeStartKey : "";
+    this.x = routePoints[0].x;
+    this.z = routePoints[0].z;
     this.typeId = stats.typeId;
     this.name = stats.name;
     this.speed = stats.speed;
@@ -11503,8 +11655,12 @@ class Enemy {
     const prevZ = this.z;
     let remaining = this.speed * this.getSpeedMultiplier() * dt;
 
-    while (remaining > 0 && this.pathIndex < pathPoints.length - 1) {
-      const to = pathPoints[this.pathIndex + 1];
+    const routePoints = Array.isArray(this.routePoints) && this.routePoints.length >= 2 ? this.routePoints : pathPoints;
+    const routeSegments = Array.isArray(this.routeSegments) && this.routeSegments.length > 0 ? this.routeSegments : pathSegments;
+    const routeLength = Number.isFinite(this.routeLength) && this.routeLength > 0 ? this.routeLength : totalPathLength;
+
+    while (remaining > 0 && this.pathIndex < routePoints.length - 1) {
+      const to = routePoints[this.pathIndex + 1];
       const dx = to.x - this.x;
       const dz = to.z - this.z;
       const dist = Math.hypot(dx, dz);
@@ -11529,15 +11685,15 @@ class Enemy {
       }
     }
 
-    if (this.pathIndex >= pathSegments.length) {
-      this.progressScore = totalPathLength;
+    if (this.pathIndex >= routeSegments.length) {
+      this.progressScore = routeLength;
     } else {
-      const segment = pathSegments[this.pathIndex];
+      const segment = routeSegments[this.pathIndex];
       const partial = Math.hypot(this.x - segment.a.x, this.z - segment.a.z);
       this.progressScore = segment.start + Math.min(partial, segment.length);
     }
 
-    if (this.pathIndex >= pathPoints.length - 1) {
+    if (this.pathIndex >= routePoints.length - 1) {
       this.alive = false;
       this.reachedEnd = true;
       this.updateHealthBar();
@@ -13796,6 +13952,7 @@ function serializeEnemyState(enemy) {
     z: quantizeNetNumber(enemy.z),
     currentY: quantizeNetNumber(enemy.currentY),
     pathIndex: enemy.pathIndex,
+    routeStartKey: enemy.routeStartKey || "",
     reachedEnd: enemy.reachedEnd,
     progressScore: quantizeNetNumber(enemy.progressScore),
     headingX: quantizeNetNumber(enemy.headingX),
@@ -13976,6 +14133,10 @@ function createEnemyFromNetworkState(state) {
     colorB: state.colorB || ENEMY_TYPES[state.typeId]?.colorB || "#ffcc84",
     hoverHeight: Number.isFinite(state.hoverHeight) ? state.hoverHeight : ENEMY_TYPES[state.typeId]?.hoverHeight || 1,
   };
+  if (typeof state.routeStartKey === "string" && state.routeStartKey) {
+    const routeData = level3EnemySpawnBranches.find((branch) => branch.startKey === state.routeStartKey);
+    applyEnemyRouteStats(stats, routeData);
+  }
   return new Enemy(stats);
 }
 
@@ -14016,6 +14177,15 @@ function syncEnemiesFromMultiplayer(states) {
       enemy.currentY += (nextY - enemy.currentY) * syncWeight;
     }
     enemy.pathIndex = Number.isFinite(state.pathIndex) ? Math.max(0, Math.floor(state.pathIndex)) : enemy.pathIndex;
+    if (typeof state.routeStartKey === "string" && state.routeStartKey && state.routeStartKey !== enemy.routeStartKey) {
+      const routeData = level3EnemySpawnBranches.find((branch) => branch.startKey === state.routeStartKey);
+      if (routeData) {
+        enemy.routePoints = routeData.points;
+        enemy.routeSegments = routeData.segments;
+        enemy.routeLength = routeData.totalLength;
+        enemy.routeStartKey = routeData.startKey;
+      }
+    }
     enemy.reachedEnd = !!state.reachedEnd;
     enemy.progressScore = Number.isFinite(state.progressScore) ? state.progressScore : enemy.progressScore;
     enemy.headingX = Number.isFinite(state.headingX) ? state.headingX : enemy.headingX;
@@ -14977,8 +15147,9 @@ function resetTowersForNewLevel() {
   game.bombarderTargetingTower = null;
 }
 
-function prepareLevel(level) {
-  const targetLevel = Math.max(1, Math.min(getHighestUnlockedLevel(), Math.floor(level || 1)));
+function prepareLevel(level, options = {}) {
+  const maxPlayableLevel = options?.allowLocked === true ? MAP_CATALOG.length : getHighestUnlockedLevel();
+  const targetLevel = Math.max(1, Math.min(maxPlayableLevel, Math.floor(level || 1)));
   const profile = getLevelDifficultyProfile(targetLevel);
   resetMobilePerformanceSampling();
   clearActiveCombatState();
@@ -15203,10 +15374,24 @@ function grantShardsByCommand(amount = 999999) {
   setStatus(`Command applied: +${shardAmount} shards.`);
 }
 
+function playLevelByCommand(targetLevel) {
+  const levelNumber = Math.max(1, Math.min(MAP_CATALOG.length, Math.floor(targetLevel)));
+  if (!Number.isFinite(levelNumber)) return false;
+  if (game.exitConfirmOpen) closeExitConfirm();
+  const started = startGameFromMenu(levelNumber, { allowLocked: true });
+  if (!started) return false;
+  const levelLabel = getMapEntry(levelNumber)?.name || `Level ${levelNumber}`;
+  setStatus(`Command applied: ${levelLabel} loaded. Build towers or edit lanes, then start a wave.`);
+  closeCommandConsole();
+  return true;
+}
+
 const CONSOLE_SECRET_RESET_COMMAND = "nxb://hard-reset/7f4c";
 const CONSOLE_SECRET_SHARD_COMMAND = "nxb://grant-shards/9a1d";
 const CONSOLE_SECRET_WAVE_PREFIX = "nxb://jump-wave/";
 const CONSOLE_SECRET_WAVE_SUFFIX = "/k3";
+const CONSOLE_SECRET_LEVEL_PREFIX = "nxb://play-level/";
+const CONSOLE_SECRET_LEVEL_SUFFIX = "/l3";
 
 function parseSecretWaveCommand(command) {
   if (!command || !command.startsWith(CONSOLE_SECRET_WAVE_PREFIX)) return null;
@@ -15217,6 +15402,22 @@ function parseSecretWaveCommand(command) {
   if (!/^\d+$/.test(rawWave)) return null;
   const waveNumber = parseInt(rawWave, 10);
   return Number.isFinite(waveNumber) ? waveNumber : null;
+}
+
+function parseSecretLevelCommand(command) {
+  if (!command) return null;
+  let rawLevel = "";
+  if (command.startsWith(CONSOLE_SECRET_LEVEL_PREFIX) && command.endsWith(CONSOLE_SECRET_LEVEL_SUFFIX)) {
+    rawLevel = command
+      .slice(CONSOLE_SECRET_LEVEL_PREFIX.length, command.length - CONSOLE_SECRET_LEVEL_SUFFIX.length)
+      .trim();
+  } else {
+    const match = command.match(/^(?:play[-\s]?level|level|map)\s+(\d+)$/i);
+    rawLevel = match ? match[1] : "";
+  }
+  if (!/^\d+$/.test(rawLevel)) return null;
+  const levelNumber = parseInt(rawLevel, 10);
+  return Number.isFinite(levelNumber) ? levelNumber : null;
 }
 
 function executeConsoleCommand(rawCommand) {
@@ -15230,6 +15431,12 @@ function executeConsoleCommand(rawCommand) {
 
   if (command === CONSOLE_SECRET_SHARD_COMMAND) {
     grantShardsByCommand(999999);
+    return;
+  }
+
+  const targetLevel = parseSecretLevelCommand(command);
+  if (Number.isFinite(targetLevel)) {
+    playLevelByCommand(targetLevel);
     return;
   }
 
@@ -18465,6 +18672,7 @@ function spawnEnemy(overrideTypeId = null) {
   const fromQueue = typeof overrideTypeId !== "string" || overrideTypeId.length === 0;
   const typeId = fromQueue ? game.spawnQueue.shift() || "crawler" : overrideTypeId;
   const stats = createEnemyStats(typeId, game.wave, game.currentLevel);
+  applyLevelEnemySpawnRouteStats(stats, typeId);
   const enemy = new Enemy(stats);
   if (fromQueue) game.spawnLeft = game.spawnQueue.length;
   game.enemies.push(enemy);
@@ -18497,6 +18705,7 @@ function startWave() {
   game.wave += 1;
   game.inWave = true;
   game.spawnerTypeSequenceState = Object.create(null);
+  level3SpawnBranchCursor = 0;
   game.waveCreditsEarned = 0;
   const profile = getLevelDifficultyProfile(game.currentLevel);
   const baseSpawnCount = 7 + game.wave * 2;
@@ -19112,7 +19321,7 @@ function update(dt) {
   refreshSoloHudIfNeeded(dt);
 }
 
-function startGameFromMenu(preferredLevel = null) {
+function startGameFromMenu(preferredLevel = null, options = {}) {
   if (isMultiplayerClient() && isMultiplayerActive()) {
     setStatus("Only the host can start the multiplayer match from menu.", true);
     return false;
@@ -19137,19 +19346,21 @@ function startGameFromMenu(preferredLevel = null) {
   clearPendingLevelClearPanel();
   closeLevelClearPanel();
   const hasPreferredLevel = Number.isFinite(preferredLevel);
+  const allowLocked = options?.allowLocked === true;
   const requestedLevel = hasPreferredLevel ? Math.max(1, Math.floor(preferredLevel)) : getHighestUnlockedLevel();
-  if (hasPreferredLevel && !isLevelUnlocked(requestedLevel)) {
+  if (hasPreferredLevel && !allowLocked && !isLevelUnlocked(requestedLevel)) {
     setStatus(`Level ${requestedLevel} is locked. Clear earlier levels first.`, true);
     updateHud();
     return false;
   }
 
-  const targetLevel = Math.max(1, Math.min(getHighestUnlockedLevel(), requestedLevel));
+  const maxPlayableLevel = allowLocked ? MAP_CATALOG.length : getHighestUnlockedLevel();
+  const targetLevel = Math.max(1, Math.min(maxPlayableLevel, requestedLevel));
   const shouldStartFresh = hasPreferredLevel || !game.started || game.over || game.levelOneDefeated;
 
   if (shouldStartFresh) {
     game.started = true;
-    prepareLevel(targetLevel);
+    prepareLevel(targetLevel, { allowLocked });
     const levelLabel = getMapEntry(targetLevel)?.name || `Level ${targetLevel}`;
     setStatus(`${levelLabel} loaded. Build towers or use Edit Lanes, then start a wave.`);
   }
