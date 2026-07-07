@@ -251,7 +251,7 @@ const ACCOUNT_MENU_PAGES = Object.freeze({
 const multiplayerUtils = window.NeonBastionMultiplayerUtils || null;
 const cloudAuthUtils = window.NeonBastionCloudUtils || null;
 const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-const BUILD_ID = "2026-07-07-07";
+const BUILD_ID = "2026-07-07-08";
 
 if (buildStampEl) buildStampEl.textContent = `Build: ${BUILD_ID}`;
 window.__NEON_BASTION_BUILD_ID__ = BUILD_ID;
@@ -3029,7 +3029,6 @@ let pathCells = [];
 let pathPoints = [];
 let pathSegments = [];
 let totalPathLength = 0;
-let laneRenderSegments = [];
 let level3EnemySpawnBranches = [];
 let level3SpawnBranchCursor = 0;
 
@@ -3110,7 +3109,7 @@ function createLaneRenderSegment(cellA, cellB) {
   };
 }
 
-function rebuildLaneRenderSegments(cellSet) {
+function buildLaneRenderSegmentsFromCellSet(cellSet) {
   const segments = [];
   for (const key of cellSet) {
     const cell = parseCellKey(key);
@@ -3121,7 +3120,7 @@ function rebuildLaneRenderSegments(cellSet) {
       if (segment) segments.push(segment);
     }
   }
-  laneRenderSegments = segments;
+  return segments;
 }
 
 function rebuildLevel3EnemySpawnBranches(level) {
@@ -3138,12 +3137,44 @@ function rebuildLevel3EnemySpawnBranches(level) {
     if (!data || data.points.length < 2 || data.totalLength <= 0) continue;
     level3EnemySpawnBranches.push({
       startKey: entryKey,
+      routeCells: route,
       cells: data.cells,
       points: data.points,
       segments: data.segments,
       totalLength: data.totalLength,
     });
   }
+}
+
+function getActiveEnemyRouteCellSet() {
+  if (game.currentLevel === 3 && level3EnemySpawnBranches.length > 0) {
+    const routeCellSet = new Set();
+    for (const branch of level3EnemySpawnBranches) {
+      const cells = Array.isArray(branch.routeCells) ? branch.routeCells : branch.cells;
+      if (!Array.isArray(cells)) continue;
+      for (const cell of cells) routeCellSet.add(cellKey(cell.x, cell.y));
+    }
+    if (routeCellSet.size > 0) return routeCellSet;
+  }
+  return null;
+}
+
+function getActiveEnemyRouteRenderSegments() {
+  const routeCellSet = getActiveEnemyRouteCellSet();
+  if (routeCellSet) return buildLaneRenderSegmentsFromCellSet(routeCellSet);
+  return pathSegments;
+}
+
+function getActiveEnemyPulseRoutes() {
+  if (game.currentLevel === 3 && level3EnemySpawnBranches.length > 0) {
+    return level3EnemySpawnBranches
+      .filter((branch) => Array.isArray(branch.segments) && branch.segments.length > 0 && branch.totalLength > 0)
+      .map((branch) => ({
+        segments: branch.segments,
+        totalLength: branch.totalLength,
+      }));
+  }
+  return [{ segments: pathSegments, totalLength: totalPathLength }];
 }
 
 function getRequiredEnemyEntryCellsForLevel(level) {
@@ -3195,7 +3226,6 @@ function commitLaneCellSet(newLaneSet) {
   if (!route || route.length < 2) return false;
   pathCellSet = newLaneSet;
   rebuildPathDataFromRoute(route);
-  rebuildLaneRenderSegments(pathCellSet);
   rebuildLevel3EnemySpawnBranches(game.currentLevel);
   return true;
 }
@@ -3206,7 +3236,6 @@ function resetLaneToLevelDefaults(level) {
   if (!route || route.length < 2) return false;
   pathCellSet = laneSet;
   rebuildPathDataFromRoute(route);
-  rebuildLaneRenderSegments(pathCellSet);
   rebuildLevel3EnemySpawnBranches(level);
   return true;
 }
@@ -3214,29 +3243,34 @@ function resetLaneToLevelDefaults(level) {
 const initialRoute = buildPathRoute(pathCellSet);
 if (!initialRoute) throw new Error("Initial lane route is invalid");
 rebuildPathDataFromRoute(initialRoute);
-rebuildLaneRenderSegments(pathCellSet);
 
-function pointOnPath(distance, out = new THREE.Vector3()) {
-  if (pathSegments.length === 0 || totalPathLength <= 0) {
-    if (pathPoints.length > 0) {
-      out.set(pathPoints[0].x, 0, pathPoints[0].z);
+function pointOnRoute(distance, routeSegments, routeLength, fallbackPoints = pathPoints, out = new THREE.Vector3()) {
+  if (!Array.isArray(routeSegments) || routeSegments.length === 0 || routeLength <= 0) {
+    const fallback = Array.isArray(fallbackPoints) && fallbackPoints.length > 0 ? fallbackPoints : pathPoints;
+    if (fallback.length > 0) {
+      out.set(fallback[0].x, 0, fallback[0].z);
       return out;
     }
     out.set(0, 0, 0);
     return out;
   }
 
-  const wrapped = ((distance % totalPathLength) + totalPathLength) % totalPathLength;
-  for (const segment of pathSegments) {
+  const wrapped = ((distance % routeLength) + routeLength) % routeLength;
+  for (const segment of routeSegments) {
     if (wrapped <= segment.start + segment.length) {
       const t = (wrapped - segment.start) / segment.length;
       out.set(segment.a.x + segment.dx * t, 0, segment.a.z + segment.dz * t);
       return out;
     }
   }
-  const last = pathPoints[pathPoints.length - 1];
+  const fallback = Array.isArray(fallbackPoints) && fallbackPoints.length > 0 ? fallbackPoints : pathPoints;
+  const last = fallback[fallback.length - 1];
   out.set(last.x, 0, last.z);
   return out;
+}
+
+function pointOnPath(distance, out = new THREE.Vector3()) {
+  return pointOnRoute(distance, pathSegments, totalPathLength, pathPoints, out);
 }
 
 function shortestAngleDelta(from, to) {
@@ -4152,7 +4186,7 @@ function buildPathRails() {
     clearcoatRoughness: marsLevel ? 0.42 : emberLevel ? 0.16 : moonLevel ? 0.25 : 0.18,
   });
 
-  const renderSegments = laneRenderSegments.length > 0 ? laneRenderSegments : pathSegments;
+  const renderSegments = getActiveEnemyRouteRenderSegments();
   for (const segment of renderSegments) {
     const midX = (segment.a.x + segment.b.x) / 2;
     const midZ = (segment.a.z + segment.b.z) / 2;
@@ -4208,13 +4242,23 @@ function buildPathPulseOrbs() {
     roughness: marsLevel ? 0.46 : emberLevel ? 0.24 : moonLevel ? 0.34 : 0.28,
   });
 
-  const count = 9;
-  for (let i = 0; i < count; i += 1) {
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), orbMaterial.clone());
-    orb.castShadow = false;
-    orb.receiveShadow = false;
-    worldGroup.add(orb);
-    mapState.pulseOrbs.push({ mesh: orb, offset: (totalPathLength / count) * i });
+  const pulseRoutes = getActiveEnemyPulseRoutes();
+  for (let routeIndex = 0; routeIndex < pulseRoutes.length; routeIndex += 1) {
+    const route = pulseRoutes[routeIndex];
+    if (!route || !Array.isArray(route.segments) || route.segments.length === 0 || route.totalLength <= 0) continue;
+    const count = Math.max(4, Math.min(9, Math.round(route.totalLength / CELL_SIZE)));
+    for (let i = 0; i < count; i += 1) {
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), orbMaterial.clone());
+      orb.castShadow = false;
+      orb.receiveShadow = false;
+      worldGroup.add(orb);
+      mapState.pulseOrbs.push({
+        mesh: orb,
+        offset: (route.totalLength / count) * i + routeIndex * 0.7,
+        routeSegments: route.segments,
+        routeLength: route.totalLength,
+      });
+    }
   }
 }
 
@@ -19007,7 +19051,12 @@ function updateMapEffects(dt) {
     const pulseY = marsLevel ? 0.78 : emberLevel ? 0.82 : moonLevel ? 0.8 : 0.84;
     const pulseWave = marsLevel ? 5.1 : emberLevel ? 6.4 : moonLevel ? 5.8 : 7;
     const pulseAmp = marsLevel ? 0.05 : emberLevel ? 0.07 : moonLevel ? 0.06 : 0.08;
-    const point = pointOnPath(game.time * pulseSpeed + pulse.offset);
+    const point = pointOnRoute(
+      game.time * pulseSpeed + pulse.offset,
+      pulse.routeSegments || pathSegments,
+      pulse.routeLength || totalPathLength,
+      pathPoints
+    );
     pulse.mesh.position.set(point.x, pulseY + Math.sin(game.time * pulseWave + pulse.offset) * pulseAmp, point.z);
   }
 
